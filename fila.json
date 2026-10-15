@@ -1,0 +1,7 @@
+{
+  "comentario": "fila vazia - cron so mantem a caixa viva e atualizada",
+  "install": [],
+  "comandos": [
+    "echo 'GH-KALI vivo: $(date -u)' && nmap --version | head -1 && df -h / | tail -1"
+  ]
+}
