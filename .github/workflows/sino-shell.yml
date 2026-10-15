@@ -1,0 +1,44 @@
+name: GH-KALI Shell
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sobe Kali com ttyd
+        run: |
+          docker pull kalilinux/kali-rolling
+          docker run -d -p 7681:7681 --name kali kalilinux/kali-rolling sleep infinity
+          docker exec kali bash -c "apt-get update -qq && apt-get install -y -qq nmap dnsutils curl jq whois whatweb gobuster hydra john sqlmap dirb netcat-openbsd dnsrecon python3 python3-pip git"
+          curl -sL -o ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 && chmod +x ttyd
+          docker cp ttyd kali:/usr/local/bin/ttyd
+          docker exec -d kali ttyd -p 7681 -W bash
+          sleep 3
+          curl -s http://localhost:7681 | head -c 80 && echo " ttyd OK"
+
+      - name: Sobe Tailscale
+        env:
+          TSKEY: "${{ secrets.TAILSCALE_AUTHKEY }}"
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh > /dev/null 2>&1
+          sudo tailscale up --authkey=$TSKEY --hostname=sino-shell --accept-dns=false
+          ip=""
+          for i in $(seq 1 20); do sleep 5; ip=$(sudo tailscale ip -4 2>/dev/null); [ -n "$ip" ] && break; done
+          if [ -z "$ip" ]; then echo "tailscale falhou"; exit 1; fi
+          echo "$ip:7681" > shell.txt
+          echo "SHELL=$ip:7681"
+
+      - name: Envia endereco
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          T=$(cat shell.txt 2>/dev/null || echo FALHOU)
+          MSG=$(printf "KALI SHELL NO AR\nendereco: %s\n(Tailscale ligado no celular -> abre no navegador)\nvida util: ~6h\nusuario: qualquer um (ja e root)" "$T")
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}" || true
+
+      - name: Mantem vivo
+        run: |
+          for i in $(seq 1 31); do sleep 600; echo "shell vivo ha $((i*10)) min"; done
