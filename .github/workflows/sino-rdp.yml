@@ -1,0 +1,95 @@
+name: GH-KALI RDP
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rdp:
+    runs-on: windows-latest
+    steps:
+      - name: Habilita RDP
+        shell: pwsh
+        run: |
+          Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          net user runneradmin "Sino@RDP2025"
+          echo "RDP habilitado"
+
+      - name: Sobe Tailscale
+        shell: pwsh
+        env:
+          TSKEY: "${{ secrets.TAILSCALE_AUTHKEY }}"
+        run: |
+          choco install tailscale -y --no-progress | Out-Null
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          if (-not (Test-Path $ts)) { $ts = (Get-Command tailscale.exe -ErrorAction SilentlyContinue).Source }
+          & $ts up --authkey=$env:TSKEY --unattended --hostname=sino-gh --accept-dns=false 2>&1 | Out-Null
+          $ip = $null
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep 5
+            $ip = (& $ts ip -4 2>$null)
+            if ($ip -and $ip.StartsWith("100.")) { break }
+            $ip = $null
+          }
+          if ($ip) { Set-Content tunnel.txt "$ip`:3389"; Write-Host "TAILSCALE=$ip" } else { Write-Host "tailscale falhou, indo pros tuneis" }
+
+      - name: Sobe tunel (ngrok -> bore fallback)
+        shell: pwsh
+        env:
+          NGROK_AUTHTOKEN: "${{ secrets.NGROK_AUTHTOKEN }}"
+        run: |
+          if (Test-Path tunnel.txt) { Write-Host "tailscale ja resolveu"; exit 0 }
+          $t = $null
+          choco install ngrok -y --no-progress | Out-Null
+          $ngrok = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
+          if (-not $ngrok) { $ngrok = "C:\ProgramData\chocolatey\bin\ngrok.exe" }
+          & $ngrok authtoken $env:NGROK_AUTHTOKEN 2>$null | Out-Null
+          Start-Process -FilePath $ngrok -ArgumentList "tcp","3389" -WindowStyle Hidden -RedirectStandardOutput ngrok.out -RedirectStandardError ngrok.err
+          for ($i = 0; $i -lt 8; $i++) {
+            Start-Sleep 5
+            try { $t = (Invoke-RestMethod http://127.0.0.1:4040/api/tunnels -TimeoutSec 3).tunnels[0].public_url; break } catch {}
+          }
+          if (-not $t) {
+            Write-Host "ngrok falhou, tentando serveo (ssh reverso)"
+            if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0" | Out-Null }
+            Start-Process -FilePath "ssh.exe" -ArgumentList "-o","StrictHostKeyChecking=no","-o","ServerAliveInterval=30","-N","-R","0:localhost:3389","serveo.net" -WindowStyle Hidden -RedirectStandardOutput serveo.out -RedirectStandardError serveo.err
+            for ($i = 0; $i -lt 14; $i++) {
+              Start-Sleep 5
+              if (Test-Path serveo.out) {
+                $m = Select-String -Path serveo.out -Pattern "Allocated port (\d+)"
+                if ($m) { $t = "serveo.net:" + $m.Matches[0].Groups[1].Value; break }
+              }
+            }
+          }
+          if (-not $t) {
+            Write-Host "serveo falhou, indo pro bore (ultimo recurso)"
+            Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip" -OutFile bore.zip
+            Expand-Archive bore.zip -Force
+            Start-Process -FilePath ".\bore\bore.exe" -ArgumentList "local","3389","--to","bore.pub" -WindowStyle Hidden -RedirectStandardOutput bore.out -RedirectStandardError bore.err
+            for ($i = 0; $i -lt 18; $i++) {
+              Start-Sleep 5
+              if (Test-Path bore.out) {
+                $m = Select-String -Path bore.out -Pattern "listening at ([^\s]+)"
+                if ($m) { $t = $m.Matches[0].Groups[1].Value; break }
+              }
+            }
+          }
+          if (-not $t) { Get-Content ngrok.err,bore.err -ErrorAction SilentlyContinue; throw "nenhum tunel subiu" }
+          Set-Content -Path tunnel.txt -Value "$t"
+          echo "TUNNEL=$t"
+
+      - name: Envia credenciais
+        shell: bash
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          T=$(cat tunnel.txt 2>/dev/null || echo FALHOU)
+          if echo "$T" | grep -q "^100\."; then MODO="Tailscale LIGADO no celular"; else MODO="internet direta"; fi
+          MSG=$(printf "RDP WINDOWS NO AR [%s]\nendereco: %s\nusuario: runneradmin\nsenha: Sino@RDP2025\nvida util: ~6h\n\n(se endereco comeca com 100., mantem o app Tailscale aberto no celular)" "$MODO" "$T")
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}" || true
+
+      - name: Mantem vivo
+        shell: bash
+        run: |
+          for i in $(seq 1 31); do sleep 600; echo "rdp vivo ha $((i*10)) min"; done
