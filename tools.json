@@ -1,0 +1,33 @@
+{
+  "base": [
+    "nmap",
+    "dnsutils",
+    "curl",
+    "wget",
+    "git",
+    "jq",
+    "whois",
+    "whatweb",
+    "gobuster",
+    "sqlmap",
+    "hydra",
+    "john",
+    "impacket-scripts",
+    "enum4linux-ng",
+    "smbclient",
+    "nikto",
+    "dirb",
+    "exploitdb",
+    "hashcat",
+    "netcat-openbsd",
+    "iputils-ping",
+    "traceroute",
+    "dnsrecon"
+  ],
+  "pesado_por_tarefa": [
+    "metasploit-framework",
+    "responder",
+    "bloodhound.py",
+    "beef-xss"
+  ]
+}
