@@ -15,12 +15,18 @@ jobs:
           net user runneradmin "Sino@RDP2025"
           echo "RDP habilitado"
 
-      - name: Instala Kali via WSL
+      - name: "Instala Kali via WSL no D"
         shell: pwsh
         run: |
           wsl --install -d kali-linux --no-launch 2>$null | Out-Null
+          wsl --shutdown
+          mkdir D:\wsl -Force | Out-Null
+          wsl --export kali-linux D:\wsl\kali.tar 2>$null | Out-Null
+          wsl --unregister kali-linux 2>$null | Out-Null
+          wsl --import kali-linux D:\wsl\kali D:\wsl\kali.tar 2>$null | Out-Null
+          Remove-Item D:\wsl\kali.tar -Force -ErrorAction SilentlyContinue
           wsl -d kali-linux -u root -- bash -c "apt-get update -qq && apt-get install -y -qq nmap curl wget git jq python3" 2>$null | Out-Null
-          Write-Host "Kali no WSL pronto"
+          Write-Host "Kali no D: pronto"
 
       - name: Sobe Tailscale
         shell: pwsh
