@@ -1,0 +1,48 @@
+name: GH-KALI Trem
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trem:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta proximo trem L8
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          python3 <<'PYEOF'
+          import urllib.request, json, os
+
+          API = "https://apim-proximotrem-prd-brazilsouth-001.azure-api.net/api/v1/lines/L8/stations/{}/next-train"
+          CANDIDATOS = {"Jardim Silveira": ["JSV","SIL","JDS"], "Itapevi": ["ITA","ITV"]}
+
+          def get(code):
+              with urllib.request.urlopen(API.format(code), timeout=12) as r:
+                  return json.loads(r.read().decode())
+
+          def consultar(estacao):
+              for code in CANDIDATOS[estacao]:
+                  try:
+                      j = get(code)
+                      if j.get("estacao_origem") or j.get("hora_previsto_chegada"):
+                          ori = j.get("estacao_origem","?")
+                          dest = j.get("estacao_destino","?")
+                          seg = j.get("proximo_em")
+                          prev = j.get("hora_previsto_chegada","?")
+                          status = j.get("status","?")
+                          tempo = f"{int(seg)//60}min{int(seg)%60:02d}s" if seg is not None else "?"
+                          return f"{estacao}: sentido {dest}\n  proximo em {tempo} | chegada {prev} | {status}"
+                  except Exception:
+                      pass
+              return f"{estacao}: sem previsao agora"
+
+          msg = "TREM L8 DIAMANTE\n" + "\n".join(consultar(e) for e in CANDIDATOS)
+          print(msg)
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": msg}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          PYEOF
