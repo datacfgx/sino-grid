@@ -16,29 +16,30 @@ jobs:
           import urllib.request, json, os
 
           API = "https://apim-proximotrem-prd-brazilsouth-001.azure-api.net/api/v1/lines/L8/stations/{}/next-train"
-          CANDIDATOS = {"Jardim Silveira": ["JSV","SIL","JDS"], "Itapevi": ["ITA","ITV"]}
+          NOMES = {"JSI": "Jardim Silveira", "IPV": "Itapevi"}
+          SENTIDOS = {"IPV": "Itapevi", "ECD": "Itapevi"}
 
           def get(code):
               with urllib.request.urlopen(API.format(code), timeout=12) as r:
                   return json.loads(r.read().decode())
 
-          def consultar(estacao):
-              for code in CANDIDATOS[estacao]:
-                  try:
-                      j = get(code)
-                      if j.get("estacao_origem") or j.get("hora_previsto_chegada"):
-                          ori = j.get("estacao_origem","?")
-                          dest = j.get("estacao_destino","?")
-                          seg = j.get("proximo_em")
-                          prev = j.get("hora_previsto_chegada","?")
-                          status = j.get("status","?")
-                          tempo = f"{int(seg)//60}min{int(seg)%60:02d}s" if seg is not None else "?"
-                          return f"{estacao}: sentido {dest}\n  proximo em {tempo} | chegada {prev} | {status}"
-                  except Exception:
-                      pass
-              return f"{estacao}: sem previsao agora"
+          def sentido(dest):
+              return "sentido Itapevi" if dest in SENTIDOS else "sentido Júlio Prestes (Centro)"
 
-          msg = "TREM L8 DIAMANTE\n" + "\n".join(consultar(e) for e in CANDIDATOS)
+          def linhas(estacao, code):
+              trens = get(code)
+              if not trens:
+                  return f"{estacao}: sem previsão no momento"
+              out = [f"{estacao}:"]
+              for t in trens[:2]:
+                  seg = t.get("proximo_em")
+                  tempo = f"{int(seg)//60}min{int(seg)%60:02d}s" if seg is not None else "?"
+                  prev = t.get("hora_previsto_chegada", "?")
+                  st = t.get("status", "?")
+                  out.append(f"  {sentido(t.get('estacao_destino','?'))}: chega em {tempo} ({prev}) [{st}]")
+              return "\n".join(out)
+
+          msg = "TREM L8 - DIAMANTE\n\n" + "\n\n".join(linhas(NOMES[c], c) for c in ("JSI", "IPV"))
           print(msg)
           req = urllib.request.Request(
               f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
