@@ -1,0 +1,72 @@
+name: GH-KALI APK Mod
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        required: true
+        type: string
+      fname:
+        required: true
+        type: string
+      ip_old:
+        required: true
+        type: string
+      ip_new:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  mod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ferramentas
+        run: |
+          curl -sL -o /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/latest/download/apktool.jar
+          SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "build-tools;35.0.0" > /dev/null 2>&1 || true
+          java -version 2>&1 | head -1
+
+      - name: Download APK
+        run: curl -sL -o /tmp/app.apk "${{ inputs.url }}" && ls -la /tmp/app.apk
+
+      - name: Troca o IP
+        run: |
+          cd /tmp
+          java -jar apktool.jar d app.apk -o out > /dev/null
+          OLDE=$(echo "${{ inputs.ip_old }}" | sed 's/\./\\./g')
+          HITS=$(grep -rl "${{ inputs.ip_old }}" out | wc -l)
+          echo "arquivos com o IP: $HITS"
+          grep -rl "${{ inputs.ip_old }}" out | xargs sed -i "s/$OLDE/${{ inputs.ip_new }}/g"
+          echo "residuais: $(grep -r '${{ inputs.ip_old }}' out | wc -l)"
+
+      - name: Rebuild e assina
+        run: |
+          cd /tmp
+          java -jar apktool.jar b out -o mod-unsigned.apk > /dev/null
+          BT=$(dirname $(find $ANDROID_HOME -name zipalign -type f | head -1))
+          keytool -genkeypair -keystore /tmp/k.jks -storepass senha123 -keypass senha123 -alias mod \
+            -dname "CN=ENI, OU=Sino, O=Familia, L=SP, ST=SP, C=BR" -keyalg RSA -keysize 2048 -validity 3650 > /dev/null 2>&1
+          $BT/zipalign -f 4 mod-unsigned.apk mod-aligned.apk
+          $BT/apksigner sign --ks /tmp/k.jks --ks-pass pass:senha123 --out "mod-${{ inputs.fname }}" mod-aligned.apk
+          ls -la mod-*.apk
+
+      - name: Envia APK modificado
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          cd /tmp
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
+            -F chat_id="${TG_CHAT}" \
+            -F document=@"mod-${{ inputs.fname }}" \
+            -F caption="APK modificado: ${{ inputs.ip_old }} -> ${{ inputs.ip_new }}. Desinstale o original antes de instalar." || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-modificado
+          path: /tmp/mod-*.apk
+          retention-days: 3
+          if-no-files-found: error
