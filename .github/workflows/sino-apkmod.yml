@@ -43,7 +43,19 @@ jobs:
               | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
             echo "IP velho detectado automaticamente: $IPOLD"
           fi
-          [ -z "$IPOLD" ] && { echo "nenhum IP publico achado"; exit 1; }
+          if [ -z "$IPOLD" ]; then
+            echo "nenhum IP publico achado - procurando dominios"
+            CANDS=$(grep -rohE '[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(:[0-9]{1,5})?' out \
+              | grep -viE '\.(png|jpg|jpeg|gif|webp|svg|css|js|json|xml|html|kt|java|kts|gradle|pro|md|txt|woff|ttf)$' \
+              | grep -viE '^(android|java|kotlin|google|github|apache|w3|schema|xmlns|http|https|www|localhost|example|schemas|tools|app)' \
+              | grep -vE '\.(google|gstatic|googleapis|firebase|crashlytics|facebook|firebaseio)\.' \
+              | sort | uniq -c | sort -rn | head -25)
+            echo "$CANDS"
+            MSG=$(printf "Sem IP em texto no APK. Candidatos a servidor:\n%s\nMe diga qual trocar." "$CANDS")
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=${MSG}" || true
+            exit 1
+          fi
           OLDE=$(echo "$IPOLD" | sed 's/\./\\./g')
           HITS=$(grep -rl "$IPOLD" out | wc -l)
           echo "arquivos com o IP: $HITS"
