@@ -16,7 +16,12 @@ jobs:
           rm -rf /opt/seeker && git clone -q --depth 1 https://github.com/thewhiteh4t/seeker /opt/seeker
           curl -sL -o /tmp/fix.py https://raw.githubusercontent.com/datacfgx/sino-grid/main/tools/seeker-py314-fix.py && python3 /tmp/fix.py
           (echo 0 | python3 /opt/seeker/seeker.py -p 8080 > /tmp/seeker.log 2>&1 &)
-          sleep 4
+          sleep 6
+          if ! curl -sf -m 5 http://localhost:8080 > /dev/null; then
+            MSGA=$(printf "SEEKER: app nao subiu. Log:\n%s" "$(tail -8 /tmp/seeker.log)")
+            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGA}" || true
+            exit 1
+          fi
           curl -sL -o /tmp/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x /tmp/cf
           /tmp/cf tunnel --no-autoupdate --url http://localhost:8080 > /tmp/cf.out 2>&1 &
