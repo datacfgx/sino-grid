@@ -20,9 +20,10 @@ jobs:
 
       - name: SDK 35 + build-tools
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          echo "sdkmanager: $SM"
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK
         run: |
