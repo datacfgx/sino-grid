@@ -9,8 +9,9 @@ on:
         required: true
         type: string
       ip_old:
-        required: true
+        required: false
         type: string
+        default: "auto"
       ip_new:
         required: true
         type: string
@@ -35,11 +36,20 @@ jobs:
         run: |
           cd /tmp
           java -jar apktool.jar d app.apk -o out > /dev/null
-          OLDE=$(echo "${{ inputs.ip_old }}" | sed 's/\./\\./g')
-          HITS=$(grep -rl "${{ inputs.ip_old }}" out | wc -l)
+          IPOLD="${{ inputs.ip_old }}"
+          if [ "$IPOLD" = "auto" ]; then
+            IPOLD=$(grep -rohE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' out \
+              | grep -vE '^(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|0\.0\.0|255\.|169\.254)' \
+              | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+            echo "IP velho detectado automaticamente: $IPOLD"
+          fi
+          [ -z "$IPOLD" ] && { echo "nenhum IP publico achado"; exit 1; }
+          OLDE=$(echo "$IPOLD" | sed 's/\./\\./g')
+          HITS=$(grep -rl "$IPOLD" out | wc -l)
           echo "arquivos com o IP: $HITS"
-          grep -rl "${{ inputs.ip_old }}" out | xargs sed -i "s/$OLDE/${{ inputs.ip_new }}/g"
-          echo "residuais: $(grep -r '${{ inputs.ip_old }}' out | wc -l)"
+          grep -rl "$IPOLD" out | xargs sed -i "s/$OLDE/${{ inputs.ip_new }}/g"
+          echo "residuais: $(grep -r "$IPOLD" out | wc -l)"
+          echo "IPOLD=$IPOLD" >> $GITHUB_ENV
 
       - name: Rebuild e assina
         run: |
@@ -61,7 +71,7 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
             -F chat_id="${TG_CHAT}" \
             -F document=@"mod-${{ inputs.fname }}" \
-            -F caption="APK modificado: ${{ inputs.ip_old }} -> ${{ inputs.ip_new }}. Desinstale o original antes de instalar." || true
+            -F caption="APK modificado: $IPOLD -> ${{ inputs.ip_new }}. Desinstale o original antes de instalar." || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
