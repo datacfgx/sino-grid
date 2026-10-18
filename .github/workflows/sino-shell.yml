@@ -19,11 +19,9 @@ jobs:
           sleep 3
           curl -s http://localhost:7681 | head -c 80 && echo " ttyd OK"
 
-      - name: Install OSINT tools
+      - name: Install OSINT tools no Kali
         run: |
-          curl -sL -o /tmp/pi.tgz https://github.com/sundowndev/phoneinfoga/releases/latest/download/phoneinfoga_linux_amd64.tar.gz && tar xzf /tmp/pi.tgz -C /tmp && mv /tmp/phoneinfoga /usr/local/bin/ 2>/dev/null || true
-          pip3 install --quiet ghunt 2>/dev/null || true
-          echo "phoneinfoga: $(phoneinfoga version 2>/dev/null || echo ok) | ghunt: $(ghunt --version 2>/dev/null || echo instalado)"
+          docker exec kali bash -c "curl -sL -o /tmp/pi.tgz https://github.com/sundowndev/phoneinfoga/releases/latest/download/phoneinfoga_linux_amd64.tar.gz && tar xzf /tmp/pi.tgz -C /tmp && mv /tmp/phoneinfoga /usr/local/bin/ && pip3 install --quiet ghunt" 2>&1 | tail -2 || true
       - name: Sobe Tailscale
         env:
           TSKEY: "${{ secrets.TAILSCALE_AUTHKEY }}"
