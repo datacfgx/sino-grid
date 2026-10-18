@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Ferramentas
         run: |
-          curl -sL -o /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/latest/download/apktool.jar
+          curl -sL -o /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
           SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
           yes | $SM --licenses > /dev/null 2>&1 || true
           $SM "build-tools;35.0.0" > /dev/null 2>&1 || true
