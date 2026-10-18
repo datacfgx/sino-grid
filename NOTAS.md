@@ -33,3 +33,13 @@ Saberes de campo, colhidos ao vivo. Leia antes de operar.
 ## Trem
 - /trem = API Próximo Trem ViaMobilidade. Codigos: JSI (Jardim Silveira), IPV (Itapevi).
 - [plataforma] = trem parado na estacao. [deslocamento] = a caminho.
+
+## MISSAO EM ESPERA: Claro tv+ na LG webOS (18/10/2026)
+- TV LG 2018/2019 (webOS 4.x): Claro tv+ descontinuado em feb/2026
+- Teoria: kill switch de versao no app (JS webOS). Backend vivo nas TVs 2020+
+- Plano A (sem root): LG Developer Mode (app oficial da loja) -> extrair IPK ->
+  decompilar (HTML/JS) -> remender check de versao -> rebuild + reinstalar via rede
+  (webOS SDK: ares-install). Puxar IPK da CDN da LG pelo app ID como alternativa
+- Plano B: RootMy.tv (webOS 4.x). NUNCA flashar firmware
+- Requisitos: modelo da TV, comportamento do app ao abrir, dev mode ativo
+- Risco: ~zero no plano A
