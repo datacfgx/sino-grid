@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dependencias
-        run: pip3 install -q requests psutil --break-system-packages && apt-get install -y -qq openssh-client
+        run: pip3 install -q requests psutil --break-system-packages
 
       - name: Clone seeker
         run: timeout 90 git clone -q --depth 1 https://github.com/thewhiteh4t/seeker /opt/seeker
