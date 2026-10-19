@@ -1,6 +1,7 @@
 package br.eni.micgain;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
@@ -10,11 +11,14 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Size;
+import android.os.ParcelFileDescriptor;
+import android.provider.MediaStore;
 import android.view.Surface;
 import android.view.TextureView;
 import android.widget.ArrayAdapter;
@@ -47,7 +51,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private volatile float ganho = 1.0f;
     private boolean gravando = false, cameraAberta = false;
     private String cameraId;
-    private File arquivoAtual;
+    private Uri videoUri;
+    private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION"};
@@ -107,8 +112,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private void iniciar() {
         if (camera == null) { abrirCamera(); toast("aguarde a camera"); return; }
         try {
-            File dir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
-            arquivoAtual = new File(dir, "miccam_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4");
+            String nome = "miccam_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4";
+            ContentValues cv = new ContentValues();
+            cv.put(MediaStore.Video.Media.DISPLAY_NAME, nome);
+            cv.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+            cv.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MicCam");
+            cv.put(MediaStore.Video.Media.IS_PENDING, 1);
+            videoUri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cv);
+            pfd = getContentResolver().openFileDescriptor(videoUri, "w");
             recorder = new MediaRecorder();
             CameraCharacteristics cc = cameraManager.getCameraCharacteristics(cameraId);
             int sensorOrientation = cc.get(CameraCharacteristics.SENSOR_ORIENTATION);
@@ -123,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
             recorder.setAudioSource(FONTES[spFonte.getSelectedItemPosition()]);
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            recorder.setOutputFile(arquivoAtual.getAbsolutePath());
+            recorder.setOutputFile(pfd.getFileDescriptor());
             recorder.setVideoEncodingBitRate(10_000_000);
             recorder.setVideoFrameRate(30);
             recorder.setVideoSize(1280, 720);
@@ -158,10 +169,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         try { recorder.stop(); } catch (Exception ignored) {}
         try { recorder.release(); } catch (Exception ignored) {}
         try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
+        try { pfd.close(); } catch (Exception ignored) {}
+        ContentValues feito = new ContentValues();
+        feito.put(MediaStore.Video.Media.IS_PENDING, 0);
+        getContentResolver().update(videoUri, feito, null, null);
         gravando = false;
         btnRec.setText("GRAVAR VIDEO");
-        txtStatus.setText("salvo: " + arquivoAtual.getAbsolutePath() + "\n(ganho " + String.format("%.1fx", ganho) + " sera aplicado na proxima versao)");
-        toast("video salvo (limpo)");
+        txtStatus.setText("salvo na Galeria: Filmes/MicCam/\n(ganho " + String.format("%.1fx", ganho) + " na v3)");
+        toast("video salvo na Galeria");
     }
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
