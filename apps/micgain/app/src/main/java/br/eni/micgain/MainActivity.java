@@ -88,6 +88,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         setContentView(R.layout.activity_main);
         tvPreview = findViewById(R.id.tvPreview);
         spFonte = findViewById(R.id.spFonte);
+        txtStatus = findViewById(R.id.txtStatus);
+        txtGanho = findViewById(R.id.txtGanho);
         faderGanho = findViewById(R.id.faderGanho);
         faderGanho.setOnValorListener(v -> {
             ganho = 1.0f + v / 10f;
