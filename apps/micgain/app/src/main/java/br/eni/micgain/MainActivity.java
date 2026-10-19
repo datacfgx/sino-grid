@@ -57,6 +57,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long t0 = 0;
     private boolean ultimaGravProcessador = false;
+    private int resW = 1280, resH = 720;
+    private int bitrate = 10_000_000;
     private boolean blinkOn = false;
     private final Runnable blinker = new Runnable() {
         @Override public void run() {
@@ -98,6 +100,20 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
         btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        android.widget.Button btnRes = findViewById(R.id.btnRes);
+        btnRes.setOnClickListener(v -> {
+            String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
+            int atual = (resW == 1920) ? 1 : 0;
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Resolução do vídeo")
+                    .setSingleChoiceItems(opcoes, atual, (d, i) -> {
+                        if (i == 1) { resW = 1920; resH = 1080; bitrate = 20_000_000; }
+                        else { resW = 1280; resH = 720; bitrate = 10_000_000; }
+                        btnRes.setText((i == 1 ? "\u2699\uFE0F Resolução: Full HD 1080p" : "\u2699\uFE0F Resolução: HD 720p"));
+                        d.dismiss();
+                    })
+                    .show();
+        });
         btnRec.setOnClickListener(v -> { if (gravando) parar(); else iniciar(); });
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
     }
@@ -158,9 +174,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             }
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             recorder.setOutputFile(pfd.getFileDescriptor());
-            recorder.setVideoEncodingBitRate(10_000_000);
+            recorder.setVideoEncodingBitRate(bitrate);
             recorder.setVideoFrameRate(30);
-            recorder.setVideoSize(1280, 720);
+            recorder.setVideoSize(resW, resH);
             recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             recorder.setAudioEncodingBitRate(192_000);
@@ -218,6 +234,20 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 ui.postDelayed(() -> {
                     btnRec.setText("GRAVAR VIDEO");
                     btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        android.widget.Button btnRes = findViewById(R.id.btnRes);
+        btnRes.setOnClickListener(v -> {
+            String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
+            int atual = (resW == 1920) ? 1 : 0;
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Resolução do vídeo")
+                    .setSingleChoiceItems(opcoes, atual, (d, i) -> {
+                        if (i == 1) { resW = 1920; resH = 1080; bitrate = 20_000_000; }
+                        else { resW = 1280; resH = 720; bitrate = 10_000_000; }
+                        btnRes.setText((i == 1 ? "\u2699\uFE0F Resolução: Full HD 1080p" : "\u2699\uFE0F Resolução: HD 720p"));
+                        d.dismiss();
+                    })
+                    .show();
+        });
                 }, 2500);
             });
         }).start();
