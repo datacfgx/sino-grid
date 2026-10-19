@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private MediaRecorder recorder;
     private TextureView tvPreview;
     private Spinner spFonte;
-    private SeekBar sbGanho;
+    private MixerFaderView faderGanho;
     private TextView txtStatus, txtGanho;
     private Button btnRec;
     private volatile float ganho = 1.0f;
@@ -88,22 +88,12 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         setContentView(R.layout.activity_main);
         tvPreview = findViewById(R.id.tvPreview);
         spFonte = findViewById(R.id.spFonte);
-        sbGanho = findViewById(R.id.sbGanho);
-        txtStatus = findViewById(R.id.txtStatus);
-        txtGanho = findViewById(R.id.txtGanho);
-        btnRec = findViewById(R.id.btnRec);
-        tvPreview.setSurfaceTextureListener(this);
-        spFonte.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, NOMES));
-        spFonte.setSelection(4); // PROCESSADOR padrao
-        sbGanho.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int p, boolean u) {
-                ganho = 1.0f + p / 10f;
-                txtGanho.setText(String.format("Ganho do som: %.1fx (aplicado no arquivo final)", ganho));
-            }
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {}
+        faderGanho = findViewById(R.id.faderGanho);
+        faderGanho.setOnValorListener(v -> {
+            ganho = 1.0f + v / 10f;
+            txtGanho.setText(String.format("%.1fx", ganho));
         });
-        btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        btnRec.setTextColor(Color.WHITE);
         android.widget.Button btnTroca = findViewById(R.id.btnTroca);
         btnTroca.setOnClickListener(v -> {
             if (gravando) { toast("pare a gravacao para trocar"); return; }
@@ -250,7 +240,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                         gravando = true;
                         t0 = System.currentTimeMillis();
                         btnRec.setText("GRAVANDO - toque para parar");
-                        btnRec.setTextColor(Color.parseColor("#FF1744"));
+                        btnRec.setTextColor(Color.WHITE);
                         ui.post(blinker);
                     } catch (Exception e) { txtStatus.setText("erro: " + e.getMessage()); }
                 }
@@ -263,7 +253,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         gravando = false;
         ui.removeCallbacks(blinker);
         btnRec.setText("SALVO!");
-        btnRec.setTextColor(Color.parseColor("#FFD600"));
+        btnRec.setTextColor(Color.WHITE);
         txtStatus.setText("finalizando...");
         new Thread(() -> {
             try { recorder.stop(); } catch (Exception ignored) {}
@@ -286,7 +276,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 toast("video salvo na Galeria");
                 ui.postDelayed(() -> {
                     btnRec.setText("GRAVAR VIDEO");
-                    btnRec.setTextColor(Color.parseColor("#4CAF50"));
+                    btnRec.setTextColor(Color.WHITE);
         android.widget.Button btnTroca = findViewById(R.id.btnTroca);
         btnTroca.setOnClickListener(v -> {
             if (gravando) { toast("pare a gravacao para trocar"); return; }
