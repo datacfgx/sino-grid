@@ -10,6 +10,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -210,9 +211,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                                 { req.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON); break; }
                         } catch (Exception ignored) {}
                         try {
-                            int[] eis = cc.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES);
-                            if (eis != null) for (int m : eis) if (m == CaptureRequest.VIDEO_STABILIZATION_MODE_ON)
-                                { req.set(CaptureRequest.VIDEO_STABILIZATION_MODE, CaptureRequest.VIDEO_STABILIZATION_MODE_ON); break; }
+                            int[] eis = cc.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES); // mantem
+                            if (eis != null) for (int m : eis) if (m == CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON)
+                                { req.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON); break; }
                         } catch (Exception ignored) {}
                         session.setRepeatingRequest(req.build(), null, ui);
                         if (processador) iniciarPcm(MediaRecorder.AudioSource.UNPROCESSED);
