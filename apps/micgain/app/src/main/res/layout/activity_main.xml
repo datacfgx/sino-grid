@@ -3,6 +3,7 @@
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="12dp">
     <TextureView android:id="@+id/tvPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+    <Button android:id="@+id/btnTroca" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="\uD83D\uDD04 Trocar camera"/>
     <Button android:id="@+id/btnRes" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="\u2699\uFE0F Resolução: HD 720p" android:layout_marginTop="8dp"/>
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fonte do microfone:" android:layout_marginTop="4dp"/>
     <Spinner android:id="@+id/spFonte" android:layout_width="match_parent" android:layout_height="wrap_content"/>
