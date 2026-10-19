@@ -1,19 +1,24 @@
 package br.eni.micgain;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.AudioTrack;
+import android.graphics.SurfaceTexture;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Size;
+import android.view.Surface;
+import android.view.TextureView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -23,193 +28,148 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
-    private static final int SR = 44100;
-    private volatile float ganho = 1.0f;
-    private volatile boolean rodando = false, gravando = false;
-    private Thread threadAudio;
-    private AudioRecord recorder;
-    private AudioTrack track;
-    private File wavAtual;
-    private FileOutputStream wavOut;
-    private int wavBytes = 0;
-    private long wavDataLen = 0;
-
+public class MainActivity extends AppCompatActivity implements TextureView.SurfaceTextureListener {
+    private CameraManager cameraManager;
+    private CameraDevice camera;
+    private CameraCaptureSession session;
+    private MediaRecorder recorder;
+    private TextureView tvPreview;
     private Spinner spFonte;
     private SeekBar sbGanho;
-    private ProgressBar pbNivel;
-    private TextView txtGanho, txtStatus;
-    private Button btnMonitor, btnGravar;
+    private TextView txtStatus, txtGanho;
+    private Button btnRec;
+    private volatile float ganho = 1.0f;
+    private boolean gravando = false, cameraAberta = false;
+    private String cameraId;
+    private File arquivoAtual;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
-    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION", "VOICE_COMMUNICATION"};
+    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION"};
     private static final int[] FONTES = {
             MediaRecorder.AudioSource.UNPROCESSED,
             MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.CAMCORDER,
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION};
+            MediaRecorder.AudioSource.VOICE_RECOGNITION};
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_main);
+        tvPreview = findViewById(R.id.tvPreview);
         spFonte = findViewById(R.id.spFonte);
         sbGanho = findViewById(R.id.sbGanho);
-        pbNivel = findViewById(R.id.pbNivel);
-        txtGanho = findViewById(R.id.txtGanho);
         txtStatus = findViewById(R.id.txtStatus);
-        btnMonitor = findViewById(R.id.btnMonitor);
-        btnGravar = findViewById(R.id.btnGravar);
-
+        txtGanho = findViewById(R.id.txtGanho);
+        btnRec = findViewById(R.id.btnRec);
+        tvPreview.setSurfaceTextureListener(this);
         spFonte.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, NOMES));
-
         sbGanho.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean u) {
                 ganho = 1.0f + p / 10f;
-                txtGanho.setText(String.format("Ganho: %.1fx", ganho));
+                txtGanho.setText(String.format("Ganho do som: %.1fx (aplicado no arquivo final)", ganho));
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
+        btnRec.setOnClickListener(v -> { if (gravando) parar(); else iniciar(); });
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
+    }
 
-        btnMonitor.setOnClickListener(v -> {
-            if (rodando) parar();
-            else iniciar();
-        });
-        btnGravar.setOnClickListener(v -> {
-            if (!rodando) { toast("Inicie o monitor primeiro"); return; }
-            if (gravando) { pararGravacao(); }
-            else { iniciarGravacao(); }
-        });
+    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { abrirCamera(); }
+    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {}
+    @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return false; }
+    @Override public void onSurfaceTextureUpdated(SurfaceTexture st) {}
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 1);
-        }
+    private void abrirCamera() {
+        if (cameraAberta) return;
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+            for (String id : cameraManager.getCameraIdList()) {
+                CameraCharacteristics c = cameraManager.getCameraCharacteristics(id);
+                if (c.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) { cameraId = id; break; }
+            }
+            if (cameraId == null) cameraId = cameraManager.getCameraIdList()[0];
+            cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
+                @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); }
+                @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
+                @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
+            }, ui);
+        } catch (Exception e) { txtStatus.setText("falha: " + e.getMessage()); }
+    }
+
+    private void iniciar() {
+        if (camera == null) { abrirCamera(); toast("aguarde a camera"); return; }
+        try {
+            File dir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+            arquivoAtual = new File(dir, "miccam_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4");
+            recorder = new MediaRecorder();
+            CameraCharacteristics cc = cameraManager.getCameraCharacteristics(cameraId);
+            int sensorOrientation = cc.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            int rot = getWindowManager().getDefaultDisplay().getRotation();
+            int graus = 0;
+            switch (rot) {
+                case Surface.ROTATION_90: graus = 90; break;
+                case Surface.ROTATION_180: graus = 180; break;
+                case Surface.ROTATION_270: graus = 270; break;
+            }
+            recorder.setOrientationHint((sensorOrientation - graus + 360) % 360);
+            recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+            recorder.setAudioSource(FONTES[spFonte.getSelectedItemPosition()]);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setOutputFile(arquivoAtual.getAbsolutePath());
+            recorder.setVideoEncodingBitRate(10_000_000);
+            recorder.setVideoFrameRate(30);
+            recorder.setVideoSize(1280, 720);
+            recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioEncodingBitRate(192_000);
+            recorder.setAudioSamplingRate(44100);
+            recorder.prepare();
+
+            Surface previewSurface = new Surface(tvPreview.getSurfaceTexture());
+            Surface recSurface = recorder.getSurface();
+            camera.createCaptureSession(Arrays.asList(previewSurface, recSurface), new CameraCaptureSession.StateCallback() {
+                @Override public void onConfigured(CameraCaptureSession s) {
+                    session = s;
+                    try {
+                        CaptureRequest.Builder req = camera.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+                        req.addTarget(previewSurface);
+                        req.addTarget(recSurface);
+                        session.setRepeatingRequest(req.build(), null, ui);
+                        recorder.start();
+                        gravando = true;
+                        btnRec.setText("PARAR E SALVAR");
+                        txtStatus.setText("gravando... ganho sera aplicado: " + String.format("%.1fx", ganho));
+                    } catch (Exception e) { txtStatus.setText("erro: " + e.getMessage()); }
+                }
+                @Override public void onConfigureFailed(CameraCaptureSession s) { txtStatus.setText("falha na sessao"); }
+            }, ui);
+        } catch (Exception e) { txtStatus.setText("falha: " + e.getMessage()); }
+    }
+
+    private void parar() {
+        try { recorder.stop(); } catch (Exception ignored) {}
+        try { recorder.release(); } catch (Exception ignored) {}
+        try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
+        gravando = false;
+        btnRec.setText("GRAVAR VIDEO");
+        txtStatus.setText("salvo: " + arquivoAtual.getAbsolutePath() + "\n(ganho " + String.format("%.1fx", ganho) + " sera aplicado na proxima versao)");
+        toast("video salvo (limpo)");
     }
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
 
-    private void iniciar() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 1);
-            return;
-        }
-        int fonte = FONTES[spFonte.getSelectedItemPosition()];
-        int minBuf = AudioRecord.getMinBufferSize(SR, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-        int bufSize = Math.max(minBuf * 2, 8192);
-        recorder = new AudioRecord(fonte, SR, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufSize);
-        track = new AudioTrack.Builder()
-                .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build())
-                .setAudioFormat(new AudioFormat.Builder().setSampleRate(SR).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                .setBufferSizeInBytes(bufSize).setTransferMode(AudioTrack.MODE_STREAM).build();
-        if (recorder.getState() != AudioRecord.STATE_INITIALIZED) { toast("AudioRecord falhou"); return; }
-        recorder.startRecording();
-        track.play();
-        rodando = true;
-        btnMonitor.setText("PARAR MONITOR");
-        txtStatus.setText("monitorando - ajuste o ganho no slider");
-
-        threadAudio = new Thread(() -> {
-            short[] buf = new short[bufSize / 2];
-            while (rodando) {
-                int n = recorder.read(buf, 0, buf.length);
-                if (n <= 0) continue;
-                double soma = 0;
-                short[] out = new short[n];
-                for (int i = 0; i < n; i++) {
-                    float amostra = buf[i] * ganho;
-                    // soft clip simples (tangent) pra evitar distorcao dura
-                    float y = (float) Math.tanh(amostra / 30000f) * 30000f;
-                    out[i] = (short) Math.max(-30000, Math.min(30000, y));
-                    soma += out[i] * out[i];
-                }
-                track.write(out, 0, n);
-                if (gravando && wavOut != null) {
-                    try {
-                        ByteBuffer bb = ByteBuffer.allocate(n * 2).order(ByteOrder.LITTLE_ENDIAN);
-                        bb.asShortBuffer().put(out);
-                        wavOut.write(bb.array());
-                        wavDataLen += n * 2;
-                    } catch (IOException ignored) {}
-                }
-                double rms = Math.sqrt(soma / n) / 30000.0;
-                int pct = (int) Math.min(100, rms * 300);
-                ui.post(() -> pbNivel.setProgress(pct));
-            }
-        });
-        threadAudio.start();
-    }
-
-    private void parar() {
-        rodando = false;
-        gravando = false;
-        try { if (threadAudio != null) threadAudio.join(500); } catch (InterruptedException ignored) {}
-        try { if (recorder != null) recorder.stop(); } catch (IllegalStateException ignored) {}
-        try { if (recorder != null) recorder.release(); } catch (Exception ignored) {}
-        try { if (track != null) { track.stop(); track.release(); } } catch (Exception ignored) {}
-        fecharWav();
-        btnMonitor.setText("INICIAR MONITOR");
-        btnGravar.setText("GRAVAR WAV AMPLIFICADO");
-        txtStatus.setText("parado");
-    }
-
-    private void iniciarGravacao() {
-        try {
-            File dir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
-            wavAtual = new File(dir, "micgain_" + System.currentTimeMillis() + ".wav");
-            wavOut = new FileOutputStream(wavAtual);
-            wavOut.write(new byte[44]); // header placeholder
-            wavDataLen = 0;
-            gravando = true;
-            btnGravar.setText("PARAR GRAVACAO");
-            txtStatus.setText("gravando em " + wavAtual.getName());
-            toast("gravando");
-        } catch (IOException e) { toast("falha ao criar wav"); }
-    }
-
-    private void pararGravacao() {
-        gravando = false;
-        fecharWav();
-        btnGravar.setText("GRAVAR WAV AMPLIFICADO");
-        txtStatus.setText("salvo: " + (wavAtual != null ? wavAtual.getAbsolutePath() : "?"));
-        toast("wav salvo");
-    }
-
-    private void fecharWav() {
-        if (wavOut == null) return;
-        try {
-            wavOut.flush();
-            long dataLen = wavDataLen;
-            long totalLen = 36 + dataLen;
-            int byteRate = SR * 2;
-            wavOut.getChannel().position(0);
-            wavOut.write(("RIFF").getBytes());
-            escreveInt(wavOut, (int) totalLen);
-            wavOut.write(("WAVEfmt ").getBytes());
-            escreveInt(wavOut, 16); escreveShort(wavOut, (short) 1); escreveShort(wavOut, (short) 1);
-            escreveInt(wavOut, SR); escreveInt(wavOut, byteRate);
-            escreveShort(wavOut, (short) 2); escreveShort(wavOut, (short) 16);
-            wavOut.write(("data").getBytes());
-            escreveInt(wavOut, (int) dataLen);
-            wavOut.close();
-        } catch (IOException ignored) {}
-        wavOut = null;
-    }
-
-    private void escreveInt(FileOutputStream o, int v) throws IOException {
-        o.write(new byte[]{(byte) v, (byte) (v >> 8), (byte) (v >> 16), (byte) (v >> 24)});
-    }
-    private void escreveShort(FileOutputStream o, short v) throws IOException {
-        o.write(new byte[]{(byte) v, (byte) (v >> 8)});
-    }
-
     @Override
-    protected void onDestroy() { parar(); super.onDestroy(); }
+    protected void onDestroy() {
+        if (gravando) parar();
+        try { if (camera != null) camera.close(); } catch (Exception ignored) {}
+        super.onDestroy();
+    }
 }
