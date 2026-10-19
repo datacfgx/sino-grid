@@ -85,6 +85,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        try {
         setContentView(R.layout.activity_main);
         tvPreview = findViewById(R.id.tvPreview);
         spFonte = findViewById(R.id.spFonte);
@@ -122,8 +123,12 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         });
         btnRec.setOnClickListener(v -> { if (gravando) parar(); else iniciar(); });
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
+        } catch (Throwable t) {
+            StringBuilder sb = new StringBuilder("ERRO NO APP:\n\n").append(t.getClass().getSimpleName()).append(": ").append(t.getMessage()).append("\n\n");
+            for (StackTraceElement e : t.getStackTrace()) sb.append(e.toString()).append("\n");
+            new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("MicCam - erro de inicializacao").setMessage(sb.toString()).setPositiveButton("OK", null).show();
+        }
     }
-
     private boolean surfacePronta = false;
     @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { surfacePronta = true; abrirCamera(); aplicaEspelhoPreview(); }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { aplicaEspelhoPreview(); }
