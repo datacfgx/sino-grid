@@ -52,6 +52,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private volatile float ganho = 1.0f;
     private boolean gravando = false, cameraAberta = false;
     private String cameraId;
+    private String idCostas, idFrente;
+    private boolean usarFrontal = false;
     private Uri videoUri;
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -100,6 +102,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
         btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        android.widget.Button btnTroca = findViewById(R.id.btnTroca);
+        btnTroca.setOnClickListener(v -> {
+            if (gravando) { toast("pare a gravacao para trocar"); return; }
+            usarFrontal = !usarFrontal;
+            btnTroca.setText(usarFrontal ? "\uD83D\uDD04 Câmera frontal (espelhada)" : "\uD83D\uDD04 Câmera traseira");
+            try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
+            abrirCamera();
+        });
         android.widget.Button btnRes = findViewById(R.id.btnRes);
         btnRes.setOnClickListener(v -> {
             String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
@@ -130,9 +140,11 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
             for (String id : cameraManager.getCameraIdList()) {
                 CameraCharacteristics c = cameraManager.getCameraCharacteristics(id);
-                if (c.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) { cameraId = id; break; }
+                Integer f = c.get(CameraCharacteristics.LENS_FACING);
+                if (f != null && f == CameraCharacteristics.LENS_FACING_BACK) idCostas = id;
+                if (f != null && f == CameraCharacteristics.LENS_FACING_FRONT) idFrente = id;
             }
-            if (cameraId == null) cameraId = cameraManager.getCameraIdList()[0];
+            cameraId = usarFrontal && idFrente != null ? idFrente : (idCostas != null ? idCostas : cameraManager.getCameraIdList()[0]);
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
                 @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
@@ -192,6 +204,16 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                         CaptureRequest.Builder req = camera.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
                         req.addTarget(previewSurface);
                         req.addTarget(recSurface);
+                        try {
+                            int[] ois = cc.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
+                            if (ois != null) for (int m : ois) if (m == CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON)
+                                { req.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON); break; }
+                        } catch (Exception ignored) {}
+                        try {
+                            int[] eis = cc.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES);
+                            if (eis != null) for (int m : eis) if (m == CaptureRequest.VIDEO_STABILIZATION_MODE_ON)
+                                { req.set(CaptureRequest.VIDEO_STABILIZATION_MODE, CaptureRequest.VIDEO_STABILIZATION_MODE_ON); break; }
+                        } catch (Exception ignored) {}
                         session.setRepeatingRequest(req.build(), null, ui);
                         if (processador) iniciarPcm(MediaRecorder.AudioSource.UNPROCESSED);
                         recorder.start();
@@ -234,6 +256,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 ui.postDelayed(() -> {
                     btnRec.setText("GRAVAR VIDEO");
                     btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        android.widget.Button btnTroca = findViewById(R.id.btnTroca);
+        btnTroca.setOnClickListener(v -> {
+            if (gravando) { toast("pare a gravacao para trocar"); return; }
+            usarFrontal = !usarFrontal;
+            btnTroca.setText(usarFrontal ? "\uD83D\uDD04 Câmera frontal (espelhada)" : "\uD83D\uDD04 Câmera traseira");
+            try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
+            abrirCamera();
+        });
         android.widget.Button btnRes = findViewById(R.id.btnRes);
         btnRes.setOnClickListener(v -> {
             String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
