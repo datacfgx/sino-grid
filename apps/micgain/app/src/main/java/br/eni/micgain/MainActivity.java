@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             ganho = 1.0f + v / 10f;
             txtGanho.setText(String.format("%.1fx", ganho));
         });
+        btnRec = findViewById(R.id.btnRec);
         btnRec.setTextColor(Color.WHITE);
         android.widget.Button btnTroca = findViewById(R.id.btnTroca);
         btnTroca.setOnClickListener(v -> {
