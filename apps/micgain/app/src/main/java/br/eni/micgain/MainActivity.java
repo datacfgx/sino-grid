@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private boolean gravando = false, cameraAberta = false;
     private String cameraId;
     private String idCostas, idFrente;
-    private boolean usarFrontal = false;
+    private int modoCam = 0; // 0 tras, 1 frontal espelhada, 2 frontal sem espelho
     private Uri videoUri;
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -106,8 +106,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         android.widget.Button btnTroca = findViewById(R.id.btnTroca);
         btnTroca.setOnClickListener(v -> {
             if (gravando) { toast("pare a gravacao para trocar"); return; }
-            usarFrontal = !usarFrontal;
-            btnTroca.setText(usarFrontal ? "\uD83D\uDD04 Câmera frontal (espelhada)" : "\uD83D\uDD04 Câmera traseira");
+            modoCam = (modoCam + 1) % 3;
+            String[] rotulos = {"\uD83D\uDD04 Câmera traseira", "\uD83D\uDD04 Frontal espelhada", "\uD83D\uDD04 Frontal SEM espelho"};
+            btnTroca.setText(rotulos[modoCam]);
+            aplicaEspelhoPreview();
             try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
             abrirCamera();
         });
@@ -129,7 +131,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
     }
 
-    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { abrirCamera(); }
+    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { abrirCamera(); aplicaEspelhoPreview(); }
+    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { aplicaEspelhoPreview(); }
+
+    private void aplicaEspelhoPreview() {
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        if (modoCam == 2) m.setScale(-1f, 1f, tvPreview.getWidth() / 2f, tvPreview.getHeight() / 2f);
+        tvPreview.setTransform(m);
+    }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {}
     @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return false; }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture st) {}
@@ -145,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 if (f != null && f == CameraCharacteristics.LENS_FACING_BACK) idCostas = id;
                 if (f != null && f == CameraCharacteristics.LENS_FACING_FRONT) idFrente = id;
             }
-            cameraId = usarFrontal && idFrente != null ? idFrente : (idCostas != null ? idCostas : cameraManager.getCameraIdList()[0]);
+            cameraId = modoCam != 0 && idFrente != null ? idFrente : (idCostas != null ? idCostas : cameraManager.getCameraIdList()[0]);
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
                 @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
@@ -260,8 +269,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         android.widget.Button btnTroca = findViewById(R.id.btnTroca);
         btnTroca.setOnClickListener(v -> {
             if (gravando) { toast("pare a gravacao para trocar"); return; }
-            usarFrontal = !usarFrontal;
-            btnTroca.setText(usarFrontal ? "\uD83D\uDD04 Câmera frontal (espelhada)" : "\uD83D\uDD04 Câmera traseira");
+            modoCam = (modoCam + 1) % 3;
+            String[] rotulos = {"\uD83D\uDD04 Câmera traseira", "\uD83D\uDD04 Frontal espelhada", "\uD83D\uDD04 Frontal SEM espelho"};
+            btnTroca.setText(rotulos[modoCam]);
+            aplicaEspelhoPreview();
             try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
             abrirCamera();
         });
