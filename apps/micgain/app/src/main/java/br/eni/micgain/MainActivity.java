@@ -139,8 +139,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         if (modoCam == 2) m.setScale(-1f, 1f, tvPreview.getWidth() / 2f, tvPreview.getHeight() / 2f);
         tvPreview.setTransform(m);
     }
-    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {}
-    @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return false; }
+        @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return false; }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture st) {}
 
     private void abrirCamera() {
