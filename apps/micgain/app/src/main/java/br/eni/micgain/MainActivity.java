@@ -131,7 +131,12 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         }
     }
     private boolean surfacePronta = false;
-    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { surfacePronta = true; abrirCamera(); aplicaEspelhoPreview(); }
+    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
+        surfacePronta = true;
+        abrirCamera();
+        aplicaEspelhoPreview();
+        ui.postDelayed(() -> { if (cameraAberta && !gravando) iniciarPreviewOcioso(); }, 400);
+    }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { aplicaEspelhoPreview(); }
 
     private void aplicaEspelhoPreview() {
@@ -175,9 +180,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                         session.setRepeatingRequest(r.build(), null, ui);
                     } catch (Exception ignored) {}
                 }
-                @Override public void onConfigureFailed(CameraCaptureSession sess) {}
+                @Override public void onConfigureFailed(CameraCaptureSession sess) {
+                    ui.postDelayed(() -> { if (!gravando && cameraAberta) iniciarPreviewOcioso(); }, 600);
+                }
             }, ui);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            ui.postDelayed(() -> { if (!gravando && cameraAberta) iniciarPreviewOcioso(); }, 600);
+        }
     }
 
     private void iniciar() {
