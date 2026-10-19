@@ -1,0 +1,50 @@
+name: GH-KALI Build MicGain
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 8.7
+        run: |
+          curl -sL -m 120 -o /tmp/g.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q /tmp/g.zip -d /tmp && /tmp/gradle-8.7/bin/gradle --version | head -6
+
+      - name: SDK 35
+        run: |
+          SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
+
+      - name: Build MicGain
+        run: |
+          cd apps/micgain
+          /tmp/gradle-8.7/bin/gradle assembleDebug --no-daemon -q
+          ls -la app/build/outputs/apk/debug/
+
+      - name: Envia APK pro Telegram
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          APK=$(find apps/micgain -name "*debug.apk" | head -1)
+          curl -s -m 60 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
+            -F chat_id="${TG_CHAT}" \
+            -F document=@"${APK}" \
+            -F caption="MicGain ENI v1.0 - ganho de microfone externo pro G52 (use com fone plugado)" || true
+
+      - name: Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: micgain-apk
+          path: apps/micgain/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
