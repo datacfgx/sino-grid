@@ -60,8 +60,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long t0 = 0;
     private boolean ultimaGravProcessador = false;
-    private int resW = 1280, resH = 720;
-    private int bitrate = 10_000_000;
+    private int resW = 1920, resH = 1080;
+    private int bitrate = 20_000_000;
     private boolean blinkOn = false;
     private final Runnable blinker = new Runnable() {
         @Override public void run() {
@@ -94,6 +94,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         btnRec = findViewById(R.id.btnRec);
         tvPreview.setSurfaceTextureListener(this);
         spFonte.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, NOMES));
+        spFonte.setSelection(4); // PROCESSADOR padrao
         sbGanho.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean u) {
                 ganho = 1.0f + p / 10f;
@@ -131,7 +132,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
     }
 
-    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { abrirCamera(); aplicaEspelhoPreview(); }
+    private boolean surfacePronta = false;
+    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { surfacePronta = true; abrirCamera(); aplicaEspelhoPreview(); }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { aplicaEspelhoPreview(); }
 
     private void aplicaEspelhoPreview() {
@@ -155,11 +157,29 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             }
             cameraId = modoCam != 0 && idFrente != null ? idFrente : (idCostas != null ? idCostas : cameraManager.getCameraIdList()[0]);
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
-                @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); }
+                @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); if (surfacePronta) iniciarPreviewOcioso(); }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
                 @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
             }, ui);
         } catch (Exception e) { txtStatus.setText("falha: " + e.getMessage()); }
+    }
+
+    private void iniciarPreviewOcioso() {
+        if (camera == null || !surfacePronta) return;
+        try {
+            Surface s = new Surface(tvPreview.getSurfaceTexture());
+            camera.createCaptureSession(java.util.Arrays.asList(s), new CameraCaptureSession.StateCallback() {
+                @Override public void onConfigured(CameraCaptureSession sess) {
+                    session = sess;
+                    try {
+                        CaptureRequest.Builder r = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+                        r.addTarget(s);
+                        session.setRepeatingRequest(r.build(), null, ui);
+                    } catch (Exception ignored) {}
+                }
+                @Override public void onConfigureFailed(CameraCaptureSession sess) {}
+            }, ui);
+        } catch (Exception ignored) {}
     }
 
     private void iniciar() {
@@ -204,6 +224,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             recorder.setAudioSamplingRate(44100);
             recorder.prepare();
 
+            try { if (session != null) { session.stopRepeating(); session.close(); } } catch (Exception ignored) {}
             Surface previewSurface = new Surface(tvPreview.getSurfaceTexture());
             Surface recSurface = recorder.getSurface();
             camera.createCaptureSession(Arrays.asList(previewSurface, recSurface), new CameraCaptureSession.StateCallback() {
@@ -249,6 +270,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             try { recorder.release(); } catch (Exception ignored) {}
             try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
             try { pfd.close(); } catch (Exception ignored) {}
+            iniciarPreviewOcioso();
             if (ultimaGravProcessador) {
                 pararPcm();
                 runOnUiThread(() -> txtStatus.setText("processando EQ + ganho no audio..."));
