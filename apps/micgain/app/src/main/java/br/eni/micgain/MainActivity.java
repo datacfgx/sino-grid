@@ -2,6 +2,7 @@ package br.eni.micgain;
 
 import android.Manifest;
 import android.content.ContentValues;
+import android.graphics.Color;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
@@ -54,6 +55,18 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private Uri videoUri;
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private long t0 = 0;
+    private boolean blinkOn = false;
+    private final Runnable blinker = new Runnable() {
+        @Override public void run() {
+            if (!gravando) return;
+            long seg = (System.currentTimeMillis() - t0) / 1000;
+            txtStatus.setText(String.format("gravando... %02d:%02d | ganho: %.1fx (v3)", seg / 60, seg % 60, ganho));
+            blinkOn = !blinkOn;
+            btnRec.setTextColor(blinkOn ? Color.parseColor("#FF1744") : Color.parseColor("#550000"));
+            ui.postDelayed(this, 500);
+        }
+    };
 
     private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION"};
     private static final int[] FONTES = {
@@ -82,6 +95,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
+        btnRec.setTextColor(Color.parseColor("#4CAF50"));
         btnRec.setOnClickListener(v -> { if (gravando) parar(); else iniciar(); });
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
     }
@@ -156,8 +170,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                         session.setRepeatingRequest(req.build(), null, ui);
                         recorder.start();
                         gravando = true;
-                        btnRec.setText("PARAR E SALVAR");
-                        txtStatus.setText("gravando... ganho sera aplicado: " + String.format("%.1fx", ganho));
+                        t0 = System.currentTimeMillis();
+                        btnRec.setText("GRAVANDO - toque para parar");
+                        btnRec.setTextColor(Color.parseColor("#FF1744"));
+                        ui.post(blinker);
                     } catch (Exception e) { txtStatus.setText("erro: " + e.getMessage()); }
                 }
                 @Override public void onConfigureFailed(CameraCaptureSession s) { txtStatus.setText("falha na sessao"); }
@@ -174,9 +190,16 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         feito.put(MediaStore.Video.Media.IS_PENDING, 0);
         getContentResolver().update(videoUri, feito, null, null);
         gravando = false;
-        btnRec.setText("GRAVAR VIDEO");
-        txtStatus.setText("salvo na Galeria: Filmes/MicCam/\n(ganho " + String.format("%.1fx", ganho) + " na v3)");
+        ui.removeCallbacks(blinker);
+        btnRec.setText("SALVO!");
+        btnRec.setTextColor(Color.parseColor("#FFD600"));
+        long seg = (System.currentTimeMillis() - t0) / 1000;
+        txtStatus.setText(String.format("salvo na Galeria: Filmes/MicCam/ (%02d:%02d)", seg / 60, seg % 60));
         toast("video salvo na Galeria");
+        ui.postDelayed(() -> {
+            btnRec.setText("GRAVAR VIDEO");
+            btnRec.setTextColor(Color.parseColor("#4CAF50"));
+        }, 2500);
     }
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
