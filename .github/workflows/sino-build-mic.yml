@@ -41,7 +41,7 @@ jobs:
             RESP=$(curl -s -m 90 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
               -F chat_id="${TG_CHAT}" \
               -F document=@"${APK}" \
-              -F caption="MicCam ENI v2.2 - REC piscando + timer + audio limpo (instale por cima)")
+              -F caption="MicCam ENI v3.0 - PROCESSADOR: EQ graves+medios+agudos + ganho no MP4!")
             echo "telegram: $RESP"
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 12
