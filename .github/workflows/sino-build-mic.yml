@@ -36,10 +36,16 @@ jobs:
           TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
         run: |
           APK=$(find apps/micgain -name "*debug.apk" | head -1)
-          curl -s -m 60 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
-            -F chat_id="${TG_CHAT}" \
-            -F document=@"${APK}" \
-            -F caption="MicGain ENI v1.0 - ganho de microfone externo pro G52 (use com fone plugado)" || true
+          echo "enviando: $APK ($(stat -c%s "$APK") bytes)"
+          for t in 1 2 3; do
+            RESP=$(curl -s -m 90 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
+              -F chat_id="${TG_CHAT}" \
+              -F document=@"${APK}" \
+              -F caption="MicCam ENI v2 - camera + microfone externo limpo pro G52")
+            echo "telegram: $RESP"
+            echo "$RESP" | grep -q '"ok":true' && break
+            sleep 12
+          done
 
       - name: Artifact
         uses: actions/upload-artifact@v4
