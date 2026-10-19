@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long t0 = 0;
+    private boolean ultimaGravProcessador = false;
     private boolean blinkOn = false;
     private final Runnable blinker = new Runnable() {
         @Override public void run() {
@@ -68,12 +69,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         }
     };
 
-    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION"};
+    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION", "PROCESSADOR (EQ + ganho no arquivo)"};
     private static final int[] FONTES = {
             MediaRecorder.AudioSource.UNPROCESSED,
             MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.CAMCORDER,
-            MediaRecorder.AudioSource.VOICE_RECOGNITION};
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            -1};
 
     @Override
     protected void onCreate(Bundle b) {
@@ -146,7 +148,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             }
             recorder.setOrientationHint((sensorOrientation - graus + 360) % 360);
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-            recorder.setAudioSource(FONTES[spFonte.getSelectedItemPosition()]);
+            int fonteEscolhida = FONTES[spFonte.getSelectedItemPosition()];
+            final boolean processador = fonteEscolhida == -1;
+            ultimaGravProcessador = processador;
+            if (processador) {
+                recorder.setAudioSource(MediaRecorder.AudioSource.UNPROCESSED);
+            } else {
+                recorder.setAudioSource(fonteEscolhida);
+            }
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             recorder.setOutputFile(pfd.getFileDescriptor());
             recorder.setVideoEncodingBitRate(10_000_000);
@@ -168,6 +177,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                         req.addTarget(previewSurface);
                         req.addTarget(recSurface);
                         session.setRepeatingRequest(req.build(), null, ui);
+                        if (processador) iniciarPcm(MediaRecorder.AudioSource.UNPROCESSED);
                         recorder.start();
                         gravando = true;
                         t0 = System.currentTimeMillis();
@@ -182,24 +192,188 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     }
 
     private void parar() {
-        try { recorder.stop(); } catch (Exception ignored) {}
-        try { recorder.release(); } catch (Exception ignored) {}
-        try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
-        try { pfd.close(); } catch (Exception ignored) {}
-        ContentValues feito = new ContentValues();
-        feito.put(MediaStore.Video.Media.IS_PENDING, 0);
-        getContentResolver().update(videoUri, feito, null, null);
         gravando = false;
         ui.removeCallbacks(blinker);
         btnRec.setText("SALVO!");
         btnRec.setTextColor(Color.parseColor("#FFD600"));
-        long seg = (System.currentTimeMillis() - t0) / 1000;
-        txtStatus.setText(String.format("salvo na Galeria: Filmes/MicCam/ (%02d:%02d)", seg / 60, seg % 60));
-        toast("video salvo na Galeria");
-        ui.postDelayed(() -> {
-            btnRec.setText("GRAVAR VIDEO");
-            btnRec.setTextColor(Color.parseColor("#4CAF50"));
-        }, 2500);
+        txtStatus.setText("finalizando...");
+        new Thread(() -> {
+            try { recorder.stop(); } catch (Exception ignored) {}
+            try { recorder.release(); } catch (Exception ignored) {}
+            try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
+            try { pfd.close(); } catch (Exception ignored) {}
+            if (ultimaGravProcessador) {
+                pararPcm();
+                runOnUiThread(() -> txtStatus.setText("processando EQ + ganho no audio..."));
+                muxAudioProcessado();
+            }
+            ContentValues feito = new ContentValues();
+            feito.put(MediaStore.Video.Media.IS_PENDING, 0);
+            getContentResolver().update(videoUri, feito, null, null);
+            long seg = (System.currentTimeMillis() - t0) / 1000;
+            String extra = ultimaGravProcessador ? " | audio: PROCESSADO (EQ+ganho)" : " | audio limpo (ganho na v3 com processador)";
+            runOnUiThread(() -> {
+                txtStatus.setText(String.format("salvo na Galeria: Filmes/MicCam/ (%02d:%02d)%s", seg / 60, seg % 60, extra));
+                toast("video salvo na Galeria");
+                ui.postDelayed(() -> {
+                    btnRec.setText("GRAVAR VIDEO");
+                    btnRec.setTextColor(Color.parseColor("#4CAF50"));
+                }, 2500);
+            });
+        }).start();
+    }
+
+
+    // ===================== PROCESSADOR v3: captura PCM + EQ 3 bandas + mux =====================
+    private android.media.AudioRecord pcmRec;
+    private Thread pcmThread;
+    private volatile boolean capturandoPcm = false;
+    private final java.util.ArrayList<Short> pcmProcessado = new java.util.ArrayList<>();
+    private double b0l, b1l, b2l, a1l, a2l, x1l, x2l, y1l, y2l;
+    private double b0m, b1m, b2m, a1m, a2m, x1m, x2m, y1m, y2m;
+    private double b0h, b1h, b2h, a1h, a2h, x1h, x2h, y1h, y2h;
+
+    private void initEq() {
+        double fs = 44100.0;
+        // graves: low-shelf 120Hz +6dB
+        double A = Math.pow(10, 6.0 / 40.0), w0 = 2 * Math.PI * 120 / fs, S = 1.0;
+        double alfa = Math.sin(w0) / 2 * Math.sqrt((A + 1 / A) * (1 / S - 1) + 2);
+        double cw = Math.cos(w0), sq = 2 * Math.sqrt(A) * alfa;
+        double denl = (A + 1) + (A - 1) * cw + sq;
+        b0l = A * ((A + 1) - (A - 1) * cw + sq) / denl;
+        b1l = 2 * A * ((A - 1) - (A + 1) * cw) / denl;
+        b2l = A * ((A + 1) - (A - 1) * cw - sq) / denl;
+        a1l = -2 * ((A - 1) + (A + 1) * cw) / denl;
+        a2l = ((A + 1) + (A - 1) * cw - sq) / denl;
+        // medios: peaking 1kHz +3dB Q=0.8
+        A = Math.pow(10, 3.0 / 40.0); w0 = 2 * Math.PI * 1000 / fs; double Q = 0.8;
+        alfa = Math.sin(w0) / (2 * Q);
+        double den = 1 + alfa / A;
+        b0m = (1 + alfa * A) / den; b1m = (-2 * Math.cos(w0)) / den; b2m = (1 - alfa * A) / den;
+        a1m = (-2 * Math.cos(w0)) / den; a2m = (1 - alfa / A) / den;
+        // agudos: high-shelf 6kHz +4dB
+        A = Math.pow(10, 4.0 / 40.0); w0 = 2 * Math.PI * 6000 / fs; S = 1.0;
+        alfa = Math.sin(w0) / 2 * Math.sqrt((A + 1 / A) * (1 / S - 1) + 2);
+        cw = Math.cos(w0); sq = 2 * Math.sqrt(A) * alfa;
+        double d0 = (A + 1) + (A - 1) * cw + sq;
+        b0h = A * ((A + 1) + (A - 1) * cw + sq) / d0; b1h = -2 * A * ((A - 1) + (A + 1) * cw) / d0;
+        b2h = A * ((A + 1) + (A - 1) * cw - sq) / d0;
+        a1h = -((A - 1) + (A + 1) * cw - sq) / d0; a2h = -((A + 1) - (A - 1) * cw + sq) / d0;
+        x1l = x2l = y1l = y2l = x1m = x2m = y1m = y2m = x1h = x2h = y1h = y2h = 0;
+    }
+    private short eq3(short x) {
+        double v = x;
+        double y = b0l * v + b1l * x1l + b2l * x2l - a1l * y1l - a2l * y2l;
+        x2l = x1l; x1l = v; y2l = y1l; y1l = y;
+        v = y;
+        y = b0m * v + b1m * x1m + b2m * x2m - a1m * y1m - a2m * y2m;
+        x2m = x1m; x1m = v; y2m = y1m; y1m = y;
+        v = y;
+        y = b0h * v + b1h * x1h + b2h * x2h + a1h * y1h + a2h * y2h;
+        x2h = x1h; x1h = v; y2h = y1h; y1h = y;
+        double g = y * ganho;
+        g = Math.tanh(g / 30000.0) * 30000.0;
+        return (short) Math.max(-32000, Math.min(32000, g));
+    }
+
+    private void iniciarPcm(int fonte) {
+        int minBuf = android.media.AudioRecord.getMinBufferSize(44100, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT);
+        pcmRec = new android.media.AudioRecord(fonte, 44100, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf * 2, 8192));
+        if (pcmRec.getState() != android.media.AudioRecord.STATE_INITIALIZED) return;
+        pcmProcessado.clear();
+        initEq();
+        pcmRec.startRecording();
+        capturandoPcm = true;
+        pcmThread = new Thread(() -> {
+            short[] buf = new short[2048];
+            while (capturandoPcm) {
+                int n = pcmRec.read(buf, 0, buf.length);
+                if (n <= 0) continue;
+                for (int i = 0; i < n; i++) pcmProcessado.add(eq3(buf[i]));
+            }
+        });
+        pcmThread.start();
+    }
+
+    private void pararPcm() {
+        capturandoPcm = false;
+        try { if (pcmThread != null) pcmThread.join(400); } catch (InterruptedException ignored) {}
+        try { pcmRec.stop(); pcmRec.release(); } catch (Exception ignored) {}
+    }
+
+    private void muxAudioProcessado() {
+        if (pcmProcessado.size() < 4410) return;
+        File tmp = null;
+        try {
+            tmp = File.createTempFile("miccam_mux", ".mp4", getCacheDir());
+            android.media.MediaExtractor ex = new android.media.MediaExtractor();
+            ex.setDataSource(this, videoUri, null);
+            int vi = -1;
+            for (int i = 0; i < ex.getTrackCount(); i++) {
+                if (ex.getTrackFormat(i).getString(android.media.MediaFormat.KEY_MIME).startsWith("video/")) { vi = i; break; }
+            }
+            if (vi < 0) return;
+            ex.selectTrack(vi);
+            android.media.MediaMuxer muxer = new android.media.MediaMuxer(tmp.getAbsolutePath(), android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            android.media.MediaFormat vfmt = ex.getTrackFormat(vi);
+            int vidx = muxer.addTrack(vfmt);
+            android.media.MediaFormat afmt = android.media.MediaFormat.createAudioFormat("audio/mp4a-latm", 44100, 1);
+            afmt.setInteger(android.media.MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+            afmt.setInteger(android.media.MediaFormat.KEY_BIT_RATE, 192000);
+            int aidx = muxer.addTrack(afmt);
+            muxer.start();
+            java.nio.ByteBuffer vbuf = java.nio.ByteBuffer.allocate(1024 * 1024);
+            android.media.MediaCodec.BufferInfo bi = new android.media.MediaCodec.BufferInfo();
+            while (true) {
+                bi.offset = 0; bi.size = ex.readSampleData(vbuf, 0);
+                if (bi.size < 0) break;
+                bi.presentationTimeUs = ex.getSampleTime(); bi.flags = ex.getSampleFlags();
+                muxer.writeSampleData(vidx, vbuf, bi);
+                ex.advance();
+            }
+            ex.release();
+            android.media.MediaCodec enc = android.media.MediaCodec.createEncoderByType("audio/mp4a-latm");
+            enc.configure(afmt, null, null, android.media.MediaCodec.CONFIGURE_FLAG_ENCODE);
+            enc.start();
+            java.nio.ByteBuffer inBuf = java.nio.ByteBuffer.allocateDirect(2048 * 2);
+            java.nio.ByteBuffer[] outArr = enc.getOutputBuffers();
+            int total = pcmProcessado.size(), pos = 0;
+            long pts = 0;
+            boolean inputDone = false, outputDone = false;
+            while (!outputDone) {
+                if (!inputDone) {
+                    int idx = enc.dequeueInputBuffer(10000);
+                    if (idx >= 0) {
+                        inBuf.clear();
+                        int chunk = Math.min(1024, total - pos);
+                        for (int i = 0; i < chunk; i++) inBuf.putShort(pcmProcessado.get(pos + i));
+                        pos += chunk;
+                        enc.queueInputBuffer(idx, 0, chunk * 2, pts, pos >= total ? android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+                        pts += (long) chunk * 1000000 / 44100;
+                        if (pos >= total) inputDone = true;
+                    }
+                }
+                int oi = enc.dequeueOutputBuffer(bi, 10000);
+                if (oi == android.media.MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) outArr = enc.getOutputBuffers();
+                else if (oi >= 0) {
+                    if (bi.size > 0 && (bi.flags & android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                        muxer.writeSampleData(aidx, outArr[oi], bi);
+                    }
+                    enc.releaseOutputBuffer(oi, false);
+                    if ((bi.flags & android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputDone = true;
+                }
+            }
+            enc.stop(); enc.release();
+            muxer.stop(); muxer.release();
+            java.io.InputStream is = new java.io.FileInputStream(tmp);
+            java.io.OutputStream os = getContentResolver().openOutputStream(videoUri, "wt");
+            byte[] b = new byte[65536]; int n;
+            while ((n = is.read(b)) > 0) os.write(b, 0, n);
+            os.close(); is.close();
+            tmp.delete();
+        } catch (Exception e) {
+            runOnUiThread(() -> txtStatus.setText("processador falhou (audio original mantido): " + e.getMessage()));
+        }
     }
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
