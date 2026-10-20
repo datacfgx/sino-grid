@@ -38,7 +38,9 @@ jobs:
           sed -i 's/^          //' out/res/drawable/btn_gravar_cinza.xml
           ALVO=$(grep -rl 'btnRec' out/res/layout/ | head -1)
           echo "arquivo do btnRec: $ALVO"
-          grep -n '@+id/btnRec' "$ALVO" || echo "btnRec NAO encontrado"
+          grep -n btnRec "$ALVO" | head -5
+          echo "==== trecho do layout ===="
+          head -50 "$ALVO"
           L=$(grep -n '@+id/btnRec' "$ALVO" | head -1 | cut -d: -f1)
           echo "linha: $L"
           [ -z "$L" ] && { echo "btnRec nao achado"; exit 1; }
