@@ -16,7 +16,6 @@ jobs:
         run: |
           curl -sL -m 300 -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
           unzip -q /tmp/ndk.zip -d /tmp
-          ls /tmp/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/clang
       - name: Gradle 8.7
         run: |
           curl -sL -m 120 -o /tmp/g.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
@@ -28,11 +27,11 @@ jobs:
           test -n "$SM"
           yes | $SM --licenses > /dev/null 2>&1 || true
           $SM "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
-      - name: hello bionic estatico
+      - name: hello freestanding
         run: |
           CC=/tmp/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/clang
           mkdir -p apps/probe-eni/app/src/main/assets
-          $CC --target=aarch64-linux-android23 -static -O2 -o apps/probe-eni/app/src/main/assets/hello apps/probe-eni/hello.c
+          $CC --target=aarch64-linux-android23 -nostdlib -ffreestanding -static -O2 -o apps/probe-eni/app/src/main/assets/hello apps/probe-eni/hello.c
           file apps/probe-eni/app/src/main/assets/hello
       - name: Build
         run: |
@@ -49,4 +48,4 @@ jobs:
       - name: Envia APK pro Telegram
         run: |
           APK=$(ls apps/probe-eni/app/build/outputs/apk/debug/*.apk)
-          curl -s -F document=@"$APK" -F caption="Probe ENI v4 (hello bionico estatico)" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
+          curl -s -F document=@"$APK" -F caption="Probe ENI v5 (hello freestanding, so syscalls)" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
