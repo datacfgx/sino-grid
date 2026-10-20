@@ -246,6 +246,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                             if (ois != null) for (int m : ois) if (m == CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON)
                                 { req.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON); break; }
                         } catch (Exception ignored) {}
+                        try { req.set(CaptureRequest.EDGE_MODE, CameraMetadata.EDGE_MODE_HIGH_QUALITY); } catch (Exception ignored) {}
+                        try { req.set(CaptureRequest.NOISE_REDUCTION_MODE, CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY); } catch (Exception ignored) {}
+                        try { req.set(CaptureRequest.HOT_PIXEL_MODE, CameraMetadata.HOT_PIXEL_MODE_HIGH_QUALITY); } catch (Exception ignored) {}
+                        try { req.set(CaptureRequest.TONEMAP_MODE, CameraMetadata.TONEMAP_MODE_HIGH_QUALITY); } catch (Exception ignored) {}
                         try {
                             int[] eis = cc.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES); // mantem
                             if (eis != null) for (int m : eis) if (m == CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON)
