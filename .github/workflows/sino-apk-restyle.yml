@@ -58,11 +58,16 @@ jobs:
           SMALI_PATH="$SMALI" python3 <<'PYEOF'
           import os, re
           p = os.environ["SMALI_PATH"]
-          lines = open(p).read().splitlines()
+          src = open(p).read().splitlines()
+          # aloca 2 registradores novos no topo
+          loc = next(l for l in src if l.strip().startswith(".locals"))
+          n = int(loc.strip().split()[1])
+          va, vb = f"v{n}", f"v{n+1}"
+          src[src.index(loc)] = f"    .locals {n+2}"
           out = []
           espera_set = False
           inserido = 0
-          for l in lines:
+          for l in src:
               out.append(l)
               if 'CONTROL_VIDEO_STABILIZATION_MODE' in l and 'sget-object' in l:
                   espera_set = True
@@ -72,15 +77,15 @@ jobs:
                   reg = m.group(1)
                   for key, val in [('EDGE_MODE','0x2'), ('NOISE_REDUCTION_MODE','0x2'), ('HOT_PIXEL_MODE','0x2'), ('TONEMAP_MODE','0x1')]:
                       out += [
-                          f'sget-object v2, Landroid/hardware/camera2/CaptureRequest;->{key}:Landroid/hardware/camera2/CaptureRequest$Key;',
-                          f'const/4 v3, {val}',
-                          'invoke-static {v3}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;',
-                          'move-result-object v3',
-                          f'invoke-virtual {{{reg}, v2, v3}}, Landroid/hardware/camera2/CaptureRequest$Builder;->set(Landroid/hardware/camera2/CaptureRequest$Key;Ljava/lang/Object;)V']
+                          f'sget-object {va}, Landroid/hardware/camera2/CaptureRequest;->{key}:Landroid/hardware/camera2/CaptureRequest$Key;',
+                          f'const/4 {vb}, {val}',
+                          f'invoke-static {{{vb}}}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;',
+                          f'move-result-object {vb}',
+                          f'invoke-virtual {{{reg}, {va}, {vb}}}, Landroid/hardware/camera2/CaptureRequest$Builder;->set(Landroid/hardware/camera2/CaptureRequest$Key;Ljava/lang/Object;)V']
                   inserido = 4
                   espera_set = False
           open(p, 'w').write("\n".join(out) + "\n")
-          print("sets inseridos:", inserido)
+          print("locals:", n, "->", n+2, "| regs:", va, vb, "| sets:", inserido)
           PYEOF
 
       - name: Rebuild e assina
@@ -103,7 +108,7 @@ jobs:
             RESP=$(curl -s -m 90 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
               -F chat_id="${TG_CHAT}" \
               -F document=@app-restyle.apk \
-              -F caption="MicCam HQ TESTE - qualidade maxima do G52 (se travar, volta pro anterior)")
+              -F caption="MicCam HQ v2 - registradores proprios (fix do crash na gravacao)")
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 12
           done
