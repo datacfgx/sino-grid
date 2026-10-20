@@ -54,8 +54,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private volatile float ganho = 1.0f;
     private boolean gravando = false, cameraAberta = false;
     private String cameraId;
-    private String idCostas, idFrente;
-    private int modoCam = 0; // 0 tras, 1 frontal espelhada, 2 frontal sem espelho
+    private String idCostas;
     private Uri videoUri;
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -111,16 +110,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         });
         btnRec = findViewById(R.id.btnRec);
         btnRec.setTextColor(Color.WHITE);
-        android.widget.Button btnTroca = findViewById(R.id.btnTroca);
-        btnTroca.setOnClickListener(v -> {
-            if (gravando) { toast("pare a gravacao para trocar"); return; }
-            modoCam = (modoCam + 1) % 3;
-            String[] rotulos = {"\uD83D\uDD04 Câmera traseira", "\uD83D\uDD04 Frontal espelhada", "\uD83D\uDD04 Frontal SEM espelho"};
-            btnTroca.setText(rotulos[modoCam]);
-            aplicaEspelhoPreview();
-            try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
-            abrirCamera();
-        });
+        
         android.widget.Button btnRes = findViewById(R.id.btnRes);
         btnRes.setOnClickListener(v -> {
             String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
@@ -147,16 +137,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
         surfacePronta = true;
         abrirCamera();
-        aplicaEspelhoPreview();
         ui.postDelayed(() -> { if (cameraAberta && !gravando) iniciarPreviewOcioso(); }, 400);
     }
-    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { aplicaEspelhoPreview(); }
+    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {}
 
-    private void aplicaEspelhoPreview() {
-        android.graphics.Matrix m = new android.graphics.Matrix();
-        if (modoCam == 2) m.setScale(-1f, 1f, tvPreview.getWidth() / 2f, tvPreview.getHeight() / 2f);
-        tvPreview.setTransform(m);
-    }
         @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return false; }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture st) {}
 
@@ -169,11 +153,17 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 CameraCharacteristics c = cameraManager.getCameraCharacteristics(id);
                 Integer f = c.get(CameraCharacteristics.LENS_FACING);
                 if (f != null && f == CameraCharacteristics.LENS_FACING_BACK) idCostas = id;
-                if (f != null && f == CameraCharacteristics.LENS_FACING_FRONT) idFrente = id;
             }
-            cameraId = modoCam != 0 && idFrente != null ? idFrente : (idCostas != null ? idCostas : cameraManager.getCameraIdList()[0]);
+            cameraId = idCostas != null ? idCostas : cameraManager.getCameraIdList()[0];
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
-                @Override public void onOpened(CameraDevice cd) { camera = cd; cameraAberta = true; txtStatus.setText("camera pronta"); if (surfacePronta) iniciarPreviewOcioso(); }
+                @Override public void onOpened(CameraDevice cd) {
+            camera = cd; cameraAberta = true;
+            txtStatus.setText("camera pronta (id=" + cameraId + " surface=" + surfacePronta + ")");
+            previewOkAt = 0;
+            iniciarPreviewOcioso();
+            ui.postDelayed(this::iniciarPreviewOcioso, 800);
+            ui.postDelayed(this::iniciarPreviewOcioso, 2500);
+        }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
                 @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
             }, ui);
@@ -320,16 +310,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 ui.postDelayed(() -> {
                     btnRec.setText("GRAVAR VIDEO");
                     btnRec.setTextColor(Color.WHITE);
-        android.widget.Button btnTroca = findViewById(R.id.btnTroca);
-        btnTroca.setOnClickListener(v -> {
-            if (gravando) { toast("pare a gravacao para trocar"); return; }
-            modoCam = (modoCam + 1) % 3;
-            String[] rotulos = {"\uD83D\uDD04 Câmera traseira", "\uD83D\uDD04 Frontal espelhada", "\uD83D\uDD04 Frontal SEM espelho"};
-            btnTroca.setText(rotulos[modoCam]);
-            aplicaEspelhoPreview();
-            try { if (camera != null) { camera.close(); cameraAberta = false; camera = null; } } catch (Exception ignored) {}
-            abrirCamera();
-        });
+        
         android.widget.Button btnRes = findViewById(R.id.btnRes);
         btnRes.setOnClickListener(v -> {
             String[] opcoes = {"HD 720p (leve, ocupa menos)", "Full HD 1080p (qualidade máxima)"};
