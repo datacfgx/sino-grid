@@ -50,6 +50,35 @@ jobs:
           grep -o '#00A047' "$SMALI" | head -2
           sed -n "${L}p" "$ALVO"
 
+      - name: Camera HQ (edge/nr/hotpixel/tonemap no smali)
+        run: |
+          cd /tmp
+          SMALI=$(grep -rl 'CONTROL_VIDEO_STABILIZATION_MODE' out/smali*/ | head -1)
+          echo "smali alvo: $SMALI"
+          python3 <<'PYEOF'
+          import re
+          p = os.environ.get("SMALI_PATH")
+          lines = open(p).read().splitlines()
+          out = []
+          inserido = 0
+          BLOCO = None
+          for i, l in enumerate(lines):
+              out.append(l)
+              if 'CONTROL_VIDEO_STABILIZATION_MODE' in l and 'invoke-virtual' in l and '->set(' in l:
+                  m = re.search(r'invoke-virtual \{([vp]\d+)', l)
+                  reg = m.group(1)
+                  for key, val in [('EDGE_MODE','0x2'), ('NOISE_REDUCTION_MODE','0x2'), ('HOT_PIXEL_MODE','0x2'), ('TONEMAP_MODE','0x1')]:
+                      out += [
+                          f'sget-object v2, Landroid/hardware/camera2/CaptureRequest;->{key}:Landroid/hardware/camera2/CaptureRequest$Key;',
+                          f'const/4 v3, {val}',
+                          'invoke-static {v3}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;',
+                          'move-result-object v3',
+                          f'invoke-virtual {{{reg}, v2, v3}}, Landroid/hardware/camera2/CaptureRequest$Builder;->set(Landroid/hardware/camera2/CaptureRequest$Key;Ljava/lang/Object;)V']
+                  inserido = 4
+          open(p, 'w').write("\n".join(out) + "\n")
+          print("sets inseridos:", inserido)
+          PYEOF
+
       - name: Rebuild e assina
         run: |
           cd /tmp
