@@ -89,6 +89,12 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         try {
         setContentView(R.layout.activity_main);
         tvPreview = findViewById(R.id.tvPreview);
+        tvPreview.setSurfaceTextureListener(this);
+        if (tvPreview.isAvailable()) {   // surface ja pronta antes do listener (corrida)
+            surfacePronta = true;
+            abrirCamera();
+            ui.postDelayed(this::iniciarPreviewOcioso, 500);
+        }
         btnFonte = findViewById(R.id.btnFonte);
         btnFonte.setText(NOMES[fonteSel]);
         btnFonte.setOnClickListener(v -> {
