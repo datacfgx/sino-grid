@@ -7,8 +7,8 @@ android {
         applicationId = "br.eni.micgain"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "3.9"
+        versionCode = 3
+        versionName = "3.9b"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }

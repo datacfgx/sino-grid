@@ -40,7 +40,7 @@ public class MixerFaderView extends View {
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
         float w = getWidth(), h = getHeight();
-        float pad = pad(w);
+        float p = pad(w);
         float y = h * 0.44f;
         float railH = Math.max(10f, Math.min(14f, h * 0.18f));
         float tickHalf = Math.min(20f, h * 0.22f);
@@ -48,19 +48,19 @@ public class MixerFaderView extends View {
         float txtSize = Math.max(20f, Math.min(26f, h * 0.28f));
         pTxt.setTextSize(txtSize);
         // trilho
-        c.drawRoundRect(new RectF(pad, y - railH/2, w - pad, y + railH/2), 7, 7, pRail);
+        c.drawRoundRect(new RectF(p, y - railH/2, w - p, y + railH/2), 7, 7, pRail);
         // zona segura 0..30%
-        float safeX = pad + (w - 2*pad) * 0.30f;
-        c.drawRoundRect(new RectF(pad, y - railH/2, safeX, y + railH/2), 7, 7, pSafe);
+        float safeX = p + (w - 2*p) * 0.30f;
+        c.drawRoundRect(new RectF(p, y - railH/2, safeX, y + railH/2), 7, 7, pSafe);
         // ticks + labels 1x..5x
         String[] labels = {"1x", "", "2x", "", "3x", "", "4x", "", "5x"};
         for (int i = 0; i < 9; i++) {
-            float x = pad + i * ((w - 2*pad) / 8f);
+            float x = p + i * ((w - 2*p) / 8f);
             c.drawLine(x, y - tickHalf, x, y + tickHalf, pTick);
             if (!labels[i].isEmpty()) c.drawText(labels[i], x - txtSize * 0.7f, y + labelOff, pTxt);
         }
         // cap do fader
-        float cx = pad + (w - 2*pad) * (valor / 40f);
+        float cx = p + (w - 2*p) * (valor / 40f);
         float capH = h * 0.60f, capW = capH * 1.32f;
         float lineHalf = capH * 0.36f;
         c.drawRoundRect(new RectF(cx - capW/2 - 8, y - capH/2 - 8, cx + capW/2 + 8, y + capH/2 + 8), 20, 20, pGlow);
@@ -70,9 +70,9 @@ public class MixerFaderView extends View {
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         if (e.getAction() == MotionEvent.ACTION_DOWN || e.getAction() == MotionEvent.ACTION_MOVE) {
-            float pad = pad(getWidth());
-            float w = getWidth() - 2*pad;
-            valor = Math.max(0, Math.min(40, ((e.getX() - pad) / w) * 40f));
+            float p = pad(getWidth());
+            float w = getWidth() - 2*p;
+            valor = Math.max(0, Math.min(40, ((e.getX() - p) / w) * 40f));
             invalidate();
             if (listener != null) listener.onValor(valor);
             return true;
