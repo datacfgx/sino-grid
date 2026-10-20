@@ -164,7 +164,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
                 @Override public void onOpened(CameraDevice cd) {
             camera = cd; cameraAberta = true;
-            txtStatus.setText("camera pronta (id=" + cameraId + " surface=" + surfacePronta + ")");
+            txtStatus.setText("camera pronta");
             previewOkAt = 0;
             iniciarPreviewOcioso();
             ui.postDelayed(MainActivity.this::iniciarPreviewOcioso, 800);
