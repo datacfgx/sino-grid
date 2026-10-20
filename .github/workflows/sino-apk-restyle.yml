@@ -38,11 +38,12 @@ jobs:
           sed -i 's/^          //' out/res/drawable/btn_gravar_cinza.xml
           ALVO=$(grep -rl 'btnRec' out/res/layout/ | head -1)
           echo "arquivo do btnRec: $ALVO"
-          L=$(grep -n 'android:id="@+id/btnRec"' "$ALVO" | head -1 | cut -d: -f1)
+          grep -n '@+id/btnRec' "$ALVO" || echo "btnRec NAO encontrado"
+          L=$(grep -n '@+id/btnRec' "$ALVO" | head -1 | cut -d: -f1)
           echo "linha: $L"
           [ -z "$L" ] && { echo "btnRec nao achado"; exit 1; }
           sed -i "${L}"'s| android:background="[^"]*"||g' "$ALVO"
-          sed -i "${L}"'s|<Button android:id="@+id/btnRec"|<Button android:id="@+id/btnRec" android:background="@drawable/btn_gravar_cinza"|' "$ALVO"
+          sed -i "${L}"'s|android:id="@+id/btnRec"|android:background="@drawable/btn_gravar_cinza" android:id="@+id/btnRec"|' "$ALVO"
           sed -n "${L}p" "$ALVO"
 
       - name: Rebuild e assina
