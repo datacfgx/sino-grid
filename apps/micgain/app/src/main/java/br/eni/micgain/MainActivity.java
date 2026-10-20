@@ -164,7 +164,11 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
                 @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
             }, ui);
-        } catch (Exception e) { txtStatus.setText("falha: " + e.getMessage()); }
+        } catch (Exception e) {
+            StringBuilder sb = new StringBuilder("falha: ").append(e).append("\n");
+            for (StackTraceElement s : e.getStackTrace()) sb.append(s.toString()).append("\n");
+            txtStatus.setText(sb.toString());
+        }
     }
 
     private void iniciarPreviewOcioso() {
