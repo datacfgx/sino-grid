@@ -161,8 +161,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             txtStatus.setText("camera pronta (id=" + cameraId + " surface=" + surfacePronta + ")");
             previewOkAt = 0;
             iniciarPreviewOcioso();
-            ui.postDelayed(this::iniciarPreviewOcioso, 800);
-            ui.postDelayed(this::iniciarPreviewOcioso, 2500);
+            ui.postDelayed(MainActivity.this::iniciarPreviewOcioso, 800);
+            ui.postDelayed(MainActivity.this::iniciarPreviewOcioso, 2500);
         }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
                 @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
