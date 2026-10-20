@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private ParcelFileDescriptor pfd;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long t0 = 0;
+    private long previewOkAt = 0;
     private boolean ultimaGravProcessador = false;
     private int resW = 1920, resH = 1080;
     private int bitrate = 20_000_000;
@@ -185,11 +186,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
     private void iniciarPreviewOcioso() {
         if (camera == null || !surfacePronta) return;
+        if (System.currentTimeMillis() - previewOkAt < 4000) return; // preview saudavel, nao reabre
         try {
             Surface s = new Surface(tvPreview.getSurfaceTexture());
             camera.createCaptureSession(java.util.Arrays.asList(s), new CameraCaptureSession.StateCallback() {
                 @Override public void onConfigured(CameraCaptureSession sess) {
                     session = sess;
+                    previewOkAt = System.currentTimeMillis();
                     try {
                         CaptureRequest.Builder r = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
                         r.addTarget(s);
@@ -297,7 +300,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             try { recorder.release(); } catch (Exception ignored) {}
             try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
             try { pfd.close(); } catch (Exception ignored) {}
+            previewOkAt = 0;
             iniciarPreviewOcioso();
+            ui.postDelayed(this::iniciarPreviewOcioso, 1500);
+            ui.postDelayed(this::iniciarPreviewOcioso, 4000);
             if (ultimaGravProcessador) {
                 pararPcm();
                 runOnUiThread(() -> txtStatus.setText("processando EQ + ganho no audio..."));
