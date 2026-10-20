@@ -38,8 +38,9 @@ jobs:
           # remove background antigo do btnRec (se houver) e aplica o cinza
           L=$(grep -n 'android:id="@+id/btnRec"' out/res/layout/activity_main.xml | head -1 | cut -d: -f1)
           echo "btnRec na linha $L"
-          sed -i "${L}s| android:background="[^"]*"||g" out/res/layout/activity_main.xml
-          sed -i "${L}s|<Button android:id="@+id/btnRec"|<Button android:id="@+id/btnRec" android:background="@drawable/btn_gravar_cinza"|" out/res/layout/activity_main.xml
+          [ -z "$L" ] && { echo "btnRec nao achado"; exit 1; }
+          sed -i "${L}"'s| android:background="[^"]*"||g' out/res/layout/activity_main.xml
+          sed -i "${L}"'s|<Button android:id="@+id/btnRec"|<Button android:id="@+id/btnRec" android:background="@drawable/btn_gravar_cinza"|' out/res/layout/activity_main.xml
           sed -n "${L}p" out/res/layout/activity_main.xml
 
       - name: Rebuild e assina
