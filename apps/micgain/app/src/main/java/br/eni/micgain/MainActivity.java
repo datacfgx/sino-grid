@@ -216,7 +216,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             }
             recorder.setOrientationHint((sensorOrientation - graus + 360) % 360);
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-            int fonteEscolhida = FONTES[spFonte.getSelectedItemPosition()];
+            int posFonte = spFonte.getSelectedItemPosition();
+            if (posFonte < 0) posFonte = 4;
+            int fonteEscolhida = FONTES[posFonte];
             final boolean processador = fonteEscolhida == -1;
             ultimaGravProcessador = processador;
             if (processador) {
