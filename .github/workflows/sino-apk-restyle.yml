@@ -1,0 +1,77 @@
+name: GH-KALI APK Restyle
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  restyle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ferramentas
+        run: |
+          curl -sL -m 60 -o /tmp/apktool.jar $(curl -s https://api.github.com/repos/iBotPeaches/Apktool/releases/latest | grep browser_download_url | grep '\.jar' | cut -d'"' -f4)
+          SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "build-tools;35.0.0" > /dev/null 2>&1 || true
+
+      - name: Baixa APK
+        run: curl -sL -m 120 -o /tmp/app.apk "${{ inputs.url }}" && ls -la /tmp/app.apk
+
+      - name: Troca so o fundo do GRAVAR
+        run: |
+          cd /tmp
+          java -jar apktool.jar d app.apk -o out > /dev/null
+          # drawable cinza escuro
+          mkdir -p out/res/drawable
+          cat > out/res/drawable/btn_gravar_cinza.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#2E2E2E"/>
+              <corners android:radius="28dp"/>
+          </shape>
+          EOF
+          sed -i 's/^          //' out/res/drawable/btn_gravar_cinza.xml
+          # remove background antigo do btnRec (se houver) e aplica o cinza
+          L=$(grep -n 'android:id="@+id/btnRec"' out/res/layout/activity_main.xml | head -1 | cut -d: -f1)
+          echo "btnRec na linha $L"
+          sed -i "${L}s| android:background="[^"]*"||g" out/res/layout/activity_main.xml
+          sed -i "${L}s|<Button android:id="@+id/btnRec"|<Button android:id="@+id/btnRec" android:background="@drawable/btn_gravar_cinza"|" out/res/layout/activity_main.xml
+          sed -n "${L}p" out/res/layout/activity_main.xml
+
+      - name: Rebuild e assina
+        run: |
+          cd /tmp
+          java -jar apktool.jar b out -o mod-unsigned.apk > /dev/null
+          BT=$(dirname $(find $ANDROID_HOME -name zipalign -type f | head -1))
+          keytool -genkeypair -keystore /tmp/k.jks -storepass senha123 -keypass senha123 -alias mod \
+            -dname "CN=ENI, OU=Sino, O=Familia, L=SP, ST=SP, C=BR" -keyalg RSA -keysize 2048 -validity 3650 > /dev/null 2>&1
+          $BT/zipalign -f 4 mod-unsigned.apk mod-aligned.apk
+          $BT/apksigner sign --ks /tmp/k.jks --ks-pass pass:senha123 --out app-restyle.apk mod-aligned.apk
+
+      - name: Envia
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          cd /tmp
+          for t in 1 2 3; do
+            RESP=$(curl -s -m 90 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
+              -F chat_id="${TG_CHAT}" \
+              -F document=@app-restyle.apk \
+              -F caption="MicCam RESTYLE - so o fundo do GRAVAR em cinza escuro, resto identico")
+            echo "$RESP" | grep -q '"ok":true' && break
+            sleep 12
+          done
+          echo "$RESP"
+
+      - name: Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-restyle
+          path: /tmp/app-restyle.apk
+          retention-days: 3
+          if-no-files-found: error
