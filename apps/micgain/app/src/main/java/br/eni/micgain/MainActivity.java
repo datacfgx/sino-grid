@@ -90,6 +90,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private Button btnRec;
     private volatile float ganho = 1.0f;
     private boolean gravando = false, cameraAberta = false;
+    private int tentativasCamera = 0;
     private String cameraId;
     private String idCostas;
     private Uri videoUri;
@@ -141,13 +142,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                     .setSingleChoiceItems(NOMES, fonteSel, (d, i) -> {
                         fonteSel = i;
                         btnFonte.setText(NOMES[i]);
+                        if (i == 5 && android.os.Build.VERSION.SDK_INT >= 31) {
+                            try { requestPermissions(new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, 77); } catch (Exception ignored) {}
+                        }
                         d.dismiss();
                     })
                     .show();
         });
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
-            try { requestPermissions(new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, 77); } catch (Exception ignored) {}
-        }
         txtStatus = findViewById(R.id.txtStatus);
         txtGanho = findViewById(R.id.txtGanho);
         faderGanho = findViewById(R.id.faderGanho);
@@ -193,7 +194,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
     private void abrirCamera() {
         if (cameraAberta) return;
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return;
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            txtStatus.setText("permissao da camera negada");
+            return;
+        }
         try {
             cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
             for (String id : cameraManager.getCameraIdList()) {
@@ -204,7 +208,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             cameraId = idCostas != null ? idCostas : cameraManager.getCameraIdList()[0];
             cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
                 @Override public void onOpened(CameraDevice cd) {
-            camera = cd; cameraAberta = true;
+            camera = cd; cameraAberta = true; tentativasCamera = 0;
             txtStatus.setText("camera pronta");
             previewOkAt = 0;
             iniciarPreviewOcioso();
@@ -212,13 +216,30 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             ui.postDelayed(MainActivity.this::iniciarPreviewOcioso, 2500);
         }
                 @Override public void onDisconnected(CameraDevice cd) { cd.close(); cameraAberta = false; }
-                @Override public void onError(CameraDevice cd, int e) { cd.close(); cameraAberta = false; txtStatus.setText("erro camera " + e); }
+                @Override public void onError(CameraDevice cd, int e) {
+                    try { cd.close(); } catch (Exception ignored) {}
+                    camera = null; cameraAberta = false;
+                    if (tentativasCamera < 4) { tentativasCamera++; txtStatus.setText("erro camera " + e + " — tentando de novo"); ui.postDelayed(MainActivity.this::abrirCamera, 800); }
+                    else txtStatus.setText("erro camera " + e);
+                }
             }, ui);
+            tentativasCamera++;
+            ui.postDelayed(MainActivity.this::vigiaCamera, 2600);
         } catch (Exception e) {
             StringBuilder sb = new StringBuilder("falha: ").append(e).append("\n");
             for (StackTraceElement s : e.getStackTrace()) sb.append(s.toString()).append("\n");
             txtStatus.setText(sb.toString());
         }
+    }
+
+    private void vigiaCamera() {
+        if (cameraAberta || gravando) return;
+        if (tentativasCamera >= 4) { txtStatus.setText("camera nao respondeu — feche e abra o app"); return; }
+        tentativasCamera++;
+        try { if (camera != null) { camera.close(); camera = null; } } catch (Exception ignored) {}
+        cameraAberta = false;
+        txtStatus.setText("reativando camera... (tentativa " + tentativasCamera + ")");
+        ui.postDelayed(this::abrirCamera, 500L * tentativasCamera);
     }
 
     private void iniciarPreviewOcioso() {
