@@ -77,7 +77,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             for (android.media.AudioDeviceInfo d : audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)) {
                 int t = d.getType();
                 if (t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                        || (android.os.Build.VERSION.SDK_INT >= 31 && t == android.media.AudioDeviceInfo.TYPE_BLE_SCO_HEADSET)) {
+                        || (android.os.Build.VERSION.SDK_INT >= 31 && t == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)) {
                     return d;
                 }
             }
