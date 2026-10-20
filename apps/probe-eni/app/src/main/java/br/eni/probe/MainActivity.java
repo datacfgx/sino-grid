@@ -26,11 +26,7 @@ public class MainActivity extends Activity {
         out.setTextColor(0xFFC8CCDC);
         out.setTextSize(15f);
         out.setText(intro());
-        btn.setOnClickListener(v -> out.setText(intro() + "
-
-" + testar() + "
-
-[fim]"));
+        btn.setOnClickListener(v -> out.setText(intro() + "\n\n" + testar() + "\n\n[fim]"));
         root.addView(btn);
         ScrollView sv = new ScrollView(this);
         sv.addView(out);
@@ -42,10 +38,8 @@ public class MainActivity extends Activity {
         return "uid=" + android.os.Process.myUid()
              + "  sdk=" + Build.VERSION.SDK_INT
              + "  release=" + Build.VERSION.RELEASE
-             + "
-SELINUX DOMAIN: " + ler("/proc/self/attr/current")
-             + "
-kernel: " + ler("/proc/sys/kernel/osrelease");
+             + "\nSELINUX DOMAIN: " + ler("/proc/self/attr/current")
+             + "\nkernel: " + ler("/proc/sys/kernel/osrelease");
     }
 
     private String ler(String p) {
@@ -63,15 +57,13 @@ kernel: " + ler("/proc/sys/kernel/osrelease");
             try {
                 int fd = Os.socket(38, OsConstants.SOCK_SEQPACKET, protos[i]);
                 Os.close(fd);
-                sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): *** ABERTA ***
-");
+                sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): *** ABERTA ***\n");
             } catch (ErrnoException e) {
                 sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): errno=").append(e.errno);
                 if (e.errno == 13) sb.append(" (EACCES/SELinux)");
                 else if (e.errno == 94) sb.append(" (ESOCKTNOSUPPORT=proto ausente)");
                 else if (e.errno == 97) sb.append(" (EAFNOSUPPORT=familia ausente)");
-                sb.append("
-");
+                sb.append("\n");
             }
         }
         return sb.toString();
