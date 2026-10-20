@@ -10,6 +10,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.io.*;
 
 public class MainActivity extends Activity {
     private TextView out;
@@ -18,16 +19,20 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(32, 32, 32, 32);
+        root.setPadding(24, 24, 24, 24);
         root.setBackgroundColor(0xFF08080C);
-        Button btn = new Button(this);
-        btn.setText("TESTAR AF_ALG");
+        Button btnExec = new Button(this);
+        btnExec.setText("1. TESTAR EXEC (binário estático)");
+        Button btnAlg = new Button(this);
+        btnAlg.setText("2. TESTAR AF_ALG (domínio do app)");
         out = new TextView(this);
         out.setTextColor(0xFFC8CCDC);
-        out.setTextSize(15f);
+        out.setTextSize(13f);
         out.setText(intro());
-        btn.setOnClickListener(v -> out.setText(intro() + "\n\n" + testar() + "\n\n[fim]"));
-        root.addView(btn);
+        btnExec.setOnClickListener(v -> out.setText(intro() + "\n\n" + testarExec() + "\n\n[fim]"));
+        btnAlg.setOnClickListener(v -> out.setText(intro() + "\n\n" + testarAlg() + "\n\n[fim]"));
+        root.addView(btnExec);
+        root.addView(btnAlg);
         ScrollView sv = new ScrollView(this);
         sv.addView(out);
         root.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -35,21 +40,44 @@ public class MainActivity extends Activity {
     }
 
     private String intro() {
-        return "uid=" + android.os.Process.myUid()
-             + "  sdk=" + Build.VERSION.SDK_INT
-             + "  release=" + Build.VERSION.RELEASE
-             + "\nSELINUX DOMAIN: " + ler("/proc/self/attr/current")
+        return "uid=" + android.os.Process.myUid() + " sdk=" + Build.VERSION.SDK_INT
+             + " release=" + Build.VERSION.RELEASE
+             + "\nDOMAIN: " + ler("/proc/self/attr/current")
              + "\nkernel: " + ler("/proc/sys/kernel/osrelease");
     }
 
     private String ler(String p) {
         try {
-            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(p));
+            BufferedReader r = new BufferedReader(new FileReader(p));
             String l = r.readLine(); r.close(); return l;
         } catch (Exception e) { return "?"; }
     }
 
-    private String testar() {
+    private String testarExec() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            File bin = new File(getFilesDir(), "hello");
+            if (!bin.exists()) {
+                InputStream is = getAssets().open("hello");
+                FileOutputStream fo = new FileOutputStream(bin);
+                byte[] buf = new byte[8192]; int n;
+                while ((n = is.read(buf)) > 0) fo.write(buf, 0, n);
+                fo.close(); is.close();
+            }
+            if (!bin.setExecutable(true, true)) sb.append("setExecutable=false!\n");
+            Process p = new ProcessBuilder(bin.getAbsolutePath()).redirectErrorStream(true).start();
+            BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String l;
+            while ((l = r.readLine()) != null) sb.append(l).append("\n");
+            p.waitFor();
+            sb.append("exit=").append(p.exitValue());
+        } catch (Exception e) {
+            sb.append("EXEC FALHOU: ").append(e);
+        }
+        return sb.toString();
+    }
+
+    private String testarAlg() {
         StringBuilder sb = new StringBuilder();
         int[] protos = {1, 2, 3, 4, 5};
         String[] nomes = {"CIPHER", "HASH", "AEAD", "SKCIPHER", "RNG"};
@@ -57,12 +85,10 @@ public class MainActivity extends Activity {
             try {
                 java.io.FileDescriptor fd = Os.socket(38, OsConstants.SOCK_SEQPACKET, protos[i]);
                 Os.close(fd);
-                sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): *** ABERTA ***\n");
+                sb.append(nomes[i]).append(": *** ABERTA ***\n");
             } catch (ErrnoException e) {
-                sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): errno=").append(e.errno);
+                sb.append(nomes[i]).append(": errno=").append(e.errno);
                 if (e.errno == 13) sb.append(" (EACCES/SELinux)");
-                else if (e.errno == 94) sb.append(" (ESOCKTNOSUPPORT=proto ausente)");
-                else if (e.errno == 97) sb.append(" (EAFNOSUPPORT=familia ausente)");
                 sb.append("\n");
             }
         }

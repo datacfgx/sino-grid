@@ -12,15 +12,20 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Gradle 8.7
-        run: |
-          curl -sL -m 120 -o /tmp/g.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q /tmp/g.zip -d /tmp && /tmp/gradle-8.7/bin/gradle --version | head -6
-      - name: SDK 35
+      - name: NDK + Gradle + SDK
         run: |
           SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
           yes | $SM --licenses > /dev/null 2>&1 || true
-          $SM "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
+          $SM "ndk;26.1.10909125" "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
+          curl -sL -m 120 -o /tmp/g.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q /tmp/g.zip -d /tmp && /tmp/gradle-8.7/bin/gradle --version | head -4
+      - name: Compila hello estatico arm64
+        run: |
+          CLANG=$(find $ANDROID_HOME/ndk/26.1.10909125 -name clang -path "*aarch64*" -type f | head -1)
+          echo "clang: $CLANG"
+          mkdir -p apps/probe-eni/app/src/main/assets
+          $CLANG --target=aarch64-linux-android23 -static -O2 -o apps/probe-eni/app/src/main/assets/hello apps/probe-eni/hello.c
+          ls -la apps/probe-eni/app/src/main/assets/
       - name: Build
         run: |
           cd apps/probe-eni
@@ -36,4 +41,4 @@ jobs:
       - name: Envia APK pro Telegram
         run: |
           APK=$(ls apps/probe-eni/app/build/outputs/apk/debug/*.apk)
-          curl -s -F document=@"$APK" -F caption="Probe ENI v2 (targetSdk 23) — testa AF_ALG no dominio SELinux legado" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
+          curl -s -F document=@"$APK" -F caption="Probe ENI v3 (exec gate)" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
