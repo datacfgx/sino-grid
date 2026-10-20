@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="8dp"
+    android:keepScreenOn="true"
+    android:background="#08080C">
+    <TextureView android:id="@+id/tvPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+    <Button android:id="@+id/btnRes" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginTop="2dp" android:text="Resolução: Full HD 1080p"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fonte do microfone:" android:layout_marginTop="2dp"/>
+    <Button android:id="@+id/btnFonte" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="PROCESSADOR (EQ + ganho no arquivo)"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="GANHO DO SOM" android:textColor="#C8CCDC" android:layout_marginTop="4dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
+        <br.eni.micgain.MixerFaderView android:id="@+id/faderGanho"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="78dp"/>
+        <TextView android:id="@+id/txtGanho" android:layout_width="88dp" android:layout_height="wrap_content"
+            android:text="1.0x" android:textColor="#50FF8C" android:background="#060A08"
+            android:gravity="center" android:padding="6dp" android:textSize="16sp" android:fontFamily="monospace"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <TextView android:id="@+id/txtStatus" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="pronto" android:layout_marginTop="2dp"/>
+    <Button android:id="@+id/btnRec" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:background="@drawable/btn_gravar_prata" android:textColor="#00A047" android:textStyle="bold"
+        android:textSize="17sp" android:padding="10dp" android:layout_marginTop="6dp" android:text="GRAVAR VÍDEO"/>
+</LinearLayout>
