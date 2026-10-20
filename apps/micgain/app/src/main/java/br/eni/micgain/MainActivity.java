@@ -46,7 +46,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private CameraCaptureSession session;
     private MediaRecorder recorder;
     private TextureView tvPreview;
-    private Spinner spFonte;
+    private int fonteSel = 4;
+    private android.widget.Button btnFonte;
     private MixerFaderView faderGanho;
     private TextView txtStatus, txtGanho;
     private Button btnRec;
@@ -88,7 +89,18 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         try {
         setContentView(R.layout.activity_main);
         tvPreview = findViewById(R.id.tvPreview);
-        spFonte = findViewById(R.id.spFonte);
+        btnFonte = findViewById(R.id.btnFonte);
+        btnFonte.setText(NOMES[fonteSel]);
+        btnFonte.setOnClickListener(v -> {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Fonte do microfone")
+                    .setSingleChoiceItems(NOMES, fonteSel, (d, i) -> {
+                        fonteSel = i;
+                        btnFonte.setText(NOMES[i]);
+                        d.dismiss();
+                    })
+                    .show();
+        });
         txtStatus = findViewById(R.id.txtStatus);
         txtGanho = findViewById(R.id.txtGanho);
         faderGanho = findViewById(R.id.faderGanho);
@@ -216,9 +228,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             }
             recorder.setOrientationHint((sensorOrientation - graus + 360) % 360);
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-            int posFonte = spFonte.getSelectedItemPosition();
-            if (posFonte < 0) posFonte = 4;
-            int fonteEscolhida = FONTES[posFonte];
+            int fonteEscolhida = FONTES[fonteSel];
             final boolean processador = fonteEscolhida == -1;
             ultimaGravProcessador = processador;
             if (processador) {
@@ -487,6 +497,15 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     }
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            abrirCamera();
+            ui.postDelayed(() -> { if (cameraAberta && !gravando) iniciarPreviewOcioso(); }, 600);
+        }
+    }
 
     @Override
     protected void onDestroy() {
