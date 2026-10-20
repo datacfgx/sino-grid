@@ -5,8 +5,6 @@
     android:keepScreenOn="true"
     android:background="#08080C">
     <TextureView android:id="@+id/tvPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
-    <Button android:id="@+id/btnTroca" android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Trocar câmera"/>
     <Button android:id="@+id/btnRes" android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:layout_marginTop="6dp" android:text="Resolução: Full HD 1080p"/>
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fonte do microfone:" android:layout_marginTop="4dp"/>
