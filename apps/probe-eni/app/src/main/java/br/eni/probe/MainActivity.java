@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
         String[] nomes = {"CIPHER", "HASH", "AEAD", "SKCIPHER", "RNG"};
         for (int i = 0; i < protos.length; i++) {
             try {
-                int fd = Os.socket(38, OsConstants.SOCK_SEQPACKET, protos[i]);
+                java.io.FileDescriptor fd = Os.socket(38, OsConstants.SOCK_SEQPACKET, protos[i]);
                 Os.close(fd);
                 sb.append(nomes[i]).append(" (proto ").append(protos[i]).append("): *** ABERTA ***\n");
             } catch (ErrnoException e) {
