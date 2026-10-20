@@ -10,7 +10,8 @@
     <Button android:id="@+id/btnRes" android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:layout_marginTop="6dp" android:text="Resolução: Full HD 1080p"/>
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fonte do microfone:" android:layout_marginTop="4dp"/>
-    <Spinner android:id="@+id/spFonte" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+    <Button android:id="@+id/btnFonte" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="PROCESSADOR (EQ + ganho no arquivo)"/>
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="GANHO DO SOM" android:textColor="#C8CCDC" android:layout_marginTop="8dp"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
