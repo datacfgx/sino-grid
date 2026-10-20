@@ -47,6 +47,43 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private MediaRecorder recorder;
     private TextureView tvPreview;
     private int fonteSel = 4;
+    private android.media.AudioManager audioManager;
+    private boolean scoAtivo = false;
+
+    private void ativarBluetooth() {
+        try {
+            if (audioManager == null) audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            audioManager.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+            audioManager.startBluetoothSco();
+            audioManager.setBluetoothScoOn(true);
+            scoAtivo = true;
+        } catch (Exception ignored) {}
+    }
+
+    private void desativarBluetooth() {
+        if (!scoAtivo) return;
+        scoAtivo = false;
+        try {
+            audioManager.stopBluetoothSco();
+            audioManager.setBluetoothScoOn(false);
+            audioManager.setMode(android.media.AudioManager.MODE_NORMAL);
+        } catch (Exception ignored) {}
+    }
+
+    private android.media.AudioDeviceInfo acharMicBt() {
+        if (android.os.Build.VERSION.SDK_INT < 23) return null;
+        try {
+            if (audioManager == null) audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            for (android.media.AudioDeviceInfo d : audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)) {
+                int t = d.getType();
+                if (t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                        || (android.os.Build.VERSION.SDK_INT >= 31 && t == android.media.AudioDeviceInfo.TYPE_BLE_SCO_HEADSET)) {
+                    return d;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
     private android.widget.Button btnFonte;
     private MixerFaderView faderGanho;
     private TextView txtStatus, txtGanho;
@@ -75,13 +112,14 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         }
     };
 
-    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION", "PROCESSADOR (EQ + ganho no arquivo)"};
+    private static final String[] NOMES = {"UNPROCESSED (limpo p/ mic ext)", "MIC (padrao)", "CAMCORDER", "VOICE_RECOGNITION", "PROCESSADOR (EQ + ganho no arquivo)", "BLUETOOTH (mic BT)"};
     private static final int[] FONTES = {
             MediaRecorder.AudioSource.UNPROCESSED,
             MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.CAMCORDER,
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            -1};
+            -1,
+            -2};
 
     @Override
     protected void onCreate(Bundle b) {
@@ -107,6 +145,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                     })
                     .show();
         });
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try { requestPermissions(new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, 77); } catch (Exception ignored) {}
+        }
         txtStatus = findViewById(R.id.txtStatus);
         txtGanho = findViewById(R.id.txtGanho);
         faderGanho = findViewById(R.id.faderGanho);
@@ -230,7 +271,17 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             int fonteEscolhida = FONTES[fonteSel];
             final boolean processador = fonteEscolhida == -1;
             ultimaGravProcessador = processador;
-            if (processador) {
+            final boolean bluetooth = fonteEscolhida == -2;
+            if (bluetooth) {
+                ativarBluetooth();
+                recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    try {
+                        android.media.AudioDeviceInfo bt = acharMicBt();
+                        if (bt != null) recorder.setPreferredDevice(bt);
+                    } catch (Exception ignored) {}
+                }
+            } else if (processador) {
                 recorder.setAudioSource(MediaRecorder.AudioSource.UNPROCESSED);
             } else {
                 recorder.setAudioSource(fonteEscolhida);
@@ -282,7 +333,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 }
                 @Override public void onConfigureFailed(CameraCaptureSession s) { txtStatus.setText("falha na sessao"); }
             }, ui);
-        } catch (Exception e) { txtStatus.setText("falha: " + e.getMessage()); }
+        } catch (Exception e) { desativarBluetooth(); txtStatus.setText("falha: " + e.getMessage()); }
     }
 
     private void parar() {
@@ -296,6 +347,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             try { recorder.release(); } catch (Exception ignored) {}
             try { session.stopRepeating(); session.close(); } catch (Exception ignored) {}
             try { pfd.close(); } catch (Exception ignored) {}
+            desativarBluetooth();
             previewOkAt = 0;
             iniciarPreviewOcioso();
             ui.postDelayed(this::iniciarPreviewOcioso, 1500);

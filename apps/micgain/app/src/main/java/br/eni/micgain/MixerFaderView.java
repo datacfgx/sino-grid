@@ -25,11 +25,13 @@ public class MixerFaderView extends View {
     public MixerFaderView(Context c) { super(c); init(); }
     private void init() {
         pRail.setColor(0xFF282C3C); pSafe.setColor(0xFF3C5A46);
-        pTick.setColor(0xFF5A6078); pTxt.setColor(0xFF8288A0); pTxt.setTextSize(26f);
+        pTick.setColor(0xFF5A6078); pTxt.setColor(0xFF8288A0);
         pCap.setColor(0xFF181A22); pCap.setStyle(Paint.Style.FILL);
         pCapLine.setColor(0xFF78FFAA); pCapLine.setStrokeWidth(6f);
         pGlow.setColor(0x552EC85A); pGlow.setStyle(Paint.Style.FILL);
     }
+
+    private float pad(float w) { return Math.min(60f, w * 0.12f); }
 
     public void setOnValorListener(OnValorListener l) { listener = l; }
     public float getValor() { return valor; }
@@ -38,9 +40,13 @@ public class MixerFaderView extends View {
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
         float w = getWidth(), h = getHeight();
-        float pad = 60f;
-        float y = h * 0.52f;
-        float railH = 14f;
+        float pad = pad(w);
+        float y = h * 0.44f;
+        float railH = Math.max(10f, Math.min(14f, h * 0.18f));
+        float tickHalf = Math.min(20f, h * 0.22f);
+        float labelOff = h * 0.36f;
+        float txtSize = Math.max(20f, Math.min(26f, h * 0.28f));
+        pTxt.setTextSize(txtSize);
         // trilho
         c.drawRoundRect(new RectF(pad, y - railH/2, w - pad, y + railH/2), 7, 7, pRail);
         // zona segura 0..30%
@@ -50,20 +56,21 @@ public class MixerFaderView extends View {
         String[] labels = {"1x", "", "2x", "", "3x", "", "4x", "", "5x"};
         for (int i = 0; i < 9; i++) {
             float x = pad + i * ((w - 2*pad) / 8f);
-            c.drawLine(x, y - 20, x, y + 20, pTick);
-            if (!labels[i].isEmpty()) c.drawText(labels[i], x - 18, y + 52, pTxt);
+            c.drawLine(x, y - tickHalf, x, y + tickHalf, pTick);
+            if (!labels[i].isEmpty()) c.drawText(labels[i], x - txtSize * 0.7f, y + labelOff, pTxt);
         }
         // cap do fader
         float cx = pad + (w - 2*pad) * (valor / 40f);
-        float capW = 96f, capH = 74f;
+        float capH = h * 0.60f, capW = capH * 1.32f;
+        float lineHalf = capH * 0.36f;
         c.drawRoundRect(new RectF(cx - capW/2 - 8, y - capH/2 - 8, cx + capW/2 + 8, y + capH/2 + 8), 20, 20, pGlow);
         c.drawRoundRect(new RectF(cx - capW/2, y - capH/2, cx + capW/2, y + capH/2), 16, 16, pCap);
-        c.drawLine(cx, y - 26, cx, y + 26, pCapLine);
+        c.drawLine(cx, y - lineHalf, cx, y + lineHalf, pCapLine);
     }
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         if (e.getAction() == MotionEvent.ACTION_DOWN || e.getAction() == MotionEvent.ACTION_MOVE) {
-            float pad = 60f;
+            float pad = pad(getWidth());
             float w = getWidth() - 2*pad;
             valor = Math.max(0, Math.min(40, ((e.getX() - pad) / w) * 40f));
             invalidate();
