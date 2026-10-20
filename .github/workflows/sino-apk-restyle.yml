@@ -55,7 +55,7 @@ jobs:
           cd /tmp
           SMALI=$(grep -rl 'CONTROL_VIDEO_STABILIZATION_MODE' out/smali*/ | head -1)
           echo "smali alvo: $SMALI"
-          python3 <<'PYEOF'
+          SMALI_PATH="$SMALI" python3 <<'PYEOF'
           import re
           p = os.environ.get("SMALI_PATH")
           lines = open(p).read().splitlines()
@@ -99,7 +99,7 @@ jobs:
             RESP=$(curl -s -m 90 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
               -F chat_id="${TG_CHAT}" \
               -F document=@app-restyle.apk \
-              -F caption="MicCam RESTYLE - fundo do GRAVAR cinza escuro, resto identico")
+              -F caption="MicCam HQ TESTE - qualidade maxima do G52 (se travar, volta pro anterior)")
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 12
           done
