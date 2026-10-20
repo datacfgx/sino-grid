@@ -56,15 +56,18 @@ jobs:
           SMALI=$(grep -rl 'CONTROL_VIDEO_STABILIZATION_MODE' out/smali*/ | head -1)
           echo "smali alvo: $SMALI"
           SMALI_PATH="$SMALI" python3 <<'PYEOF'
-          import re
-          p = os.environ.get("SMALI_PATH")
+          import os, re
+          p = os.environ["SMALI_PATH"]
           lines = open(p).read().splitlines()
           out = []
+          espera_set = False
           inserido = 0
-          BLOCO = None
-          for i, l in enumerate(lines):
+          for l in lines:
               out.append(l)
-              if 'CONTROL_VIDEO_STABILIZATION_MODE' in l and 'invoke-virtual' in l and '->set(' in l:
+              if 'CONTROL_VIDEO_STABILIZATION_MODE' in l and 'sget-object' in l:
+                  espera_set = True
+                  continue
+              if espera_set and 'invoke-virtual' in l and '->set(' in l:
                   m = re.search(r'invoke-virtual \{([vp]\d+)', l)
                   reg = m.group(1)
                   for key, val in [('EDGE_MODE','0x2'), ('NOISE_REDUCTION_MODE','0x2'), ('HOT_PIXEL_MODE','0x2'), ('TONEMAP_MODE','0x1')]:
@@ -75,6 +78,7 @@ jobs:
                           'move-result-object v3',
                           f'invoke-virtual {{{reg}, v2, v3}}, Landroid/hardware/camera2/CaptureRequest$Builder;->set(Landroid/hardware/camera2/CaptureRequest$Key;Ljava/lang/Object;)V']
                   inserido = 4
+                  espera_set = False
           open(p, 'w').write("\n".join(out) + "\n")
           print("sets inseridos:", inserido)
           PYEOF
