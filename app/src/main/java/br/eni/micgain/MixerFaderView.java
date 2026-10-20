@@ -41,11 +41,11 @@ public class MixerFaderView extends View {
         super.onDraw(c);
         float w = getWidth(), h = getHeight();
         float pad = pad(w);
-        float y = h * 0.46f;
-        float railH = Math.min(14f, h * 0.18f);
+        float y = h * 0.44f;
+        float railH = Math.max(10f, Math.min(14f, h * 0.18f));
         float tickHalf = Math.min(20f, h * 0.22f);
-        float labelOff = h * 0.34f;
-        float txtSize = Math.max(16f, Math.min(26f, h * 0.26f));
+        float labelOff = h * 0.36f;
+        float txtSize = Math.max(20f, Math.min(26f, h * 0.28f));
         pTxt.setTextSize(txtSize);
         // trilho
         c.drawRoundRect(new RectF(pad, y - railH/2, w - pad, y + railH/2), 7, 7, pRail);
@@ -61,7 +61,7 @@ public class MixerFaderView extends View {
         }
         // cap do fader
         float cx = pad + (w - 2*pad) * (valor / 40f);
-        float capH = h * 0.62f, capW = capH * 1.32f;
+        float capH = h * 0.60f, capW = capH * 1.32f;
         float lineHalf = capH * 0.36f;
         c.drawRoundRect(new RectF(cx - capW/2 - 8, y - capH/2 - 8, cx + capW/2 + 8, y + capH/2 + 8), 20, 20, pGlow);
         c.drawRoundRect(new RectF(cx - capW/2, y - capH/2, cx + capW/2, y + capH/2), 16, 16, pCap);
