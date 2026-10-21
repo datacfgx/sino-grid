@@ -1,0 +1,29 @@
+name: GH-KALI Chave da Casa
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  keygen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: platform-tools
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+      - name: Gera chave permanente
+        run: |
+          /tmp/platform-tools/adb keygen /tmp/adbkey
+          ls -la /tmp/adbkey /tmp/adbkey.pub
+      - name: Commit no repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          B64_PRIV=$(base64 -w0 /tmp/adbkey)
+          B64_PUB=$(base64 -w0 /tmp/adbkey.pub)
+          SHA_PRIV=$(gh api repos/datacfgx/sino-grid/contents/tools/adbkey --jq .sha 2>/dev/null || echo "")
+          SHA_PUB=$(gh api repos/datacfgx/sino-grid/contents/tools/adbkey.pub --jq .sha 2>/dev/null || echo "")
+          gh api repos/datacfgx/sino-grid/contents/tools/adbkey -X PUT -f message="chave da casa: adbkey privada (pareamento permanente)" -f content="$B64_PRIV" ${SHA_PRIV:+-f sha="$SHA_PRIV"} > /dev/null
+          gh api repos/datacfgx/sino-grid/contents/tools/adbkey.pub -X PUT -f message="chave da casa: adbkey.pub" -f content="$B64_PUB" ${SHA_PUB:+-f sha="$SHA_PUB"} > /dev/null
+          echo "chave commitada"
