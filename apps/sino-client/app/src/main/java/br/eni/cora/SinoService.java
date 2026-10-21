@@ -16,6 +16,7 @@ public class SinoService extends Service {
     public static volatile WsClient ws;
     Thread worker;
     volatile OutputStream pipeOut;
+    volatile boolean piping = false;
 
     public int onStartCommand(Intent i, int f, int id) {
         Notification n = new Notification.Builder(this)
@@ -53,13 +54,15 @@ public class SinoService extends Service {
                 }).start();
             }
             @Override public void onMessage(byte[] d) {
-                if (pipeOut != null) {
-                    try { pipeOut.write(d); pipeOut.flush(); }
-                    catch (Exception e) { pipeOut = null; }
+                if (ehBinario(d)) {
+                    if (pipeOut != null) {
+                        try { pipeOut.write(d); pipeOut.flush(); }
+                        catch (Exception e) { pipeOut = null; }
+                    }
                     return;
                 }
                 try { onCmd(new String(d)); }
-                catch (Exception e) { throw new RuntimeException(e); }
+                catch (Exception e) { status = "cmd: " + e; }
             }
             @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
         });
@@ -88,10 +91,25 @@ public class SinoService extends Service {
         } catch (Exception e) { status = "cmd: " + e; }
     }
 
+    static boolean ehBinario(byte[] d) {
+        if (d.length == 0) return false;
+        for (byte b : d) {
+            int c = b & 0xff;
+            if (c < 9 || (c > 13 && c < 32)) return true;
+        }
+        return false;
+    }
+
     void iniciarPipe(int porta) throws Exception {
+        if (piping) { send("{\"type\":\"pipe\",\"status\":\"busy\"}"); return; }
+        piping = true;
+        try { iniciarPipe2(porta); } finally { piping = false; }
+    }
+
+    void iniciarPipe2(int porta) throws Exception {
         if (porta <= 0) porta = acharPortaAdbd();
         if (porta <= 0) {
-            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
             status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
             return;
         }
@@ -121,11 +139,23 @@ public class SinoService extends Service {
         }
     }
 
+    static int[] faixaPortas() {
+        try {
+            BufferedReader r = new BufferedReader(new FileReader("/proc/sys/net/ipv4/ip_local_port_range"));
+            String[] partes = r.readLine().trim().split("\\s+");
+            r.close();
+            return new int[]{Integer.parseInt(partes[0]), Integer.parseInt(partes[1])};
+        } catch (Exception e) {
+            return new int[]{32768, 60999};
+        }
+    }
+
     int acharPortaAdbd() {
+        final int[] faixa = faixaPortas();
         final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
         ExecutorService ex = Executors.newFixedThreadPool(120);
         List<Future<?>> fs = new ArrayList<>();
-        for (int p = 30000; p <= 50000 && achados.isEmpty(); p++) {
+        for (int p = faixa[0]; p <= faixa[1] && achados.isEmpty(); p++) {
             final int port = p;
             fs.add(ex.submit(() -> {
                 try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
@@ -183,7 +213,7 @@ public class SinoService extends Service {
             int pct = sc > 0 ? lvl * 100 / sc : -1;
             int plug = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) : 0;
             int adb = 0;
-            try { adb = Settings.Global.getInt(getContentResolver(), Settings.Global.ADB_ENABLED); } catch (Exception ignored) {}
+            try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
             String memAv = "?";
             BufferedReader r = new BufferedReader(new FileReader("/proc/meminfo"));
             String l1 = r.readLine(), l2 = r.readLine(), l3 = r.readLine(); r.close();
