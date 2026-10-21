@@ -31,10 +31,25 @@ jobs:
           curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
           unzip -q /tmp/pt.zip -d /tmp
           /tmp/platform-tools/adb --version
-      - name: Parear
+      - name: Aguarda o servico de pareamento abrir
+        timeout-minutes: 5
+        run: |
+          echo "aguardando ${{ inputs.alvo }}:${{ inputs.porta_par }} aceitar TCP..."
+          for i in $(seq 1 60); do
+            if nc -z -w2 ${{ inputs.alvo }} ${{ inputs.porta_par }} 2>/dev/null; then
+              echo "PORTA ABERTA (tentativa $i)"; exit 0
+            fi
+            sleep 5
+          done
+          echo "porta nunca abriu"; exit 1
+      - name: Parear (imediato)
         run: |
           A=/tmp/platform-tools/adb
-          echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }}
+          for tent in 1 2 3; do
+            echo "=== tentativa $tent ==="
+            echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }} && break
+            sleep 3
+          done
       - name: Descobre porta de conexao
         if: ${{ inputs.porta_con == 'SCAN' }}
         run: |
@@ -47,8 +62,10 @@ jobs:
           A=/tmp/platform-tools/adb
           P="${{ inputs.porta_con }}"
           if [ "$P" = "SCAN" ]; then P="$PORTA_DETECTADA"; fi
-          echo "usando porta $P"
-          $A connect ${{ inputs.alvo }}:$P
+          for tent in 1 2 3 4 5; do
+            $A connect ${{ inputs.alvo }}:$P && break
+            sleep 3
+          done
           $A devices
           $A shell id
           $A shell cat /proc/self/attr/current
