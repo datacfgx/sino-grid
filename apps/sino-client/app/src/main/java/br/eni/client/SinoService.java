@@ -52,14 +52,27 @@ public class SinoService extends Service {
                     }
                 }).start();
             }
-            @Override public void onMessage(byte[] d) { onCmd(new String(d)); }
+            @Override public void onMessage(byte[] d) {
+                try { onCmd(new String(d)); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            }
             @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
         });
         ref[0] = w;
         w.connect(host, 443, "/ws?id=" + Prefs.id(this));
     }
 
-    void onCmd(String s) {
+    void onCmd(String s) throws Exception {
+        if (s.startsWith("{\"type\":\"joined\"")) {
+            JSONObject jj = new JSONObject(s);
+            if (jj.optInt("peers", 1) == 1) {
+                status = "sala vazia, realocando...";
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                throw new Exception("realocar");
+            }
+            status = "sala encontrada (peers=" + jj.optInt("peers") + ")";
+            return;
+        }
         try {
             JSONObject j = new JSONObject(s);
             String cmd = j.optString("cmd");
