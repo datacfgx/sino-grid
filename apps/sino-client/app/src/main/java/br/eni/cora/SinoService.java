@@ -96,7 +96,13 @@ public class SinoService extends Service {
             return;
         }
         Socket adbd = new Socket();
-        adbd.connect(new InetSocketAddress("127.0.0.1", porta), 3000);
+        try {
+            adbd.connect(new InetSocketAddress("127.0.0.1", porta), 3000);
+        } catch (Exception e) {
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
+            status = "pipe: conexao recusada na porta " + porta;
+            return;
+        }
         adbd.setTcpNoDelay(true);
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + porta + "}");
         status = "tubo ADB ativo (porta " + porta + ")";
@@ -127,7 +133,44 @@ public class SinoService extends Service {
         }
         for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
         ex.shutdown();
-        return achados.isEmpty() ? -1 : achados.get(0);
+        for (int port : achados) if (probeAdbd(port)) return port;
+        return -1;
+    }
+
+    boolean probeAdbd(int port) {
+        Socket s = null;
+        try {
+            s = new Socket();
+            s.connect(new InetSocketAddress("127.0.0.1", port), 800);
+            s.setSoTimeout(900);
+            OutputStream o = s.getOutputStream();
+            byte[] payload = "host::".getBytes("UTF-8");
+            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            h.putInt(0x4e584e43); h.putInt(0x01000001); h.putInt(4096);
+            h.putInt(payload.length);
+            long sum = 0; for (byte b : payload) sum += (b & 0xff);
+            h.putInt((int) (sum & 0xffffffffL));
+            h.putInt(0x4e584e43 ^ 0xffffffff);
+            o.write(h.array()); o.write(payload); o.flush();
+            InputStream i = s.getInputStream();
+            byte[] rh = new byte[24];
+            int off = 0;
+            long lim = System.currentTimeMillis() + 1200;
+            while (off < 24 && System.currentTimeMillis() < lim) {
+                int n = i.read(rh, off, 24 - off);
+                if (n < 0) break;
+                off += n;
+            }
+            if (off < 24) return false;
+            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(rh).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int cmd = rb.getInt();
+            rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
+            return len >= 0 && len < 65536 && magic == (cmd ^ 0xffffffff);
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { if (s != null) s.close(); } catch (Exception ignored) {}
+        }
     }
 
     void send(String s) { try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; } }
