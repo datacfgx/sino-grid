@@ -1,0 +1,35 @@
+name: GH-KALI Warden
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guarda a sala g52 (5h)
+        run: |
+          pip install -q websocket-client
+          python3 - <<'PY'
+          import websocket, json, time
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          fim = time.time() + 5*3600
+          tent = 0
+          while time.time() < fim:
+              tent += 1
+              try:
+                  ws = websocket.create_connection(url, header=["X-Role: warden"], timeout=45)
+                  print(f"[warden] conectado (tent {tent})", flush=True)
+                  ws.send(json.dumps({"cmd": "ping"}))
+                  while time.time() < fim:
+                      m = ws.recv()
+                      if m: print("RECV:", m[:400], flush=True)
+              except Exception as e:
+                  print("[warden] erro:", str(e)[:120], flush=True)
+                  time.sleep(5)
+          print("[warden] tempo esgotado", flush=True)
+          PY
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="warden encerrou (5h) — redeploy se precisar" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
