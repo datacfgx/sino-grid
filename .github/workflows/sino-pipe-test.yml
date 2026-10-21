@@ -68,14 +68,26 @@ jobs:
                   print("FALHA: app nao confirmou o tubo", flush=True)
                   return
               time.sleep(1)
-              for t in range(5):
-                  if adb("connect", "127.0.0.1:15555").returncode == 0: break
+              pronto = False
+              for t in range(20):
+                  adb("connect", "127.0.0.1:15555")
+                  st = adb("shell", "id")
+                  if st.returncode == 0 and "uid=" in st.stdout:
+                      pronto = True
+                      break
                   time.sleep(3)
               adb("devices")
-              adb("shell", "id")
-              print("=== MISSAO INAUGURAL: apagar MicCam ENI ===", flush=True)
-              adb("shell", "pm", "uninstall", "br.eni.micgain")
-              print("=== FIM DA MISSAO ===", flush=True)
+              if pronto:
+                  print("=== MISSAO INAUGURAL: apagar MicCam ENI ===", flush=True)
+                  r = adb("shell", "pm", "uninstall", "br.eni.micgain")
+                  print("=== FIM DA MISSAO ===", flush=True)
+                  time.sleep(2)
+                  try: ws.close()
+                  except Exception: pass
+              else:
+                  print("FALHA: device nao respondeu shell id apos retries", flush=True)
+                  try: ws.close()
+                  except Exception: pass
           threading.Thread(target=missao, daemon=True).start()
 
           pediu = False

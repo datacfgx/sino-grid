@@ -107,19 +107,15 @@ public class SinoService extends Service {
     }
 
     void iniciarPipe2(int porta) throws Exception {
-        Socket adbd = null;
-        int achada = -1;
+        List<Integer> candidatos = new ArrayList<>();
         if (porta > 0) {
-            List<Integer> so = new ArrayList<>();
-            so.add(porta);
-            adbd = tentarConexaoAdb(so);
-            if (adbd != null) achada = porta;
+            candidatos.add(porta);
         } else {
             final int[] faixa = faixaPortas();
             final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
             ExecutorService ex = Executors.newFixedThreadPool(150);
             List<Future<?>> fs = new ArrayList<>();
-            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
+            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 40; p++) {
                 final int port = p;
                 fs.add(ex.submit(() -> {
                     try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
@@ -128,34 +124,58 @@ public class SinoService extends Service {
             for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
             ex.shutdown();
             Collections.sort(achados);
-            adbd = tentarConexaoAdb(achados);
-            if (adbd != null) achada = achados.get(0);
+            candidatos.addAll(achados);
         }
-        if (adbd == null) {
-            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
+        for (int cand : candidatos) {
+            Socket s;
+            try {
+                s = new Socket();
+                s.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                s.setTcpNoDelay(true);
+            } catch (Exception e) { continue; }
+            pipeOut = s.getOutputStream();
+            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + ",\"sniff\":true}");
+            status = "farejando porta " + cand + " ...";
+            InputStream si = s.getInputStream();
+            byte[] hdr = new byte[24];
+            int got = 0;
+            long lim = System.currentTimeMillis() + 7000;
+            boolean valido = false;
+            try {
+                while (got < 24 && System.currentTimeMillis() < lim) {
+                    int n = si.read(hdr, got, 24 - got);
+                    if (n < 0) break;
+                    got += n;
+                }
+                if (got == 24) {
+                    java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    int cmd = rb.getInt(); rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
+                    if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff)) valido = true;
+                }
+            } catch (Exception e) {}
+            if (!valido) {
+                pipeOut = null;
+                try { s.close(); } catch (Exception ignored) {}
+                continue;
+            }
+            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + "}");
+            status = "tubo ADB ativo (porta " + cand + ")";
+            if (ws != null) ws.send(hdr);
+            byte[] buf = new byte[16384];
+            try {
+                int n;
+                while ((n = si.read(buf)) > 0) {
+                    if (ws != null) ws.send(Arrays.copyOf(buf, n));
+                }
+            } finally {
+                pipeOut = null;
+                try { s.close(); } catch (Exception ignored) {}
+                status = "tubo encerrado";
+            }
             return;
         }
-        adbd.setTcpNoDelay(true);
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + achada + "}");
-        status = "tubo ADB ativo (porta " + achada + ")";
-        final InputStream ai = adbd.getInputStream();
-        pipeOut = adbd.getOutputStream();
-        if (ws != null && respostaPendente != null && respostaPendente.length > 0) {
-            ws.send(respostaPendente);
-            respostaPendente = null;
-        }
-        byte[] buf = new byte[16384];
-        try {
-            int n;
-            while ((n = ai.read(buf)) > 0) {
-                if (ws != null) ws.send(Arrays.copyOf(buf, n));
-            }
-        } finally {
-            pipeOut = null;
-            try { adbd.close(); } catch (Exception ignored) {}
-            status = "tubo encerrado";
-        }
+        send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
+        status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
     }
 
     byte[] respostaPendente = null;
