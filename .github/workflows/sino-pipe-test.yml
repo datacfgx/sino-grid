@@ -1,0 +1,103 @@
+name: GH-KALI Tubo + Missao Inaugural
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pipe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: platform-tools + chave da casa
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+          mkdir -p ~/.android
+          cp tools/adbkey ~/.android/adbkey
+          cp tools/adbkey.pub ~/.android/adbkey.pub
+          chmod 600 ~/.android/adbkey
+      - name: Tubo ADB + apagar MicCam
+        timeout-minutes: 8
+        run: |
+          pip install -q websocket-client
+          python3 - <<'PY'
+          import json, socket, subprocess, threading, time
+          import websocket
+
+          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          ESTADO = {"tcp": None}
+          ws = websocket.create_connection(URL, header=["X-Role: teste"], timeout=30)
+          ws.settimeout(10)
+          print("[teste] na sala, esperando o telefone...", flush=True)
+
+          def ponte():
+              srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+              srv.bind(("127.0.0.1", 15555))
+              srv.listen(1)
+              print("[teste] ponte local 15555 no ar", flush=True)
+              conn, _ = srv.accept()
+              ESTADO["tcp"] = conn
+              print("[teste] adb server conectou na ponte", flush=True)
+              try:
+                  while True:
+                      b = conn.recv(65536)
+                      if not b: break
+                      ws.send_binary(b)
+              except Exception:
+                  pass
+          threading.Thread(target=ponte, daemon=True).start()
+
+          def adb(*args):
+              r = subprocess.run(["/tmp/platform-tools/adb", *args], capture_output=True, text=True, timeout=90)
+              print("$ adb " + " ".join(args), flush=True)
+              print((r.stdout + r.stderr).strip()[:400], flush=True)
+              return r
+
+          def missao():
+              fim = time.time() + 150
+              while time.time() < fim and ESTADO["tcp"] is None:
+                  time.sleep(1)
+              if ESTADO["tcp"] is None:
+                  print("FALHA: ninguem conectou na ponte", flush=True)
+                  return
+              time.sleep(1)
+              for t in range(5):
+                  if adb("connect", "127.0.0.1:15555").returncode == 0: break
+                  time.sleep(3)
+              adb("devices")
+              adb("shell", "id")
+              print("=== MISSAO INAUGURAL: apagar MicCam ENI ===", flush=True)
+              adb("shell", "pm", "uninstall", "br.eni.micgain")
+              print("=== FIM DA MISSAO ===", flush=True)
+          threading.Thread(target=missao, daemon=True).start()
+
+          pediu = False
+          while True:
+              try:
+                  m = ws.recv()
+              except websocket.WebSocketTimeoutException:
+                  continue
+              except Exception:
+                  break
+              if m is None: break
+              if isinstance(m, bytes):
+                  if ESTADO.get("tcp"):
+                      try: ESTADO["tcp"].sendall(m)
+                      except Exception: pass
+                  continue
+              print("WS:", str(m)[:180], flush=True)
+              try: j = json.loads(m)
+              except Exception: continue
+              if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not pediu:
+                  pediu = True
+                  ws.send(json.dumps({"cmd": "pipe"}))
+                  print("[teste] pedi o tubo ao telefone", flush=True)
+              if j.get("type") == "pipe":
+                  print("PIPE:", json.dumps(j), flush=True)
+          ws.close()
+          PY
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="tubo+missao finalizados — veja o log da run" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
