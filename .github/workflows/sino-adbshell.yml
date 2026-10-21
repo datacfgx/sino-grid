@@ -1,0 +1,54 @@
+name: GH-KALI ADB Shell Remoto
+on:
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: "IP Tailscale do G52 (100.x.y.z)"
+        required: true
+      porta_par:
+        description: "Porta do dialog de pareamento"
+        required: true
+      codigo:
+        description: "Codigo de 6 digitos"
+        required: true
+      porta_con:
+        description: "Porta de conexao (tela principal)"
+        required: true
+permissions:
+  contents: read
+jobs:
+  adb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ""
+          oauth-secret: ""
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: 1.78.1
+      - name: platform-tools 33.0.3
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+          /tmp/platform-tools/adb --version
+      - name: Ping no alvo
+        run: tailscale ping -c 3 ${{ inputs.alvo }} || true
+      - name: Parear + conectar + testar como shell
+        run: |
+          set -x
+          A=/tmp/platform-tools/adb
+          echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }}
+          $A connect ${{ inputs.alvo }}:${{ inputs.porta_con }}
+          $A devices
+          $A shell id
+          $A shell cat /proc/self/attr/current
+          $A push tools/hello_arm64 /data/local/tmp/hello
+          $A shell chmod 700 /data/local/tmp/hello
+          $A shell /data/local/tmp/hello
+          $A shell rm -f /data/local/tmp/hello
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="runner adb remoto finalizado — veja o log da run" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
