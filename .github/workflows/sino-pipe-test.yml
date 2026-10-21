@@ -26,6 +26,7 @@ jobs:
 
           URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
           ESTADO = {"tcp": None}
+          TUBO_OK = threading.Event()
           ws = websocket.create_connection(URL, header=["X-Role: teste"], timeout=30)
           ws.settimeout(10)
           print("[teste] na sala, esperando o telefone...", flush=True)
@@ -62,6 +63,10 @@ jobs:
           threading.Thread(target=keepalive, daemon=True).start()
 
           def missao():
+              print("[teste] aguardando o app armar a ponte (pipe ok)...", flush=True)
+              if not TUBO_OK.wait(90):
+                  print("FALHA: app nao confirmou o tubo", flush=True)
+                  return
               time.sleep(1)
               for t in range(5):
                   if adb("connect", "127.0.0.1:15555").returncode == 0: break
@@ -96,6 +101,7 @@ jobs:
                   print("[teste] pedi o tubo ao telefone", flush=True)
               if j.get("type") == "pipe":
                   print("PIPE:", json.dumps(j), flush=True)
+                  if j.get("status") == "ok": TUBO_OK.set()
           ws.close()
           PY
       - name: Aviso no Telegram
