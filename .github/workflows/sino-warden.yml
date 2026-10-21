@@ -47,6 +47,13 @@ jobs:
                   ws = websocket.create_connection(URL, header=["X-Role: warden"], timeout=30)
                   ws.settimeout(20)
                   print(f"[warden] na sala (tent {tent})", flush=True)
+                  import threading as _th
+                  def _keep():
+                      while True:
+                          time.sleep(30)
+                          try: ws.send(json.dumps({"cmd": "keepalive"}))
+                          except Exception: return
+                  _th.Thread(target=_keep, daemon=True).start()
                   pediu = False
                   while time.time() < FIM:
                       try:
