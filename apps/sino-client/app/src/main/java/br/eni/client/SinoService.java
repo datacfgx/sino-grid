@@ -40,10 +40,11 @@ public class SinoService extends Service {
     void connectOnce() throws Exception {
         final String host = Prefs.host(this);
         status = "conectando " + host + " ...";
+        final WsClient[] ref = new WsClient[1];
         WsClient w = new WsClient(new WsClient.Listener() {
             @Override public void onOpen() {
                 status = "conectado";
-                ws = w;
+                ws = ref[0];
                 new Thread(() -> {
                     while (heartbeat) {
                         try { sendTelemetry(); Thread.sleep(30000); }
@@ -52,8 +53,9 @@ public class SinoService extends Service {
                 }).start();
             }
             @Override public void onMessage(byte[] d) { onCmd(new String(d)); }
-            @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == w) ws = null; }
+            @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
         });
+        ref[0] = w;
         w.connect(host, 443, "/ws?id=" + Prefs.id(this));
     }
 
