@@ -141,6 +141,10 @@ public class SinoService extends Service {
         status = "tubo ADB ativo (porta " + achada + ")";
         final InputStream ai = adbd.getInputStream();
         pipeOut = adbd.getOutputStream();
+        if (ws != null && respostaPendente != null && respostaPendente.length > 0) {
+            ws.send(respostaPendente);
+            respostaPendente = null;
+        }
         byte[] buf = new byte[16384];
         try {
             int n;
@@ -153,6 +157,8 @@ public class SinoService extends Service {
             status = "tubo encerrado";
         }
     }
+
+    byte[] respostaPendente = null;
 
     Socket tentarConexaoAdb(List<Integer> portas) {
         for (int port : portas) {
@@ -184,6 +190,18 @@ public class SinoService extends Service {
                 int cmd = rb.getInt();
                 rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
                 if (len >= 0 && len < 65536 && magic == (cmd ^ 0xffffffff)) {
+                    byte[] pl = new byte[len];
+                    int po = 0;
+                    long plim = System.currentTimeMillis() + 1500;
+                    while (po < len && System.currentTimeMillis() < plim) {
+                        int n = i.read(pl, po, len - po);
+                        if (n < 0) break;
+                        po += n;
+                    }
+                    ByteArrayOutputStream pend = new ByteArrayOutputStream();
+                    pend.write(rh);
+                    pend.write(pl, 0, po);
+                    respostaPendente = pend.toByteArray();
                     s.setSoTimeout(0);
                     return s;
                 }
