@@ -1,0 +1,63 @@
+name: GH-KALI Parar Chave da Casa
+on:
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: "IP Tailscale do G52 (100.x.y.z)"
+        required: true
+      porta_par:
+        description: "Porta do dialog de pareamento"
+        required: true
+      codigo:
+        description: "Codigo de 6 digitos"
+        required: true
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: 1.78.1
+      - name: platform-tools 33.0.3
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+      - name: Planta a chave da casa
+        run: |
+          mkdir -p ~/.android
+          cp tools/adbkey ~/.android/adbkey
+          cp tools/adbkey.pub ~/.android/adbkey.pub
+          chmod 600 ~/.android/adbkey
+          echo "chave da casa plantada"
+      - name: Aguarda o servico de pareamento abrir
+        timeout-minutes: 5
+        run: |
+          for i in $(seq 1 60); do
+            nc -z -w2 ${{ inputs.alvo }} ${{ inputs.porta_par }} 2>/dev/null && { echo "PORTA ABERTA ($i)"; exit 0; }
+            sleep 5
+          done
+          echo "porta nunca abriu"; exit 1
+      - name: Parear com a chave da casa
+        run: |
+          A=/tmp/platform-tools/adb
+          for t in 1 2 3; do
+            echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }} && break
+            sleep 3
+          done
+      - name: Verifica
+        run: |
+          A=/tmp/platform-tools/adb
+          P=$($A mdns services 2>/dev/null || true)
+          $A connect ${{ inputs.alvo }}:$(seq 30000 50000 | xargs -P 300 -I{} sh -c 'nc -z -w1 ${{ inputs.alvo }} {} 2>/dev/null && echo {}' | head -1) || true
+          $A devices
+          $A shell id || true
+          $A shell cat /proc/self/attr/current || true
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="chave da casa pareada — shell permanente ativo" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
