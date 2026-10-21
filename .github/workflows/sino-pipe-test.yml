@@ -54,13 +54,14 @@ jobs:
               print((r.stdout + r.stderr).strip()[:400], flush=True)
               return r
 
+          def keepalive():
+              while True:
+                  time.sleep(25)
+                  try: ws.send(json.dumps({"cmd": "keepalive"}))
+                  except Exception: return
+          threading.Thread(target=keepalive, daemon=True).start()
+
           def missao():
-              fim = time.time() + 150
-              while time.time() < fim and ESTADO["tcp"] is None:
-                  time.sleep(1)
-              if ESTADO["tcp"] is None:
-                  print("FALHA: ninguem conectou na ponte", flush=True)
-                  return
               time.sleep(1)
               for t in range(5):
                   if adb("connect", "127.0.0.1:15555").returncode == 0: break
