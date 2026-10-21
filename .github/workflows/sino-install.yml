@@ -49,6 +49,12 @@ jobs:
           if [ "$P" = "SCAN" ]; then P="$PORTA_DETECTADA"; fi
           for t in 1 2 3 4 5; do $A connect ${{ inputs.alvo }}:$P && break; sleep 3; done
           $A devices
+          STATE=$($A get-state 2>/dev/null || true)
+          echo "estado: $STATE"
+          if [ "$STATE" != "device" ]; then
+            echo "aparelho nao respondeu como device (porta errada?) — abortando"
+            exit 1
+          fi
           $A install -r /tmp/app.apk
       - name: Aviso no Telegram
         if: always()
