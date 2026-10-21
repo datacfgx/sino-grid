@@ -1,4 +1,4 @@
-package br.eni.client;
+package br.eni.cora;
 
 import android.app.*;
 import android.content.*;
@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
             startService(new Intent(this, SinoService.class));
         });
         r.addView(host); r.addView(devid); r.addView(save); r.addView(st);
+        setTitle("CORA 💓 — Agente ENI");
         setContentView(r);
         Handler h = new Handler();
         h.postDelayed(new Runnable() {

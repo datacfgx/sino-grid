@@ -1,4 +1,4 @@
-package br.eni.client;
+package br.eni.cora;
 
 import android.content.*;
 

