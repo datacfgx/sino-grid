@@ -95,10 +95,9 @@ jobs:
               print("WS:", str(m)[:180], flush=True)
               try: j = json.loads(m)
               except Exception: continue
-              if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not pediu:
-                  pediu = True
+              if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not TUBO_OK.is_set():
                   ws.send(json.dumps({"cmd": "pipe"}))
-                  print("[teste] pedi o tubo ao telefone", flush=True)
+                  print("[teste] pedi o tubo (join com peers>=2)", flush=True)
               if j.get("type") == "pipe":
                   print("PIPE:", json.dumps(j), flush=True)
                   if j.get("status") == "ok": TUBO_OK.set()
