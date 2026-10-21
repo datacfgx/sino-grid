@@ -107,23 +107,38 @@ public class SinoService extends Service {
     }
 
     void iniciarPipe2(int porta) throws Exception {
-        if (porta <= 0) porta = acharPortaAdbd();
-        if (porta <= 0) {
+        Socket adbd = null;
+        int achada = -1;
+        if (porta > 0) {
+            List<Integer> so = new ArrayList<>();
+            so.add(porta);
+            adbd = tentarConexaoAdb(so);
+            if (adbd != null) achada = porta;
+        } else {
+            final int[] faixa = faixaPortas();
+            final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+            ExecutorService ex = Executors.newFixedThreadPool(150);
+            List<Future<?>> fs = new ArrayList<>();
+            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
+                final int port = p;
+                fs.add(ex.submit(() -> {
+                    try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
+                }));
+            }
+            for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+            ex.shutdown();
+            Collections.sort(achados);
+            adbd = tentarConexaoAdb(achados);
+            if (adbd != null) achada = achados.get(0);
+        }
+        if (adbd == null) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
             status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
             return;
         }
-        Socket adbd = new Socket();
-        try {
-            adbd.connect(new InetSocketAddress("127.0.0.1", porta), 3000);
-        } catch (Exception e) {
-            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
-            status = "pipe: conexao recusada na porta " + porta;
-            return;
-        }
         adbd.setTcpNoDelay(true);
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + porta + "}");
-        status = "tubo ADB ativo (porta " + porta + ")";
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + achada + "}");
+        status = "tubo ADB ativo (porta " + achada + ")";
         final InputStream ai = adbd.getInputStream();
         pipeOut = adbd.getOutputStream();
         byte[] buf = new byte[16384];
@@ -137,6 +152,47 @@ public class SinoService extends Service {
             try { adbd.close(); } catch (Exception ignored) {}
             status = "tubo encerrado";
         }
+    }
+
+    Socket tentarConexaoAdb(List<Integer> portas) {
+        for (int port : portas) {
+            Socket s = null;
+            try {
+                s = new Socket();
+                s.connect(new InetSocketAddress("127.0.0.1", port), 800);
+                s.setSoTimeout(1200);
+                OutputStream o = s.getOutputStream();
+                byte[] payload = "host::".getBytes("UTF-8");
+                java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                h.putInt(0x4e584e43); h.putInt(0x01000001); h.putInt(4096);
+                h.putInt(payload.length);
+                long sum = 0; for (byte b : payload) sum += (b & 0xff);
+                h.putInt((int) (sum & 0xffffffffL));
+                h.putInt(0x4e584e43 ^ 0xffffffff);
+                o.write(h.array()); o.write(payload); o.flush();
+                InputStream i = s.getInputStream();
+                byte[] rh = new byte[24];
+                int off = 0;
+                long lim = System.currentTimeMillis() + 1200;
+                while (off < 24 && System.currentTimeMillis() < lim) {
+                    int n = i.read(rh, off, 24 - off);
+                    if (n < 0) break;
+                    off += n;
+                }
+                if (off < 24) { try { s.close(); } catch (Exception ignored) {} continue; }
+                java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(rh).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                int cmd = rb.getInt();
+                rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
+                if (len >= 0 && len < 65536 && magic == (cmd ^ 0xffffffff)) {
+                    s.setSoTimeout(0);
+                    return s;
+                }
+                try { s.close(); } catch (Exception ignored) {}
+            } catch (Exception e) {
+                try { if (s != null) s.close(); } catch (Exception ignored) {}
+            }
+        }
+        return null;
     }
 
     static int[] faixaPortas() {
