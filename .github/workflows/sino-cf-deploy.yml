@@ -1,0 +1,77 @@
+name: GH-KALI CF Deploy Relay DO
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: "Global API Key (cfk_...)"
+        required: true
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify + conta
+        id: acc
+        run: |
+          K="${{ inputs.key }}"
+          echo "=== verify ==="
+          curl -s -H "Authorization: Bearer $K" https://api.cloudflare.com/client/v4/user/tokens/verify; echo
+          echo "=== accounts ==="
+          curl -s -H "Authorization: Bearer $K" https://api.cloudflare.com/client/v4/accounts | tee /tmp/acc.json; echo
+          ACC=$(python3 -c "import json;d=json.load(open('/tmp/acc.json'));print(d['result'][0]['id'])")
+          echo "acc=$ACC" >> $GITHUB_OUTPUT
+      - name: Upload relay DO
+        run: |
+          K="${{ inputs.key }}"
+          ACC="${{ steps.acc.outputs.acc }}"
+          cat > /tmp/worker.js <<'JS'
+          export class Room {
+            constructor(state, env) { this.state = state; this.sockets = new Set(); }
+            async fetch(request) {
+              const url = new URL(request.url);
+              if (url.pathname === "/_peek") return new Response(JSON.stringify({ peers: this.sockets.size }));
+              if (request.headers.get("Upgrade") !== "websocket") return new Response("ws only", { status: 426 });
+              const pair = new WebSocketPair();
+              const [client, server] = Object.values(pair);
+              server.accept();
+              server.role = request.headers.get("X-Role") || "anon";
+              this.sockets.add(server);
+              server.send(JSON.stringify({ type: "joined", role: server.role, peers: this.sockets.size }));
+              server.addEventListener("message", (ev) => {
+                for (const s of this.sockets) if (s !== server && s.readyState === 1) s.send(ev.data);
+              });
+              const drop = () => this.sockets.delete(server);
+              server.addEventListener("close", drop);
+              server.addEventListener("error", drop);
+              return new Response(null, { status: 101, webSocket: client });
+            }
+          }
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (url.pathname === "/health") return new Response("ok");
+              if (url.pathname !== "/ws" && url.pathname !== "/peek") return new Response("sino-relay: /ws?id=<device> | /peek?id=<device>");
+              const id = (url.searchParams.get("id") || "g52").slice(0, 64);
+              return env.ROOM.get(env.ROOM.idFromName(id)).fetch(request);
+            }
+          };
+          JS
+          cat > /tmp/meta.json <<'JSON'
+          {"main_module":"worker.js","compatibility_date":"2024-11-01","bindings":[{"name":"ROOM","type":"durable_object_namespace","class_name":"Room"}]}
+          JSON
+          echo "=== upload ==="
+          curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/sino-relay" \
+            -H "Authorization: Bearer $K" \
+            -F "metadata=@/tmp/meta.json;type=application/json" \
+            -F "worker.js=@/tmp/worker.js;type=application/javascript+module"
+          echo
+      - name: Health do relay
+        run: |
+          sleep 3
+          curl -s -m 15 https://sino-relay.worldeffects752.workers.dev/health; echo
+          curl -s -m 15 "https://sino-relay.worldeffects752.workers.dev/peek?id=g52"; echo
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="deploy relay DO finalizado — veja o log" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
