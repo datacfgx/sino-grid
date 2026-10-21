@@ -1,4 +1,4 @@
-name: GH-KALI Warden
+name: GH-KALI Warden Ponte
 on:
   workflow_dispatch:
 permissions:
@@ -7,29 +7,77 @@ jobs:
   warden:
     runs-on: ubuntu-latest
     steps:
-      - name: Guarda a sala g52 (5h)
+      - name: Ponte ADB 15555 (5h)
         run: |
           pip install -q websocket-client
           python3 - <<'PY'
-          import websocket, json, time
-          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
-          fim = time.time() + 5*3600
+          import json, socket, threading, time
+          import websocket
+          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          ESTADO = {"tcp": None}
+
+          def escutar(ws):
+              srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+              srv.bind(("127.0.0.1", 15555))
+              srv.listen(1)
+              print("[warden] ponte 127.0.0.1:15555 no ar — aguardando adb do runner", flush=True)
+              conn, _ = srv.accept()
+              print("[warden] runner conectou na ponte", flush=True)
+              ESTADO["tcp"] = conn
+              def tcp_para_ws(c=conn):
+                  try:
+                      while True:
+                          b = c.recv(65536)
+                          if not b: break
+                          ws.send_binary(b)
+                  except Exception:
+                      pass
+                  finally:
+                      try: c.close()
+                      except Exception: pass
+                      ESTADO["tcp"] = None
+                      print("[warden] ponte encerrada", flush=True)
+              threading.Thread(target=tcp_para_ws, daemon=True).start()
+          FIM = time.time() + 5*3600
           tent = 0
-          while time.time() < fim:
+          while time.time() < FIM:
               tent += 1
               try:
-                  ws = websocket.create_connection(url, header=["X-Role: warden"], timeout=45)
-                  print(f"[warden] conectado (tent {tent})", flush=True)
-                  ws.send(json.dumps({"cmd": "ping"}))
-                  while time.time() < fim:
-                      m = ws.recv()
-                      if m: print("RECV:", m[:400], flush=True)
+                  ws = websocket.create_connection(URL, header=["X-Role: warden"], timeout=30)
+                  ws.settimeout(20)
+                  print(f"[warden] na sala (tent {tent})", flush=True)
+                  pediu = False
+                  while time.time() < FIM:
+                      try:
+                          m = ws.recv()
+                      except websocket.WebSocketTimeoutException:
+                          continue
+                      if m is None: break
+                      if isinstance(m, bytes):
+                          if ESTADO.get("tcp"):
+                              try: ESTADO["tcp"].sendall(m)
+                              except Exception: pass
+                          continue
+                      print("RECV:", str(m)[:260], flush=True)
+                      try: j = json.loads(m)
+                      except Exception: continue
+                      if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not pediu:
+                          pediu = True
+                          ws.send(json.dumps({"cmd": "pipe"}))
+                          print("[warden] pedi pipe ao telefone", flush=True)
+                      if j.get("type") == "pipe" and j.get("status") == "ok" and ESTADO.get("tcp") is None:
+                          print("[warden] telefone abriu tubo na porta " + str(j.get("port")), flush=True)
+                          escutar(ws)
+                          pediu = False
+                          break
               except Exception as e:
-                  print("[warden] erro:", str(e)[:120], flush=True)
+                  print("[warden] erro:", str(e)[:100], flush=True)
                   time.sleep(5)
-          print("[warden] tempo esgotado", flush=True)
+          print("[warden] turno encerrado", flush=True)
+
           PY
       - name: Aviso no Telegram
         if: always()
         run: |
-          curl -s -F text="warden encerrou (5h) — redeploy se precisar" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
+          curl -s -F text="warden-ponte encerrou — redeployar se precisar" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
