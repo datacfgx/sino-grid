@@ -153,9 +153,9 @@ public class SinoService extends Service {
     int acharPortaAdbd() {
         final int[] faixa = faixaPortas();
         final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-        ExecutorService ex = Executors.newFixedThreadPool(120);
+        ExecutorService ex = Executors.newFixedThreadPool(150);
         List<Future<?>> fs = new ArrayList<>();
-        for (int p = faixa[0]; p <= faixa[1] && achados.isEmpty(); p++) {
+        for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
             final int port = p;
             fs.add(ex.submit(() -> {
                 try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
@@ -163,8 +163,18 @@ public class SinoService extends Service {
         }
         for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
         ex.shutdown();
-        for (int port : achados) if (probeAdbd(port)) return port;
-        return -1;
+        Collections.sort(achados);
+        final int[] vencedor = {-1};
+        ExecutorService px = Executors.newFixedThreadPool(6);
+        List<Future<?>> pf = new ArrayList<>();
+        for (final int port : achados) {
+            pf.add(px.submit(() -> {
+                if (vencedor[0] < 0 && probeAdbd(port)) vencedor[0] = port;
+            }));
+        }
+        for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
+        px.shutdown();
+        return vencedor[0];
     }
 
     boolean probeAdbd(int port) {
