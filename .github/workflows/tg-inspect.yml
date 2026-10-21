@@ -1,0 +1,20 @@
+name: TG Inspect
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Interroga o bot
+        run: |
+          B="https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}"
+          echo "=== getMe ==="
+          curl -s "$B/getMe"
+          echo
+          echo "=== getWebhookInfo ==="
+          curl -s "$B/getWebhookInfo"
+          echo
+          echo "=== getUpdates (peek, nao confirma) ==="
+          curl -s "$B/getUpdates?limit=5" | head -c 4000
