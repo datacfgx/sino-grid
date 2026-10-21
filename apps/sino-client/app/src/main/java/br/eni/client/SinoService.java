@@ -1,6 +1,7 @@
 package br.eni.client;
 
 import android.app.*;
+import android.provider.Settings;
 import android.content.*;
 import android.os.*;
 import android.util.*;
