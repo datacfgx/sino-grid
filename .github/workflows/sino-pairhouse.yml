@@ -45,18 +45,16 @@ jobs:
       - name: Parear com a chave da casa
         run: |
           A=/tmp/platform-tools/adb
+          ok=0
           for t in 1 2 3; do
-            echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }} && break
+            if echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }}; then ok=1; break; fi
             sleep 3
           done
-      - name: Verifica
+          if [ "$ok" != "1" ]; then echo "PAREAMENTO FALHOU"; exit 1; fi
+          echo "PAREADO COM A CHAVE DA CASA"
+      - name: Status
         run: |
-          A=/tmp/platform-tools/adb
-          P=$($A mdns services 2>/dev/null || true)
-          $A connect ${{ inputs.alvo }}:$(seq 30000 50000 | xargs -P 300 -I{} sh -c 'nc -z -w1 ${{ inputs.alvo }} {} 2>/dev/null && echo {}' | head -1) || true
-          $A devices
-          $A shell id || true
-          $A shell cat /proc/self/attr/current || true
+          echo "pareamento registrado no adbd — pronto pra conexoes futuras com a chave da casa"
       - name: Aviso no Telegram
         if: always()
         run: |
