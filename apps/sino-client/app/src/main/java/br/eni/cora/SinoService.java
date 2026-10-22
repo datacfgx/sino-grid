@@ -19,6 +19,7 @@ public class SinoService extends Service {
     volatile boolean piping = false;
     volatile String lastPortsJson = "[]";
     public static volatile int lastBatt = -1, lastAdb = -1;
+    public static volatile String pendingInstall = null;
     public static volatile long lastDataMb = -1, lastMemKb = -1;
 
     public static void wsSend(String s) {
@@ -385,13 +386,28 @@ public class SinoService extends Service {
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             out.close(); in.close();
             f.setReadable(true, false);
+            pendingInstall = f.getAbsolutePath();
             send("{\"type\":\"install\",\"status\":\"baixado\",\"bytes\":" + f.length() + "}");
-            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-            i.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            String ch = "instalacao";
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Instalações", android.app.NotificationManager.IMPORTANCE_HIGH));
+            }
+            android.content.Intent i = new android.content.Intent(this, MainActivity.class);
+            i.putExtra("instalar", true);
             i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-            status = "confirme a instalação na tela que abriu";
-            send("{\"type\":\"install\",\"status\":\"dialogo_aberto\"}");
+            int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 77, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
+            android.app.Notification.Builder nb = new android.app.Notification.Builder(this)
+                    .setContentTitle("CORA 💓")
+                    .setContentText("APK recebido da clínica — toque para instalar")
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentIntent(pi)
+                    .setAutoCancel(true);
+            if (android.os.Build.VERSION.SDK_INT >= 26) nb.setChannelId(ch);
+            nm.notify(77, nb.build());
+            status = "toque na notificação para confirmar a instalação";
+            send("{\"type\":\"install\",\"status\":\"notificacao_enviada\"}");
         } catch (Exception e) {
             status = "install: " + e;
             send("{\"type\":\"install\",\"status\":\"erro\"}");

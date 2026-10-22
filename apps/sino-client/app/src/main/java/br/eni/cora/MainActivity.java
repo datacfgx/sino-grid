@@ -203,6 +203,7 @@ public class MainActivity extends Activity {
         sv.addView(r);
         setContentView(sv);
         startService(new Intent(this, SinoService.class));
+        verificaInstalar();
 
         h.postDelayed(new Runnable() {
             @Override public void run() { atualiza(); h.postDelayed(this, 1500); }
@@ -272,6 +273,26 @@ public class MainActivity extends Activity {
         bg.setStroke(dp(1), cor);
         c.setBackground(bg);
         return c;
+    }
+
+    void verificaInstalar() {
+        try {
+            String p = SinoService.pendingInstall;
+            if (p != null) {
+                SinoService.pendingInstall = null;
+                java.io.File f = new java.io.File(p);
+                android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                i.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
+                startActivity(i);
+            }
+        } catch (Exception e) {
+            SinoService.status = "install: " + e;
+        }
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        verificaInstalar();
     }
 
     void atualiza() {
