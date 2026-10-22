@@ -35,18 +35,25 @@ jobs:
               srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
               srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
               srv.bind(("127.0.0.1", 15555))
-              srv.listen(1)
-              print("[teste] ponte local 15555 no ar", flush=True)
-              conn, _ = srv.accept()
-              ESTADO["tcp"] = conn
-              print("[teste] adb server conectou na ponte", flush=True)
-              try:
-                  while True:
-                      b = conn.recv(65536)
-                      if not b: break
-                      ws.send_binary(b)
-              except Exception:
-                  pass
+              srv.listen(8)
+              print("[teste] ponte local 15555 no ar (aceite em loop)", flush=True)
+              while True:
+                  conn, _ = srv.accept()
+                  antiga = ESTADO.get("tcp")
+                  if antiga:
+                      try: antiga.close()
+                      except Exception: pass
+                  ESTADO["tcp"] = conn
+                  print("[teste] adb conectou na ponte", flush=True)
+                  def escutar_conn(c=conn):
+                      try:
+                          while True:
+                              b = c.recv(65536)
+                              if not b: break
+                              ws.send_binary(b)
+                      except Exception:
+                          pass
+                  threading.Thread(target=escutar_conn, daemon=True).start()
           threading.Thread(target=ponte, daemon=True).start()
 
           def adb(*args):
@@ -67,9 +74,16 @@ jobs:
               if not TUBO_OK.wait(90):
                   print("FALHA: app nao confirmou o tubo", flush=True)
                   return
+              def re_pedir():
+                  while not TUBO_OK.is_set():
+                      time.sleep(12)
+                      try: ws.send(json.dumps({"cmd": "pipe"}))
+                      except Exception: return
+              threading.Thread(target=re_pedir, daemon=True).start()
               time.sleep(1)
               pronto = False
               for t in range(20):
+                  adb("disconnect", "127.0.0.1:15555")
                   adb("connect", "127.0.0.1:15555")
                   st = adb("shell", "id")
                   if st.returncode == 0 and "uid=" in st.stdout:
