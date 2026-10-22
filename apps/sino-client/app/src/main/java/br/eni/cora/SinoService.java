@@ -257,6 +257,17 @@ public class SinoService extends Service {
         }
     }
 
+    static int[] faixaPortas() {
+        try {
+            BufferedReader r = new BufferedReader(new FileReader("/proc/sys/net/ipv4/ip_local_port_range"));
+            String[] partes = r.readLine().trim().split("\\s+");
+            r.close();
+            return new int[]{Integer.parseInt(partes[0]), Integer.parseInt(partes[1])};
+        } catch (Exception e) {
+            return new int[]{32768, 60999};
+        }
+    }
+
     String varrerPortasJson() {
         final int[] faixa = faixaPortas();
         final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
