@@ -80,9 +80,27 @@ public class SinoService extends Service {
                     while (true) {
                         try {
                             Thread.sleep(45000);
+                            // self-healing só faz sentido com Wi-Fi ligado (depuração sem fio exige Wi-Fi nessa build)
+                            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                            boolean temWifi = false;
+                            try {
+                                for (android.net.Network n : cm.getAllNetworks()) {
+                                    android.net.NetworkInfo ni = cm.getNetworkInfo(n);
+                                    if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
+                                        temWifi = true;
+                                        break;
+                                    }
+                                }
+                            } catch (Exception ignored) {}
                             int adb = 0;
                             try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
-                            if (adb == 0) {
+                            if (!temWifi) {
+                                // 4G/5G: silencioso, sem self-healing, sem mensagem
+                                if (adb == 0) {
+                                    lastPortsJson = "[]";
+                                }
+                            } else if (adb == 0) {
+                                // Wi-Fi mas depuração caiu: tenta religar
                                 try {
                                     Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
                                     status = "self-healing: depuração religada";
