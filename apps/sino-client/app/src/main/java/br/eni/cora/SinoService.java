@@ -134,8 +134,9 @@ public class SinoService extends Service {
                 s.setTcpNoDelay(true);
             } catch (Exception e) { continue; }
             pipeOut = s.getOutputStream();
-            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + ",\"sniff\":true}");
+            send("{\"type\":\"pipe\",\"status\":\"farejando\",\"port\":" + cand + "}");
             status = "farejando porta " + cand + " ...";
+            s.setSoTimeout(2500);
             InputStream si = s.getInputStream();
             byte[] hdr = new byte[24];
             int got = 0;
@@ -160,6 +161,7 @@ public class SinoService extends Service {
             }
             send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + "}");
             status = "tubo ADB ativo (porta " + cand + ")";
+            try { s.setSoTimeout(0); } catch (Exception ignored) {}
             if (ws != null) ws.send(hdr);
             byte[] buf = new byte[16384];
             try {
