@@ -140,8 +140,8 @@ public class MainActivity extends Activity {
         pbg.setStroke(dp(1), 0xFF5A6078);
         par.setBackground(pbg);
         par.setOnClickListener(v -> {
-            SinoService.wsSend("{\"type\":\"quero_parear\",\"id\":\"" + Prefs.id(this) + "\"}");
-            SinoService.status = "clínica avisada — abra a tela de pareamento";
+            SinoService.acionarEnxameManual();
+            SinoService.status = "enxame manual acionado — farejadores em campo...";
         });
         r.addView(par, bg3);
 

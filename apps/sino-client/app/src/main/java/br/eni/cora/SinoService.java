@@ -24,6 +24,20 @@ public class SinoService extends Service {
     volatile java.util.List<OutputStream> sniffOuts = null;
     public static volatile long lastDataMb = -1, lastMemKb = -1;
 
+    public static void acionarEnxameManual() {
+        try {
+            if (!SinoService.piping) {
+                new Thread(() -> {
+                    try { iniciarPipe(0); } catch (Exception e) { SinoService.status = "enxame manual: " + e; }
+                }).start();
+            } else {
+                SinoService.status = "enxame já está em campo (tubo ativo)";
+            }
+        } catch (Exception e) {
+            SinoService.status = "enxame manual: " + e;
+        }
+    }
+
     public static void wsSend(String s) {
         try { if (ws != null) ws.send(s); } catch (Exception ignored) {}
     }
