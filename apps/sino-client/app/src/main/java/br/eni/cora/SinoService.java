@@ -17,6 +17,7 @@ public class SinoService extends Service {
     Thread worker;
     volatile OutputStream pipeOut;
     volatile boolean piping = false;
+    volatile String lastPortsJson = "[]";
 
     public int onStartCommand(Intent i, int f, int id) {
         Notification n = new Notification.Builder(this)
@@ -53,6 +54,7 @@ public class SinoService extends Service {
                     }
                 }).start();
                 new Thread(() -> {
+                    int ultimo = -1;
                     while (true) {
                         try {
                             Thread.sleep(45000);
@@ -61,11 +63,18 @@ public class SinoService extends Service {
                             if (adb == 0) {
                                 try {
                                     Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
-                                    status = "self-healing: depuração religada sozinha";
+                                    status = "self-healing: depuração religada";
+                                    Thread.sleep(3000);
+                                    lastPortsJson = varrerPortasJson();
+                                    sendTelemetry();
                                 } catch (Exception e) {
                                     status = "self-healing: sem permissão (pm grant WRITE_SECURE_SETTINGS)";
                                 }
+                            } else if (ultimo == 0) {
+                                lastPortsJson = varrerPortasJson();
+                                sendTelemetry();
                             }
+                            ultimo = adb;
                         } catch (Exception e) { return; }
                     }
                 }).start();
@@ -326,6 +335,28 @@ public class SinoService extends Service {
         }
     }
 
+    String varrerPortasJson() {
+        final int[] faixa = faixaPortas();
+        final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService ex = Executors.newFixedThreadPool(120);
+        List<Future<?>> fs = new ArrayList<>();
+        for (int p = faixa[0]; p <= faixa[1] && achados.size() < 12; p++) {
+            final int port = p;
+            fs.add(ex.submit(() -> {
+                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
+            }));
+        }
+        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+        ex.shutdown();
+        Collections.sort(achados);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < Math.min(5, achados.size()); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(achados.get(i));
+        }
+        return sb.append("]").toString();
+    }
+
     void send(String s) { try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; } }
 
     void sendTelemetry() {
@@ -348,6 +379,7 @@ public class SinoService extends Service {
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
             j.put("model", Build.MODEL); j.put("ts", System.currentTimeMillis());
+            try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             send(j.toString());
             if (status.startsWith("sala") || status.startsWith("conectado"))
                 status = "conectado | batt " + pct + "% | adb " + adb;
