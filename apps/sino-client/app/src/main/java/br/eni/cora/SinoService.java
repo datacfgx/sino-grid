@@ -15,6 +15,7 @@ public class SinoService extends Service {
     public static volatile String status = "parado";
     public static volatile WsClient ws;
     Thread worker;
+    android.os.PowerManager.WakeLock wakeLock;
     volatile OutputStream pipeOut;
     volatile boolean piping = false;
     volatile String lastPortsJson = "[]";
@@ -28,6 +29,14 @@ public class SinoService extends Service {
     }
 
     public int onStartCommand(Intent i, int f, int id) {
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cora:coracao");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire();
+            }
+        } catch (Exception e) {}
         Notification n = new Notification.Builder(this)
                 .setContentTitle("CORA 💓")
                 .setContentText("coração operante de remediação e assistência")
@@ -38,6 +47,11 @@ public class SinoService extends Service {
         return START_STICKY;
     }
     public IBinder onBind(Intent i) { return null; }
+
+    @Override public void onDestroy() {
+        super.onDestroy();
+        try { if (wakeLock != null) wakeLock.release(); } catch (Exception ignored) {}
+    }
 
     void loop() {
         while (true) {
