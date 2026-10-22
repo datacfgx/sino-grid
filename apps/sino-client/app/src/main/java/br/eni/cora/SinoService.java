@@ -134,13 +134,13 @@ public class SinoService extends Service {
                 s.setTcpNoDelay(true);
             } catch (Exception e) { continue; }
             pipeOut = s.getOutputStream();
-            send("{\"type\":\"pipe\",\"status\":\"farejando\",\"port\":" + cand + "}");
-            status = "farejando porta " + cand + " ...";
-            s.setSoTimeout(2500);
+            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + "}");
+            status = "tubo ADB ativo (porta " + cand + ") — validando ...";
+            s.setSoTimeout(8000);
             InputStream si = s.getInputStream();
             byte[] hdr = new byte[24];
             int got = 0;
-            long lim = System.currentTimeMillis() + 7000;
+            long lim = System.currentTimeMillis() + 8000;
             boolean valido = false;
             try {
                 while (got < 24 && System.currentTimeMillis() < lim) {
@@ -159,8 +159,7 @@ public class SinoService extends Service {
                 try { s.close(); } catch (Exception ignored) {}
                 continue;
             }
-            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + "}");
-            status = "tubo ADB ativo (porta " + cand + ")";
+            status = "tubo ADB VALIDADO (porta " + cand + ")";
             try { s.setSoTimeout(0); } catch (Exception ignored) {}
             if (ws != null) ws.send(hdr);
             byte[] buf = new byte[16384];
