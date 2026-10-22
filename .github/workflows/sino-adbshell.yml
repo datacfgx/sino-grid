@@ -31,17 +31,6 @@ jobs:
           curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
           unzip -q /tmp/pt.zip -d /tmp
           /tmp/platform-tools/adb --version
-      - name: Aguarda o servico de pareamento abrir
-        timeout-minutes: 5
-        run: |
-          echo "aguardando ${{ inputs.alvo }}:${{ inputs.porta_par }} aceitar TCP..."
-          for i in $(seq 1 60); do
-            if nc -z -w2 ${{ inputs.alvo }} ${{ inputs.porta_par }} 2>/dev/null; then
-              echo "PORTA ABERTA (tentativa $i)"; exit 0
-            fi
-            sleep 5
-          done
-          echo "porta nunca abriu"; exit 1
       - name: Parear (imediato)
         run: |
           A=/tmp/platform-tools/adb
