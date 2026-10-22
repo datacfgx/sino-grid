@@ -18,6 +18,12 @@ public class SinoService extends Service {
     volatile OutputStream pipeOut;
     volatile boolean piping = false;
     volatile String lastPortsJson = "[]";
+    public static volatile int lastBatt = -1, lastAdb = -1;
+    public static volatile long lastDataMb = -1, lastMemKb = -1;
+
+    public static void wsSend(String s) {
+        try { if (ws != null) ws.send(s); } catch (Exception ignored) {}
+    }
 
     public int onStartCommand(Intent i, int f, int id) {
         Notification n = new Notification.Builder(this)
@@ -386,6 +392,11 @@ public class SinoService extends Service {
             j.put("mem", memAv); j.put("data_mb_free", free);
             j.put("model", Build.MODEL); j.put("ts", System.currentTimeMillis());
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
+            try {
+                lastBatt = pct; lastAdb = adb; lastDataMb = free;
+                java.util.regex.Matcher mm = java.util.regex.Pattern.compile("(\\d+)").matcher(memAv);
+                if (mm.find()) lastMemKb = Long.parseLong(mm.group(1));
+            } catch (Exception ignored) {}
             send(j.toString());
             if (status.startsWith("sala") || status.startsWith("conectado"))
                 status = "conectado | batt " + pct + "% | adb " + adb;
