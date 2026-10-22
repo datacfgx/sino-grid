@@ -120,6 +120,12 @@ public class SinoService extends Service {
             if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
             else if ("report".equals(cmd)) sendTelemetry();
             else if ("scan".equals(cmd)) sendScan();
+            else if ("install_url".equals(cmd)) {
+                final String url = j.optString("url");
+                new Thread(() -> instalarPorUrl(url)).start();
+            }
+            else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
+            else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"));
             else if ("pipe".equals(cmd)) {
                 final int portaPedida = j.optInt("port", 0);
                 new Thread(() -> {
@@ -367,6 +373,62 @@ public class SinoService extends Service {
             sb.append(achados.get(i));
         }
         return sb.append("]").toString();
+    }
+
+    void instalarPorUrl(String url) {
+        try {
+            status = "baixando APK da nuvem...";
+            java.io.InputStream in = new java.net.URL(url).openStream();
+            java.io.File f = new java.io.File(getCacheDir(), "remoto.apk");
+            java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+            byte[] buf = new byte[16384]; int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.close(); in.close();
+            send("{\"type\":\"install\",\"status\":\"baixado\",\"bytes\":" + f.length() + "}");
+            status = "abra o app e confirme a instalação na tela...";
+            android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
+            android.content.pm.PackageInstaller.SessionParams sp = new android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            int sid = pin.createSession(sp);
+            android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
+            java.io.InputStream is = new java.io.FileInputStream(f);
+            java.io.OutputStream os = ses.openWrite("base.apk", 0, f.length());
+            byte[] b2 = new byte[16384]; int m;
+            while ((m = is.read(b2)) > 0) os.write(b2, 0, m);
+            ses.fsync(os); os.close(); is.close();
+            android.content.Intent intent = new android.content.Intent(this, MainActivity.class);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
+            android.app.PendingIntent pend = android.app.PendingIntent.getActivity(this, sid, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
+            ses.commit(pend.getIntentSender());
+            send("{\"type\":\"install\",\"status\":\"confirmacao_pedida\"}");
+            status = "instalação aguardando sua confirmação";
+        } catch (Exception e) {
+            status = "install: " + e;
+            send("{\"type\":\"install\",\"status\":\"erro\"}");
+        }
+    }
+
+    void desinstalar(String pkg) {
+        try {
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:" + pkg));
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            send("{\"type\":\"uninstall\",\"status\":\"confirmacao_pedida\",\"pkg\":\"" + pkg + "\"}");
+            status = "desinstalação aguardando sua confirmação";
+        } catch (Exception e) {
+            send("{\"type\":\"uninstall\",\"status\":\"erro\"}");
+        }
+    }
+
+    void abrirUrl(String url) {
+        try {
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            send("{\"type\":\"open\",\"status\":\"ok\"}");
+        } catch (Exception e) {
+            send("{\"type\":\"open\",\"status\":\"erro\"}");
+        }
     }
 
     void send(String s) { try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; } }
