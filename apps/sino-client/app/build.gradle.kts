@@ -2,6 +2,6 @@ plugins { id("com.android.application") }
 android {
     namespace = "br.eni.cora"
     compileSdk = 35
-    defaultConfig { applicationId = "br.eni.cora"; minSdk = 23; targetSdk = 23; versionCode = 11; versionName = "0.9.2" }
+    defaultConfig { applicationId = "br.eni.cora"; minSdk = 23; targetSdk = 23; versionCode = 12; versionName = "1.0" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }

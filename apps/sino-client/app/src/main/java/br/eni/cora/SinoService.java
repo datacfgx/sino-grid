@@ -52,6 +52,23 @@ public class SinoService extends Service {
                         catch (Exception e) { return; }
                     }
                 }).start();
+                new Thread(() -> {
+                    while (true) {
+                        try {
+                            Thread.sleep(45000);
+                            int adb = 0;
+                            try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
+                            if (adb == 0) {
+                                try {
+                                    Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
+                                    status = "self-healing: depuração religada sozinha";
+                                } catch (Exception e) {
+                                    status = "self-healing: sem permissão (pm grant WRITE_SECURE_SETTINGS)";
+                                }
+                            }
+                        } catch (Exception e) { return; }
+                    }
+                }).start();
             }
             @Override public void onMessage(byte[] d) {
                 if (ehBinario(d)) {
@@ -71,6 +88,7 @@ public class SinoService extends Service {
     }
 
     void onCmd(String s) throws Exception {
+        if (!s.trim().startsWith("{")) return;
         if (s.startsWith("{\"type\":\"joined\"")) {
             JSONObject jj = new JSONObject(s);
             if (jj.optInt("peers", 1) == 1) {
