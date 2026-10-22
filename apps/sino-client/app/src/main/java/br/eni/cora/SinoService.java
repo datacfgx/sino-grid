@@ -237,9 +237,9 @@ public class SinoService extends Service {
         } else {
             final int[] faixa = faixaPortas();
             final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-            ExecutorService ex = Executors.newFixedThreadPool(150);
+            ExecutorService ex = Executors.newFixedThreadPool(200);
             List<Future<?>> fs = new ArrayList<>();
-            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 40; p++) {
+            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
                 final int port = p;
                 fs.add(ex.submit(() -> {
                     try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
