@@ -147,6 +147,7 @@ public class SinoService extends Service {
 
     void onCmd(String s) throws Exception {
         if (!s.trim().startsWith("{")) return;
+        if (s.trim().startsWith("{\"pipe_ping\":true}")) return;
         if (s.startsWith("{\"type\":\"joined\"")) {
             JSONObject jj = new JSONObject(s);
             if (jj.optInt("peers", 1) == 1) {
@@ -285,7 +286,24 @@ public class SinoService extends Service {
         } finally {
             pipeOut = null;
             try { win.close(); } catch (Exception ignored) {}
-            status = "tubo encerrado";
+            status = "reativando tubo em 4s...";
+            new Thread(() -> {
+                try { Thread.sleep(4000); } catch (InterruptedException ignored) {}
+                try {
+                    android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                    boolean temWifi = false;
+                    try {
+                        for (android.net.Network n : cm.getAllNetworks()) {
+                            android.net.NetworkInfo ni = cm.getNetworkInfo(n);
+                            if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
+                                temWifi = true;
+                                break;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    if (temWifi && !piping) iniciarPipe(0);
+                } catch (Exception e) { status = "reativar: " + e; }
+            }).start();
         }
     }
 
