@@ -20,6 +20,7 @@ public class SinoService extends Service {
     volatile String lastPortsJson = "[]";
     public static volatile int lastBatt = -1, lastAdb = -1;
     public static volatile String pendingInstall = null;
+    volatile java.util.List<OutputStream> sniffOuts = null;
     public static volatile long lastDataMb = -1, lastMemKb = -1;
 
     public static void wsSend(String s) {
@@ -88,6 +89,15 @@ public class SinoService extends Service {
             }
             @Override public void onMessage(byte[] d) {
                 if (ehBinario(d)) {
+                    java.util.List<OutputStream> sos = sniffOuts;
+                    if (sos != null) {
+                        synchronized (sos) {
+                            for (OutputStream o : sos) {
+                                try { o.write(d); o.flush(); } catch (Exception e) {}
+                            }
+                        }
+                        return;
+                    }
                     if (pipeOut != null) {
                         try { pipeOut.write(d); pipeOut.flush(); }
                         catch (Exception e) { pipeOut = null; }
@@ -153,7 +163,7 @@ public class SinoService extends Service {
     }
 
     void iniciarPipe2(int porta) throws Exception {
-        List<Integer> candidatos = new ArrayList<>();
+        final List<Integer> candidatos = new ArrayList<>();
         if (porta > 0) {
             candidatos.add(porta);
         } else {
@@ -172,185 +182,78 @@ public class SinoService extends Service {
             Collections.sort(achados);
             candidatos.addAll(achados);
         }
-        for (int cand : candidatos) {
-            Socket s;
-            try {
-                s = new Socket();
-                s.connect(new InetSocketAddress("127.0.0.1", cand), 800);
-                s.setTcpNoDelay(true);
-            } catch (Exception e) { continue; }
-            pipeOut = s.getOutputStream();
-            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + cand + "}");
-            status = "tubo ADB ativo (porta " + cand + ") — validando ...";
-            s.setSoTimeout(8000);
-            InputStream si = s.getInputStream();
-            byte[] hdr = new byte[24];
-            int got = 0;
-            long lim = System.currentTimeMillis() + 8000;
-            boolean valido = false;
-            try {
-                while (got < 24 && System.currentTimeMillis() < lim) {
-                    int n = si.read(hdr, got, 24 - got);
-                    if (n < 0) break;
-                    got += n;
-                }
-                if (got == 24) {
-                    java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int cmd = rb.getInt(); rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
-                    if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff)) valido = true;
-                }
-            } catch (Exception e) {}
-            if (!valido) {
-                pipeOut = null;
-                try { s.close(); } catch (Exception ignored) {}
-                continue;
-            }
-            status = "tubo ADB VALIDADO (porta " + cand + ")";
-            try { s.setSoTimeout(0); } catch (Exception ignored) {}
-            if (ws != null) ws.send(hdr);
-            byte[] buf = new byte[16384];
-            try {
-                int n;
-                while ((n = si.read(buf)) > 0) {
-                    if (ws != null) ws.send(Arrays.copyOf(buf, n));
-                }
-            } finally {
-                pipeOut = null;
-                try { s.close(); } catch (Exception ignored) {}
-                status = "tubo encerrado";
-            }
+        if (candidatos.isEmpty()) {
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
+            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
             return;
         }
-        send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-        status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
-    }
-
-    byte[] respostaPendente = null;
-
-    Socket tentarConexaoAdb(List<Integer> portas) {
-        for (int port : portas) {
-            Socket s = null;
-            try {
-                s = new Socket();
-                s.connect(new InetSocketAddress("127.0.0.1", port), 800);
-                s.setSoTimeout(1200);
-                OutputStream o = s.getOutputStream();
-                byte[] payload = "host::".getBytes("UTF-8");
-                java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                h.putInt(0x4e584e43); h.putInt(0x01000001); h.putInt(4096);
-                h.putInt(payload.length);
-                long sum = 0; for (byte b : payload) sum += (b & 0xff);
-                h.putInt((int) (sum & 0xffffffffL));
-                h.putInt(0x4e584e43 ^ 0xffffffff);
-                o.write(h.array()); o.write(payload); o.flush();
-                InputStream i = s.getInputStream();
-                byte[] rh = new byte[24];
-                int off = 0;
-                long lim = System.currentTimeMillis() + 1200;
-                while (off < 24 && System.currentTimeMillis() < lim) {
-                    int n = i.read(rh, off, 24 - off);
-                    if (n < 0) break;
-                    off += n;
-                }
-                if (off < 24) { try { s.close(); } catch (Exception ignored) {} continue; }
-                java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(rh).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                int cmd = rb.getInt();
-                rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
-                if (len >= 0 && len < 65536 && magic == (cmd ^ 0xffffffff)) {
-                    byte[] pl = new byte[len];
-                    int po = 0;
-                    long plim = System.currentTimeMillis() + 1500;
-                    while (po < len && System.currentTimeMillis() < plim) {
-                        int n = i.read(pl, po, len - po);
-                        if (n < 0) break;
-                        po += n;
-                    }
-                    ByteArrayOutputStream pend = new ByteArrayOutputStream();
-                    pend.write(rh);
-                    pend.write(pl, 0, po);
-                    respostaPendente = pend.toByteArray();
-                    s.setSoTimeout(0);
-                    return s;
-                }
-                try { s.close(); } catch (Exception ignored) {}
-            } catch (Exception e) {
-                try { if (s != null) s.close(); } catch (Exception ignored) {}
-            }
-        }
-        return null;
-    }
-
-    static int[] faixaPortas() {
-        try {
-            BufferedReader r = new BufferedReader(new FileReader("/proc/sys/net/ipv4/ip_local_port_range"));
-            String[] partes = r.readLine().trim().split("\\s+");
-            r.close();
-            return new int[]{Integer.parseInt(partes[0]), Integer.parseInt(partes[1])};
-        } catch (Exception e) {
-            return new int[]{32768, 60999};
-        }
-    }
-
-    int acharPortaAdbd() {
-        final int[] faixa = faixaPortas();
-        final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-        ExecutorService ex = Executors.newFixedThreadPool(150);
-        List<Future<?>> fs = new ArrayList<>();
-        for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
-            final int port = p;
-            fs.add(ex.submit(() -> {
-                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
-            }));
-        }
-        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-        ex.shutdown();
-        Collections.sort(achados);
-        final int[] vencedor = {-1};
-        ExecutorService px = Executors.newFixedThreadPool(6);
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + candidatos.get(0) + ",\"enxame\":" + candidatos.size() + "}");
+        status = "enxame: " + candidatos.size() + " farejadores em campo";
+        final List<Socket> abertos = Collections.synchronizedList(new ArrayList<>());
+        final List<OutputStream> outs = Collections.synchronizedList(new ArrayList<>());
+        sniffOuts = outs;
+        final Socket[] vencedor = {null};
+        final byte[] hdrVencedor = new byte[24];
+        ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
         List<Future<?>> pf = new ArrayList<>();
-        for (final int port : achados) {
+        for (final int cand : candidatos) {
             pf.add(px.submit(() -> {
-                if (vencedor[0] < 0 && probeAdbd(port)) vencedor[0] = port;
+                Socket s = null;
+                try {
+                    s = new Socket();
+                    s.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                    s.setTcpNoDelay(true);
+                    s.setSoTimeout(8000);
+                    synchronized (abertos) { abertos.add(s); outs.add(s.getOutputStream()); }
+                    InputStream si = s.getInputStream();
+                    byte[] hdr = new byte[24];
+                    int got = 0;
+                    while (got < 24) {
+                        int n = si.read(hdr, got, 24 - got);
+                        if (n < 0) break;
+                        got += n;
+                    }
+                    if (got == 24) {
+                        java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                        int cmd = rb.getInt(); rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
+                        if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && vencedor[0] == null) {
+                            vencedor[0] = s;
+                            System.arraycopy(hdr, 0, hdrVencedor, 0, 24);
+                        }
+                    }
+                } catch (Exception e) {
+                }
             }));
         }
         for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
         px.shutdown();
-        return vencedor[0];
-    }
-
-    boolean probeAdbd(int port) {
-        Socket s = null;
+        sniffOuts = null;
+        if (vencedor[0] == null) {
+            for (Socket s2 : abertos) try { s2.close(); } catch (Exception ignored) {}
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
+            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
+            return;
+        }
+        final Socket win = vencedor[0];
+        for (Socket s2 : abertos) {
+            if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
+        }
+        win.setSoTimeout(0);
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
+        status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
+        final InputStream ai = win.getInputStream();
+        pipeOut = win.getOutputStream();
+        if (ws != null) ws.send(hdrVencedor);
+        byte[] buf = new byte[16384];
         try {
-            s = new Socket();
-            s.connect(new InetSocketAddress("127.0.0.1", port), 800);
-            s.setSoTimeout(900);
-            OutputStream o = s.getOutputStream();
-            byte[] payload = "host::".getBytes("UTF-8");
-            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            h.putInt(0x4e584e43); h.putInt(0x01000001); h.putInt(4096);
-            h.putInt(payload.length);
-            long sum = 0; for (byte b : payload) sum += (b & 0xff);
-            h.putInt((int) (sum & 0xffffffffL));
-            h.putInt(0x4e584e43 ^ 0xffffffff);
-            o.write(h.array()); o.write(payload); o.flush();
-            InputStream i = s.getInputStream();
-            byte[] rh = new byte[24];
-            int off = 0;
-            long lim = System.currentTimeMillis() + 1200;
-            while (off < 24 && System.currentTimeMillis() < lim) {
-                int n = i.read(rh, off, 24 - off);
-                if (n < 0) break;
-                off += n;
+            int n;
+            while ((n = ai.read(buf)) > 0) {
+                if (ws != null) ws.send(Arrays.copyOf(buf, n));
             }
-            if (off < 24) return false;
-            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(rh).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            int cmd = rb.getInt();
-            rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
-            return len >= 0 && len < 65536 && magic == (cmd ^ 0xffffffff);
-        } catch (Exception e) {
-            return false;
         } finally {
-            try { if (s != null) s.close(); } catch (Exception ignored) {}
+            pipeOut = null;
+            try { win.close(); } catch (Exception ignored) {}
+            status = "tubo encerrado";
         }
     }
 
