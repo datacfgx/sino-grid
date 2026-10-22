@@ -1,6 +1,5 @@
 name: GH-KALI Entrega CORA
-on:
-  workflow_dispatch:
+on: [workflow_dispatch]
 permissions:
   actions: read
   contents: read
