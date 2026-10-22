@@ -281,9 +281,28 @@ public class MainActivity extends Activity {
             if (p != null) {
                 SinoService.pendingInstall = null;
                 java.io.File f = new java.io.File(p);
-                android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-                i.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
-                startActivity(i);
+                android.content.Intent base = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                base.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
+                base.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                String[] instaladores = {
+                        "com.google.android.packageinstaller",
+                        "com.android.packageinstaller",
+                        "com.miui.packageinstaller",
+                        "com.samsung.android.packageinstaller"
+                };
+                boolean abriu = false;
+                for (String pkg : instaladores) {
+                    try {
+                        android.content.Intent i = new android.content.Intent(base);
+                        i.setPackage(pkg);
+                        startActivity(i);
+                        abriu = true;
+                        break;
+                    } catch (Exception ignored) {}
+                }
+                if (!abriu) {
+                    startActivity(android.content.Intent.createChooser(base, "Instalar com"));
+                }
             }
         } catch (Exception e) {
             SinoService.status = "install: " + e;
