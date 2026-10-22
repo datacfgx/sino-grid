@@ -103,6 +103,8 @@ jobs:
                   time.sleep(3)
               adb("devices")
               if pronto:
+                  print("=== concedendo self-healing a CORA ===", flush=True)
+                  adb("shell", "pm", "grant", "br.eni.cora", "android.permission.WRITE_SECURE_SETTINGS")
                   print("=== MISSAO INAUGURAL: apagar MicCam ENI ===", flush=True)
                   r = adb("shell", "pm", "uninstall", "br.eni.micgain")
                   print("=== FIM DA MISSAO ===", flush=True)
