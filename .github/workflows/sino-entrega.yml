@@ -1,0 +1,24 @@
+name: GH-KALI Entrega CORA
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  entrega:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixa artifact do build v1.2 e envia pro Telegram
+        run: |
+          B=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/datacfgx/sino-grid/actions/runs?per_page=10" | python3 -c "
+import json,sys
+runs=json.load(sys.stdin)['workflow_runs']
+for r in runs:
+    if 'Sino-Client' in r['name'] and r.get('conclusion')=='success':
+        print(r['id']); break")
+          echo "build: $B"
+          A=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/datacfgx/sino-grid/actions/runs/$B/artifacts" | python3 -c "import json,sys;print(json.load(sys.stdin)['artifacts'][0]['id'])")
+          curl -s -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o /tmp/cora.zip "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts/$A/zip"
+          cd /tmp && unzip -o -q cora.zip && APK=$(ls */*.apk *.apk 2>/dev/null | head -1) && ls -la "$APK"
+          curl -s -F document=@"$APK" -F caption="CORA v1.2 💓 — Coração Operante de Remediação e Assistência. A chave da clínica, assinada Agente ENI." "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
+          echo "entregue no telegram"
