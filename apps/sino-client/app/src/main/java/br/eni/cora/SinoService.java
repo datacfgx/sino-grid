@@ -24,17 +24,17 @@ public class SinoService extends Service {
     volatile java.util.List<OutputStream> sniffOuts = null;
     public static volatile long lastDataMb = -1, lastMemKb = -1;
 
+    public static SinoService instancia;
+    public static volatile boolean pedidoEnxameManual = false;
+
     public static void acionarEnxameManual() {
-        try {
-            if (!SinoService.piping) {
-                new Thread(() -> {
-                    try { iniciarPipe(0); } catch (Exception e) { SinoService.status = "enxame manual: " + e; }
-                }).start();
-            } else {
-                SinoService.status = "enxame já está em campo (tubo ativo)";
-            }
-        } catch (Exception e) {
-            SinoService.status = "enxame manual: " + e;
+        if (instancia != null && !instancia.piping) {
+            pedidoEnxameManual = true;
+            SinoService.status = "enxame manual acionado — farejadores em campo...";
+        } else if (instancia != null) {
+            SinoService.status = "enxame já está em campo (tubo ativo)";
+        } else {
+            SinoService.status = "serviço não iniciado — toque SALVAR + INICIAR TÚNEL";
         }
     }
 
@@ -43,6 +43,7 @@ public class SinoService extends Service {
     }
 
     public int onStartCommand(Intent i, int f, int id) {
+        instancia = this;
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
             if (pm != null) {
@@ -71,7 +72,27 @@ public class SinoService extends Service {
         while (true) {
             try { connectOnce(); }
             catch (Exception e) { status = "erro: " + e; }
-            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+            try {
+                Thread.sleep(5000);
+                if (pedidoEnxameManual) {
+                    pedidoEnxameManual = false;
+                    try {
+                        android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                        boolean temWifi = false;
+                        try {
+                            for (android.net.Network n : cm.getAllNetworks()) {
+                                android.net.NetworkInfo ni = cm.getNetworkInfo(n);
+                                if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
+                                    temWifi = true;
+                                    break;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                        if (temWifi && !piping) iniciarPipe(0);
+                        else if (!temWifi) status = "sem Wi-Fi — enxame silencioso (4G)";
+                    } catch (Exception e) { status = "enxame manual: " + e; }
+                }
+            } catch (InterruptedException ignored) {}
         }
     }
 
