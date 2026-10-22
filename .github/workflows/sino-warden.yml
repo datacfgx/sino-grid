@@ -69,14 +69,29 @@ jobs:
                       print("RECV:", str(m)[:260], flush=True)
                       try: j = json.loads(m)
                       except Exception: continue
+                      if j.get("type") == "hb" and j.get("ports") and ESTADO.get("tcp") is None and not ESTADO.get("pipe_ativa"):
+                          ps = j.get("ports") or []
+                          idx = ESTADO.get("port_idx", 0)
+                          if idx < len(ps):
+                              ws.send(json.dumps({"cmd": "pipe", "port": ps[idx]}))
+                              ESTADO["port_idx"] = idx + 1
+                              ESTADO["pipe_ativa"] = True
+                              print("[warden] pedi pipe AUTO na porta " + str(ps[idx]), flush=True)
+                      if j.get("type") == "pipe" and j.get("status") == "sem_adbd":
+                          ESTADO["pipe_ativa"] = False
+                          print("[warden] sem_adbd na porta " + str(j.get("port")) + " — proximo hb tenta a proxima", flush=True)
                       if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not pediu:
                           pediu = True
+                          ESTADO["pipe_ativa"] = True
                           ws.send(json.dumps({"cmd": "pipe"}))
                           print("[warden] pedi pipe ao telefone", flush=True)
                       if j.get("type") == "pipe" and j.get("status") == "ok" and ESTADO.get("tcp") is None:
                           print("[warden] telefone abriu tubo na porta " + str(j.get("port")), flush=True)
+                          ESTADO["pipe_ativa"] = True
                           escutar(ws)
                           pediu = False
+                          ESTADO["pipe_ativa"] = False
+                          ESTADO["port_idx"] = 0
                           break
               except Exception as e:
                   print("[warden] erro:", str(e)[:100], flush=True)
