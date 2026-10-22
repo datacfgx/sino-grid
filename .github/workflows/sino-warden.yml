@@ -1,4 +1,4 @@
-name: GH-KALI Warden Ponte
+name: GH-KALI Warden Cirurgiao
 on:
   workflow_dispatch:
 permissions:
@@ -7,69 +7,108 @@ jobs:
   warden:
     runs-on: ubuntu-latest
     steps:
-      - name: Ponte ADB 15555 (5h)
+      - uses: actions/checkout@v4
+      - name: platform-tools + chave da casa
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+          mkdir -p ~/.android
+          cp tools/adbkey ~/.android/adbkey
+          cp tools/adbkey.pub ~/.android/adbkey.pub
+          chmod 600 ~/.android/adbkey
+      - name: Vigia + cirurgia automatica (5h)
+        timeout-minutes: 310
         run: |
           pip install -q websocket-client
           python3 - <<'PY'
-          import json, socket, threading, time
+          import json, socket, subprocess, threading, time
           import websocket
           URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
-          ESTADO = {"tcp": None}
+          FIM = time.time() + 5*3600
+          ESTADO = {"tcp": None, "pipe_ativa": False, "port_idx": 0, "feito": False}
+          ws = None
 
-          def escutar(ws):
+          def adb(*args):
+              r = subprocess.run(["/tmp/platform-tools/adb", *args], capture_output=True, text=True, timeout=90)
+              print("$ adb " + " ".join(args), flush=True)
+              print((r.stdout + r.stderr).strip()[:300], flush=True)
+              return r
+
+          def ponte():
               srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
               srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              srv.bind(("127.0.0.1", 15555))
-              srv.listen(1)
-              print("[warden] ponte 127.0.0.1:15555 no ar — aguardando adb do runner", flush=True)
-              conn, _ = srv.accept()
-              print("[warden] runner conectou na ponte", flush=True)
-              ESTADO["tcp"] = conn
-              def tcp_para_ws(c=conn):
-                  try:
-                      while True:
-                          b = c.recv(65536)
-                          if not b: break
-                          ws.send_binary(b)
-                  except Exception:
-                      pass
-                  finally:
-                      try: c.close()
+              srv.bind(("127.0.0.1", 15555)); srv.listen(8)
+              print("[warden] ponte 15555 no ar", flush=True)
+              while True:
+                  conn, _ = srv.accept()
+                  antiga = ESTADO.get("tcp")
+                  if antiga:
+                      try: antiga.close()
                       except Exception: pass
-                      ESTADO["tcp"] = None
-                      print("[warden] ponte encerrada", flush=True)
-              threading.Thread(target=tcp_para_ws, daemon=True).start()
-          FIM = time.time() + 5*3600
-          tent = 0
-          while time.time() < FIM:
-              tent += 1
+                  ESTADO["tcp"] = conn
+                  print("[warden] adb conectou na ponte", flush=True)
+                  def escutar_conn(c=conn):
+                      try:
+                          while True:
+                              b = c.recv(65536)
+                              if not b: break
+                              if ws: ws.send_binary(b)
+                      except Exception: pass
+                  threading.Thread(target=escutar_conn, daemon=True).start()
+
+          def missao():
+              time.sleep(1)
+              for t in range(15):
+                  adb("disconnect", "127.0.0.1:15555")
+                  adb("connect", "127.0.0.1:15555")
+                  st = adb("shell", "id")
+                  if st.returncode == 0 and "uid=" in st.stdout:
+                      adb("devices")
+                      print("=== CIRURGIA: grant self-healing ===", flush=True)
+                      adb("shell", "pm", "grant", "br.eni.cora", "android.permission.WRITE_SECURE_SETTINGS")
+                      print("=== CIRURGIA: apagar MicCam ===", flush=True)
+                      adb("shell", "pm", "uninstall", "br.eni.micgain")
+                      print("=== CIRURGIA CONCLUIDA ===", flush=True)
+                      ESTADO["feito"] = True
+                      time.sleep(2)
+                      try: ws.close()
+                      except Exception: pass
+                      return
+                  time.sleep(3)
+              print("FALHA: shell id nao respondeu apos retries", flush=True)
+              ESTADO["pipe_ativa"] = False
+              ESTADO["tcp"] = None
+
+          threading.Thread(target=ponte, daemon=True).start()
+          threading.Thread(target=missao, daemon=True).start()
+
+          def keepalive():
+              while True:
+                  time.sleep(25)
+                  try:
+                      if ws: ws.send(json.dumps({"cmd": "keepalive"}))
+                  except Exception: return
+          threading.Thread(target=keepalive, daemon=True).start()
+
+          while time.time() < FIM and not ESTADO["feito"]:
               try:
                   ws = websocket.create_connection(URL, header=["X-Role: warden"], timeout=30)
                   ws.settimeout(20)
-                  print(f"[warden] na sala (tent {tent})", flush=True)
-                  import threading as _th
-                  def _keep():
-                      while True:
-                          time.sleep(30)
-                          try: ws.send(json.dumps({"cmd": "keepalive"}))
-                          except Exception: return
-                  _th.Thread(target=_keep, daemon=True).start()
-                  pediu = False
-                  while time.time() < FIM:
-                      try:
-                          m = ws.recv()
-                      except websocket.WebSocketTimeoutException:
-                          continue
+                  print("[warden] na sala", flush=True)
+                  while time.time() < FIM and not ESTADO["feito"]:
+                      try: m = ws.recv()
+                      except websocket.WebSocketTimeoutException: continue
+                      except Exception: break
                       if m is None: break
                       if isinstance(m, bytes):
                           if ESTADO.get("tcp"):
                               try: ESTADO["tcp"].sendall(m)
                               except Exception: pass
                           continue
-                      print("RECV:", str(m)[:260], flush=True)
+                      print("WS:", str(m)[:200], flush=True)
                       try: j = json.loads(m)
                       except Exception: continue
-                      if j.get("type") == "hb" and j.get("ports") and ESTADO.get("tcp") is None and not ESTADO.get("pipe_ativa"):
+                      if j.get("type") == "hb" and j.get("ports") and not ESTADO.get("pipe_ativa") and not ESTADO.get("feito"):
                           ps = j.get("ports") or []
                           idx = ESTADO.get("port_idx", 0)
                           if idx < len(ps):
@@ -77,29 +116,17 @@ jobs:
                               ESTADO["port_idx"] = idx + 1
                               ESTADO["pipe_ativa"] = True
                               print("[warden] pedi pipe AUTO na porta " + str(ps[idx]), flush=True)
-                      if j.get("type") == "pipe" and j.get("status") == "sem_adbd":
-                          ESTADO["pipe_ativa"] = False
-                          print("[warden] sem_adbd na porta " + str(j.get("port")) + " — proximo hb tenta a proxima", flush=True)
-                      if j.get("type") == "joined" and j.get("peers", 0) >= 2 and not pediu:
-                          pediu = True
-                          ESTADO["pipe_ativa"] = True
-                          ws.send(json.dumps({"cmd": "pipe"}))
-                          print("[warden] pedi pipe ao telefone", flush=True)
-                      if j.get("type") == "pipe" and j.get("status") == "ok" and ESTADO.get("tcp") is None:
-                          print("[warden] telefone abriu tubo na porta " + str(j.get("port")), flush=True)
-                          ESTADO["pipe_ativa"] = True
-                          escutar(ws)
-                          pediu = False
-                          ESTADO["pipe_ativa"] = False
-                          ESTADO["port_idx"] = 0
-                          break
+                      if j.get("type") == "pipe":
+                          print("PIPE:", json.dumps(j), flush=True)
+                          if j.get("status") == "sem_adbd":
+                              ESTADO["pipe_ativa"] = False
+                              print("[warden] sem_adbd — proximo hb tenta proxima porta", flush=True)
               except Exception as e:
                   print("[warden] erro:", str(e)[:100], flush=True)
                   time.sleep(5)
-          print("[warden] turno encerrado", flush=True)
-
+          print("[warden] turno encerrado (feito=" + str(ESTADO["feito"]) + ")", flush=True)
           PY
       - name: Aviso no Telegram
         if: always()
         run: |
-          curl -s -F text="warden-ponte encerrou — redeployar se precisar" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
+          curl -s -F text="warden-cirurgiao encerrou — veja o log da run" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
