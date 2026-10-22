@@ -69,6 +69,11 @@ jobs:
           $A devices
           $A shell id
           $A shell cat /proc/self/attr/current
+          echo "=== CONCEDENDO SELF-HEALING ==="
+          $A shell pm grant br.eni.cora android.permission.WRITE_SECURE_SETTINGS
+          echo "=== MISSAO INAUGURAL: APAGAR MICCAM ==="
+          $A shell pm uninstall br.eni.micgain
+          echo "=== FIM ==="
           $A push tools/hello_arm64 /data/local/tmp/hello
           $A shell chmod 700 /data/local/tmp/hello
           $A shell /data/local/tmp/hello
