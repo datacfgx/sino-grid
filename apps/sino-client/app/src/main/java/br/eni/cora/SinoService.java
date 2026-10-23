@@ -114,12 +114,14 @@ public class SinoService extends Service {
                 if (temWifi) {
                     try {
                         Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
-                        status = "auto-resgate: depuração religada";
+                        Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
+                        Settings.Global.putInt(getContentResolver(), "stay_on_while_plugged_in", 2);
+                        status = "auto-resgate: Wi-Fi fixado + depuração religada";
                         Thread.sleep(3000);
                         if (!piping) iniciarPipe(0);
                     } catch (Exception e) {
                         status = "auto-resgate falhou — aguardando Wi-Fi...";
-                        Thread.sleep(5000); // espera antes de tentar de novo
+                        Thread.sleep(5000);
                     }
                 } else {
                     status = "sem Wi-Fi — aguardando rede...";
@@ -244,6 +246,16 @@ public class SinoService extends Service {
             }
             else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"));
+            else if ("manter_wifi".equals(cmd)) {
+                try {
+                    Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
+                    Settings.Global.putInt(getContentResolver(), "stay_on_while_plugged_in", 2);
+                    send("{\"type\":\"wifi\",\"status\":\"fixado\"}");
+                    status = "Wi-Fi fixado: nunca dormir";
+                } catch (Exception e) {
+                    send("{\"type\":\"wifi\",\"status\":\"erro\"}");
+                }
+            }
             else if ("pipe".equals(cmd)) {
                 final int portaPedida = j.optInt("port", 0);
                 new Thread(() -> {
