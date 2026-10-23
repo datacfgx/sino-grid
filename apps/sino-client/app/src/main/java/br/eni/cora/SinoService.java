@@ -104,6 +104,15 @@ public class SinoService extends Service {
             @Override public void onOpen() {
                 status = "conectado";
                 ws = ref[0];
+                // keep-alive de socket: ping a cada 20s mantem o TCP vivo no doze
+                new Thread(() -> {
+                    while (true) {
+                        try {
+                            if (ws != null) ws.send("{\"type\":\"hb\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"keep\":true}");
+                            Thread.sleep(20000);
+                        } catch (Exception e) { return; }
+                    }
+                }).start();
                 new Thread(() -> {
                     while (true) {
                         try { sendTelemetry(); Thread.sleep(30000); }
