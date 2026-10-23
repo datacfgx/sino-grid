@@ -358,6 +358,15 @@ public class SinoService extends Service {
             if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
         }
         win.setSoTimeout(0);
+        // WakeLock específico para manter o adbd vivo durante o sono
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            if (wm != null) {
+                android.net.wifi.WifiManager.WifiLock wl = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "cora_adb");
+                wl.setReferenceCounted(false);
+                wl.acquire();
+            }
+        } catch (Exception e) {}
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
         status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
         final InputStream ai = win.getInputStream();
