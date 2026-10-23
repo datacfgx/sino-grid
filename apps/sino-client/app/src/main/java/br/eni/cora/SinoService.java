@@ -505,9 +505,23 @@ public class SinoService extends Service {
         try {
             android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:" + pkg));
             i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-            send("{\"type\":\"uninstall\",\"status\":\"confirmacao_pedida\",\"pkg\":\"" + pkg + "\"}");
-            status = "desinstalação aguardando sua confirmação";
+            int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 88, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            String ch = "instalacao";
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Instalacoes", android.app.NotificationManager.IMPORTANCE_HIGH));
+            }
+            android.app.Notification.Builder nb = new android.app.Notification.Builder(this)
+                    .setContentTitle("CORA 💓")
+                    .setContentText("Toque para confirmar desinstalação")
+                    .setSmallIcon(android.R.drawable.stat_sys_warning)
+                    .setContentIntent(pi)
+                    .setAutoCancel(true);
+            if (android.os.Build.VERSION.SDK_INT >= 26) nb.setChannelId(ch);
+            nm.notify(88, nb.build());
+            send("{\"type\":\"uninstall\",\"status\":\"notificacao_enviada\",\"pkg\":\"" + pkg + "\"}");
+            status = "toque na notificação para confirmar a desinstalação";
         } catch (Exception e) {
             send("{\"type\":\"uninstall\",\"status\":\"erro\"}");
         }
