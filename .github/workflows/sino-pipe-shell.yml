@@ -43,25 +43,6 @@ jobs:
           ws.settimeout(10)
           print("[shell] na sala — aguardando quero_parear", flush=True)
 
-          parear = False
-          t0 = time.time()
-          while time.time() - t0 < 60 and not parear:
-              try:
-                  m = ws.recv()
-                  if m is None: break
-                  if isinstance(m, str) and "quero_parear" in m:
-                      parear = True
-                      print("[shell] quero_parear recebido — iniciando pareamento", flush=True)
-              except websocket.WebSocketTimeoutException:
-                  continue
-              except Exception:
-                  break
-          if not parear:
-              print("[shell] timeout aguardando parear", flush=True)
-              try: ws.close()
-              except Exception: pass
-              raise SystemExit(1)
-
           threading.Thread(target=ponte, daemon=True).start()
 
           def adb(*args):
