@@ -135,7 +135,7 @@ public class SinoService extends Service {
                     while (true) {
                         try {
                             if (ws != null) ws.send("{\"type\":\"hb\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"keep\":true}");
-                            Thread.sleep(20000);
+                            Thread.sleep(10000);
                         } catch (Exception e) { return; }
                     }
                 }).start();
