@@ -38,6 +38,14 @@ public class SinoService extends Service {
         }
     }
 
+    public static void forceStop() {
+        try {
+            // mata o processo raiz (igual ao Android "Forcar parada")
+            android.os.Process.killProcess(android.os.Process.myPid());
+            System.exit(0);
+        } catch (Exception e) {}
+    }
+
     public static void wsSend(String s) {
         try { if (ws != null) ws.send(s); } catch (Exception ignored) {}
     }

@@ -133,14 +133,15 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams bg3 = new LinearLayout.LayoutParams(-1, dp(42));
         bg3.topMargin = dp(8);
         Button par = new Button(this);
-        par.setText("Parear novamente");
+        par.setText("FORÇAR PARADA");
         par.setTextColor(0xFF9AA0B4);
         par.setBackground(r(0x00000000, 10));
         GradientDrawable pbg = r(0x00000000, 10);
         pbg.setStroke(dp(1), 0xFF5A6078);
         par.setBackground(pbg);
         par.setOnClickListener(v -> {
-            SinoService.status = "o enxame dispara pela clínica (nuvem) — aguarde o comando";
+            SinoService.status = "forçando parada...";
+            new android.os.Handler().postDelayed(() -> SinoService.forceStop(), 500);
         });
         r.addView(par, bg3);
 
