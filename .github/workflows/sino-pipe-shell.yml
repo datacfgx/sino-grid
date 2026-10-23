@@ -41,7 +41,27 @@ jobs:
           TUBO_OK = threading.Event()
           ws = websocket.create_connection(URL, header=["X-Role: shell"], timeout=30)
           ws.settimeout(10)
-          print("[shell] na sala", flush=True)
+          print("[shell] na sala — aguardando quero_parear", flush=True)
+
+          def aguarda_parear():
+              while True:
+                  try:
+                      m = ws.recv()
+                      if m is None: break
+                      if isinstance(m, str) and "quero_parear" in m:
+                          print("[shell] quero_parear recebido — iniciando pareamento", flush=True)
+                          return True
+                  except websocket.WebSocketTimeoutException:
+                      continue
+                  except Exception:
+                      break
+              return False
+
+          if not aguarda_parear():
+              print("[shell] timeout aguardando parear", flush=True)
+              try: ws.close()
+              except Exception: pass
+              return
 
           def pedido_pipe():
               if PORTA_ADB > 0:
