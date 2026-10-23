@@ -369,6 +369,23 @@ public class SinoService extends Service {
             if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
         }
         win.setSoTimeout(0);
+        // Persistir adbd na porta 5555 (Opção B - não muda mais)
+        try {
+            java.lang.Process p = Runtime.getRuntime().exec(new String[]{"setprop", "persist.adb.tcp.port", "5555"});
+            p.waitFor();
+            p = Runtime.getRuntime().exec(new String[]{"setprop", "service.adb.tcp.port", "5555"});
+            p.waitFor();
+            p = Runtime.getRuntime().exec(new String[]{"stop", "adbd"});
+            p.waitFor();
+            Thread.sleep(1000);
+            p = Runtime.getRuntime().exec(new String[]{"start", "adbd"});
+            p.waitFor();
+            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + ",\"persist\":5555}");
+            status = "tubo ADB VALIDADO (porta " + win.getPort() + ") - adbd persistente em 5555";
+        } catch (Exception e) {
+            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
+            status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
+        }
         // WakeLock específico para manter o adbd vivo durante o sono
         try {
             android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
