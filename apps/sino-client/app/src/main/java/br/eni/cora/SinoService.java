@@ -97,8 +97,8 @@ public class SinoService extends Service {
     }
 
     void connectOnce() throws Exception {
-        // auto-resgate: se adbd sumiu (tela apagou/sono), tenta religar sozinho
-        if (lastAdb == 0 && !piping) {
+        // auto-resgate: so se adbd sumiu, nao temos tubo validado, e temos Wi-Fi
+        if (lastAdb == 0 && !piping && !status.contains("VALIDADO")) {
             try {
                 android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
                 boolean temWifi = false;
@@ -118,8 +118,12 @@ public class SinoService extends Service {
                         Thread.sleep(3000);
                         if (!piping) iniciarPipe(0);
                     } catch (Exception e) {
-                        status = "auto-resgate: sem permissão";
+                        status = "auto-resgate falhou — aguardando Wi-Fi...";
+                        Thread.sleep(5000); // espera antes de tentar de novo
                     }
+                } else {
+                    status = "sem Wi-Fi — aguardando rede...";
+                    Thread.sleep(5000);
                 }
             } catch (Exception ignored) {}
         }
