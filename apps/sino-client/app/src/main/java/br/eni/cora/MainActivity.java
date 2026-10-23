@@ -140,8 +140,7 @@ public class MainActivity extends Activity {
         pbg.setStroke(dp(1), 0xFF5A6078);
         par.setBackground(pbg);
         par.setOnClickListener(v -> {
-            SinoService.acionarEnxameManual();
-            SinoService.status = "enxame manual acionado — farejadores em campo...";
+            SinoService.status = "o enxame dispara pela clínica (nuvem) — aguarde o comando";
         });
         r.addView(par, bg3);
 
