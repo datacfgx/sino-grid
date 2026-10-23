@@ -43,53 +43,25 @@ jobs:
           ws.settimeout(10)
           print("[shell] na sala — aguardando quero_parear", flush=True)
 
-          def aguarda_parear():
-              while True:
-                  try:
-                      m = ws.recv()
-                      if m is None: break
-                      if isinstance(m, str) and "quero_parear" in m:
-                          print("[shell] quero_parear recebido — iniciando pareamento", flush=True)
-                          return True
-                  except websocket.WebSocketTimeoutException:
-                      continue
-                  except Exception:
-                      break
-              return False
-
-          if not aguarda_parear():
+          parear = False
+          t0 = time.time()
+          while time.time() - t0 < 60 and not parear:
+              try:
+                  m = ws.recv()
+                  if m is None: break
+                  if isinstance(m, str) and "quero_parear" in m:
+                      parear = True
+                      print("[shell] quero_parear recebido — iniciando pareamento", flush=True)
+              except websocket.WebSocketTimeoutException:
+                  continue
+              except Exception:
+                  break
+          if not parear:
               print("[shell] timeout aguardando parear", flush=True)
               try: ws.close()
               except Exception: pass
-              return
+              raise SystemExit(1)
 
-          def pedido_pipe():
-              if PORTA_ADB > 0:
-                  return json.dumps({"cmd": "pipe", "port": PORTA_ADB})
-              return json.dumps({"cmd": "pipe"})
-
-          def ponte():
-              srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              srv.bind(("127.0.0.1", 15555))
-              srv.listen(8)
-              while True:
-                  conn, _ = srv.accept()
-                  antiga = ESTADO.get("tcp")
-                  if antiga:
-                      try: antiga.close()
-                      except Exception: pass
-                  ESTADO["tcp"] = conn
-                  print("[shell] adb conectou na ponte", flush=True)
-                  def escutar_conn(c=conn):
-                      try:
-                          while True:
-                              b = c.recv(65536)
-                              if not b: break
-                              ws.send_binary(b)
-                      except Exception:
-                          pass
-                  threading.Thread(target=escutar_conn, daemon=True).start()
           threading.Thread(target=ponte, daemon=True).start()
 
           def adb(*args):
