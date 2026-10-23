@@ -40,9 +40,12 @@ public class SinoService extends Service {
 
     public static void forceStop() {
         try {
-            // mata o processo raiz (igual ao Android "Forcar parada")
-            android.os.Process.killProcess(android.os.Process.myPid());
-            System.exit(0);
+            if (instancia != null) {
+                instancia.stopSelf();
+                android.content.Intent i = new android.content.Intent(instancia, SinoService.class);
+                instancia.startService(i);
+                SinoService.status = "serviço reiniciado — aguardando conexão...";
+            }
         } catch (Exception e) {}
     }
 

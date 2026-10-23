@@ -140,8 +140,8 @@ public class MainActivity extends Activity {
         pbg.setStroke(dp(1), 0xFF5A6078);
         par.setBackground(pbg);
         par.setOnClickListener(v -> {
-            SinoService.status = "forçando parada...";
-            new android.os.Handler().postDelayed(() -> SinoService.forceStop(), 500);
+            SinoService.status = "reiniciando serviço...";
+            SinoService.forceStop();
         });
         r.addView(par, bg3);
 
