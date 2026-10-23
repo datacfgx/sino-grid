@@ -97,6 +97,32 @@ public class SinoService extends Service {
     }
 
     void connectOnce() throws Exception {
+        // auto-resgate: se adbd sumiu (tela apagou/sono), tenta religar sozinho
+        if (lastAdb == 0 && !piping) {
+            try {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                boolean temWifi = false;
+                try {
+                    for (android.net.Network n : cm.getAllNetworks()) {
+                        android.net.NetworkInfo ni = cm.getNetworkInfo(n);
+                        if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
+                            temWifi = true;
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {}
+                if (temWifi) {
+                    try {
+                        Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
+                        status = "auto-resgate: depuração religada";
+                        Thread.sleep(3000);
+                        if (!piping) iniciarPipe(0);
+                    } catch (Exception e) {
+                        status = "auto-resgate: sem permissão";
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
         final String host = Prefs.host(this);
         status = "conectando " + host + " ...";
         final WsClient[] ref = new WsClient[1];
