@@ -10,7 +10,7 @@ import android.view.View;
 import android.widget.*;
 
 public class MainActivity extends Activity {
-    TextView status, battV, memV, dataV, aoVivo;
+    TextView status, battV, memV, dataV, aoVivo, adbdV;
     View barB, barM, barD;
     TextView chipAdb;
     EditText host, devid;
