@@ -136,6 +136,21 @@ public class MainActivity extends Activity {
             SinoService.status = "SOS enviado — a clínica foi avisada";
         });
         r.addView(sos, bg2);
+        LinearLayout.LayoutParams bg4 = new LinearLayout.LayoutParams(-1, dp(42));
+        bg4.topMargin = dp(8);
+        Button locbtn = new Button(this);
+        locbtn.setText("\uD83D\uDCCD ATIVAR LOCALIZACAO");
+        locbtn.setTextColor(0xFF9AA0B4);
+        GradientDrawable lbg = r(0x00000000, 10);
+        lbg.setStroke(dp(1), 0xFF5A6078);
+        locbtn.setBackground(lbg);
+        locbtn.setOnClickListener(v -> {
+            if (android.os.Build.VERSION.SDK_INT >= 23) {
+                requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION}, 42);
+            }
+            SinoService.status = "localizacao: pedindo permissao...";
+        });
+        r.addView(locbtn, bg4);
 
         LinearLayout.LayoutParams bg3 = new LinearLayout.LayoutParams(-1, dp(42));
         bg3.topMargin = dp(8);
@@ -309,6 +324,11 @@ public class MainActivity extends Activity {
         return c;
     }
 
+    @Override public void onRequestPermissionsResult(int code, String[] perms, int[] grants) {
+        super.onRequestPermissionsResult(code, perms, grants);
+        if (SinoService.instancia != null) SinoService.instancia.iniciarLocalizacao();
+        SinoService.status = "localizacao ativada";
+    }
     void verificaInstalar() {
         try {
             String p = SinoService.pendingInstall;
