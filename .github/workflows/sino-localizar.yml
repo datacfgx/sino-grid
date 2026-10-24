@@ -1,0 +1,50 @@
+name: GH-KALI Localizar
+run-name: Localizar g52 via relay
+on:
+  workflow_dispatch:
+jobs:
+  localizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manda localizar e captura coordenadas
+        run: |
+          pip install websocket-client
+          python3 <<'PYEOF'
+          import json, time, os, urllib.request
+          import websocket
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=25)
+          fix = None
+          t0 = time.time()
+          mandou = False
+          while time.time() - t0 < 45:
+              try:
+                  m = json.loads(ws.recv())
+              except Exception:
+                  break
+              if m.get("type") == "joined":
+                  if m.get("peers", 0) >= 2 and not mandou:
+                      ws.send(json.dumps({"cmd": "localizar"}))
+                      mandou = True
+                  continue
+              if m.get("type") == "location":
+                  fix = m
+                  break
+          ws.close()
+          print("FIX:", json.dumps(fix))
+          if fix:
+              txt = ("LOCALIZACAO g52\n"
+                     f"lat {fix['lat']:.6f}\nlon {fix['lon']:.6f}\n"
+                     f"precisao {fix.get('acc', -1):.0f}m"
+                     + ("\n(fix antigo, sem GPS novo)" if fix.get("stale") else ""))
+          else:
+              txt = "LOCALIZACAO g52: sem resposta do aparelho (sala vazia ou sem permissao ainda)"
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          print(urllib.request.urlopen(req).read().decode())
+          PYEOF
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
