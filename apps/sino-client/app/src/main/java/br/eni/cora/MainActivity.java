@@ -220,7 +220,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("br.eni.cora · v1.31");
+        f2.setText("br.eni.cora · v1.32");
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
