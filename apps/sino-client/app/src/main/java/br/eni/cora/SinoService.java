@@ -320,7 +320,7 @@ public class SinoService extends Service {
                 new Thread(() -> instalarPorUrl(url)).start();
             }
             else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
-            else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"));
+            else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
             else if ("localizar".equals(cmd)) localizar();
             else if ("adbd".equals(cmd)) iniciarMiniAdbd();
             else if ("manter_wifi".equals(cmd)) {
@@ -692,9 +692,10 @@ public class SinoService extends Service {
         }
     }
 
-    void abrirUrl(String url) {
+    void abrirUrl(String url, String pkg) {
         try {
             android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            if (pkg != null && !pkg.isEmpty()) i.setPackage(pkg);
             i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
             send("{\"type\":\"open\",\"status\":\"ok\"}");
@@ -724,7 +725,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.38.1"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.38.2"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
