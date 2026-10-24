@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "URL pra abrir no navegador do aparelho"
+        description: "URL pra abrir no aparelho"
         required: true
         default: "https://www.google.com"
+      pkg:
+        description: "Pacote alvo (ex: app.revanced.android.youtube) — vazio = handler padrao"
+        required: false
+        default: ""
 jobs:
   abre:
     runs-on: ubuntu-latest
@@ -29,7 +33,10 @@ jobs:
                   break
               if m.get("type") == "joined":
                   if m.get("peers", 0) >= 2 and not ok:
-                      ws.send(json.dumps({"cmd": "open_url", "url": alvo}))
+                      payload = {"cmd": "open_url", "url": alvo}
+                      if os.environ.get("PKG_ALVO"):
+                          payload["pkg"] = os.environ["PKG_ALVO"]
+                      ws.send(json.dumps(payload))
                       ok = True
                       break
           ws.close()
@@ -42,5 +49,6 @@ jobs:
           PYEOF
         env:
           URL_ALVO: ${{ inputs.url }}
+          PKG_ALVO: ${{ inputs.pkg }}
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
