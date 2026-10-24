@@ -1,0 +1,46 @@
+name: GH-KALI Abre URL
+run-name: Abre ${{ inputs.url }} no g52
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL pra abrir no navegador do aparelho"
+        required: true
+        default: "https://www.google.com"
+jobs:
+  abre:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manda open_url via relay
+        run: |
+          pip install websocket-client
+          python3 <<'PYEOF'
+          import json, time, os, urllib.request
+          import websocket
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          alvo = os.environ["URL_ALVO"]
+          ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=25)
+          t0 = time.time()
+          ok = False
+          while time.time() - t0 < 30:
+              try:
+                  m = json.loads(ws.recv())
+              except Exception:
+                  break
+              if m.get("type") == "joined":
+                  if m.get("peers", 0) >= 2 and not ok:
+                      ws.send(json.dumps({"cmd": "open_url", "url": alvo}))
+                      ok = True
+                      break
+          ws.close()
+          txt = f"NAVEGADOR g52: abrindo {alvo}" if ok else "NAVEGADOR g52: sala vazia, aparelho offline?"
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          PYEOF
+        env:
+          URL_ALVO: ${{ inputs.url }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
