@@ -99,6 +99,13 @@ public class MainActivity extends Activity {
         bl.leftMargin = dp(8);
         chips.addView(boot, bl);
         r.addView(chips, clp);
+        adbdV = new TextView(this);
+        adbdV.setText("adbd: procurando...");
+        adbdV.setTextSize(10f);
+        adbdV.setTextColor(0xFF5A6078);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(-1, -2);
+        alp.topMargin = dp(4);
+        r.addView(adbdV, alp);
 
         // botões
         LinearLayout.LayoutParams bg = new LinearLayout.LayoutParams(-1, dp(46));
@@ -220,7 +227,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("br.eni.cora · v1.34");
+        f2.setText("br.eni.cora · v1.35");
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -357,6 +364,13 @@ public class MainActivity extends Activity {
         if (SinoService.lastDataMb >= 0) {
             dataV.setText(SinoService.lastDataMb / 1024 + " GB");
             setW(barD, (int) Math.min(100, SinoService.lastDataMb / 380));
+        }
+        if (SinoService.lastAdbPort > 0) {
+            adbdV.setText("adbd: porta " + SinoService.lastAdbPort + " · tubo pronto pra clínica");
+            adbdV.setTextColor(0xFF50FF8C);
+        } else {
+            adbdV.setText("adbd: procurando...");
+            adbdV.setTextColor(0xFF5A6078);
         }
         boolean adbOn = SinoService.lastAdb == 1;
         chipAdb.setText(adbOn ? "depuração sem fio: ativa" : "depuração sem fio: desligada");
