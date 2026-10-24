@@ -17,6 +17,11 @@
         </activity>
         <service android:name=".SinoService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".CoraJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".SinoService$InstallReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="br.eni.cora.INSTALL_*" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
