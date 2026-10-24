@@ -39,7 +39,10 @@ jobs:
                   out.append(f"  {sentido(t.get('estacao_destino','?'))}: chega em {tempo} ({prev}) [{st}]")
               return "\n".join(out)
 
-          msg = "TREM L8 - DIAMANTE\n\n" + "\n\n".join(linhas(NOMES[c], c) for c in ("JSI", "IPV"))
+          try:
+              msg = "TREM L8 - DIAMANTE\n\n" + "\n\n".join(linhas(NOMES[c], c) for c in ("JSI", "IPV"))
+          except Exception:
+              msg = "TREM L8 - DIAMANTE\n\n\u23f3 fonte (ViaMobilidade) fora do ar no momento\n\u23f3 tenta de novo em alguns minutos"
           print(msg)
           req = urllib.request.Request(
               f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
