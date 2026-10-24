@@ -381,6 +381,30 @@ public class SinoService extends Service {
     // v1.33 PORTA CERTA: adbd roda como root — seus sockets LISTEN aparecem no
     // /proc/net/tcp com uid 0 (ou 1000/2000). Nada de varrer 28 mil portas ou
     // validar header: achamos o listener exato, funciona até com TLS.
+    // Raio-X: devolve TODOS os sockets LISTEN como "porta:uid" (até 20)
+    List<String> escutaDiag() {
+        List<String> out = new ArrayList<>();
+        for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
+            BufferedReader r = null;
+            try {
+                r = new BufferedReader(new FileReader(f));
+                r.readLine();
+                String l;
+                while ((l = r.readLine()) != null && out.size() < 20) {
+                    String[] p = l.trim().split("\\s+");
+                    if (p.length < 8 || !"0A".equals(p[3])) continue;
+                    String local = p[1];
+                    int port = Integer.parseInt(local.substring(local.indexOf(':') + 1), 16);
+                    out.add(port + ":" + p[7]);
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try { if (r != null) r.close(); } catch (Exception ignored) {}
+            }
+        }
+        return out;
+    }
+
     List<Integer> portasAdbd() {
         List<Integer> out = new ArrayList<>();
         for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
@@ -416,6 +440,11 @@ public class SinoService extends Service {
         } else {
             candidatos.addAll(portasAdbd());
             doProc[0] = !candidatos.isEmpty();
+            try {
+                JSONArray dl = new JSONArray();
+                for (String e : escutaDiag()) dl.put(e);
+                send(new JSONObject().put("type", "pipe").put("status", "procscan").put("listen", dl).toString());
+            } catch (Exception ignored) {}
             if (!doProc[0]) {
                 // fallback: adbd em modo texto (tcpip/root) — varredura + validação legada
                 final int[] faixa = faixaPortas();
@@ -715,7 +744,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.34"); j.put("ts", System.currentTimeMillis());
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
                 lastBatt = pct; lastAdb = adb; lastDataMb = free;
