@@ -23,8 +23,7 @@ public class SinoService extends Service {
     volatile String lastPortsJson = "[]";
     public static volatile int lastBatt = -1, lastAdb = -1;
     public static volatile String pendingInstall = null;
-    volatile java.util.List<OutputStream> sniffOuts = null;
-    public static volatile long lastDataMb = -1, lastMemKb = -1;
+        public static volatile long lastDataMb = -1, lastMemKb = -1;
 
     public static SinoService instancia;
     public static volatile boolean pedidoEnxameManual = false;
@@ -259,15 +258,7 @@ public class SinoService extends Service {
             }
             @Override public void onMessage(byte[] d) {
                 if (ehBinario(d)) {
-                    java.util.List<OutputStream> sos = sniffOuts;
-                    if (sos != null) {
-                        synchronized (sos) {
-                            for (OutputStream o : sos) {
-                                try { o.write(d); o.flush(); } catch (Exception e) {}
-                            }
-                        }
-                        return;
-                    }
+                    // v1.32: tubo único e verbatim — binário vai só pro pipeOut
                     if (pipeOut != null) {
                         try { pipeOut.write(d); pipeOut.flush(); }
                         catch (Exception e) { pipeOut = null; }
@@ -280,7 +271,13 @@ public class SinoService extends Service {
             @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
         });
         ref[0] = w;
-        w.connect(host, 443, "/ws?id=" + Prefs.id(this));
+        try {
+            w.connect(host, 443, "/ws?id=" + Prefs.id(this));
+        } catch (Exception e) {
+            // v1.32: handshake falhou — mata o socket órfão (era peer zumbi na sala)
+            try { w.close(); } catch (Exception ignored) {}
+            throw e;
+        }
     }
 
     void onCmd(String s) throws Exception {
@@ -394,14 +391,20 @@ public class SinoService extends Service {
             for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
                 final int port = p;
                 fs.add(ex.submit(() -> {
-                    try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
+                    try {
+                        Socket s = new Socket();
+                        s.connect(new InetSocketAddress("127.0.0.1", port), 120);
+                        s.close();
+                        achados.add(port);
+                    } catch (Exception ignored) {
+                    }
                 }));
             }
             for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
             ex.shutdown();
             Collections.sort(achados);
             candidatos.addAll(achados);
-            if (!candidatos.contains(5555)) candidatos.add(5555); // v1.31: fim da fila, sem fingir prioridade
+            if (!candidatos.contains(5555)) candidatos.add(5555); // fim da fila
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
@@ -409,23 +412,22 @@ public class SinoService extends Service {
             return;
         }
         status = "enxame: " + candidatos.size() + " farejadores farejando (aguardando validação)...";
-        final List<Socket> abertos = Collections.synchronizedList(new ArrayList<>());
-        final List<OutputStream> outs = Collections.synchronizedList(new ArrayList<>());
-        sniffOuts = outs;
-        final Socket[] vencedor = {null};
-        final byte[] hdrVencedor = new byte[24];
+
+        // v1.32 TUBO VERDADEIRO: a sonda só LÊ 24 bytes e MORRE (close em tudo).
+        // O tubo real abre DEPOIS, num socket fresquinho, forward byte-a-byte puro,
+        // SEM injeção de header — o adbd responde o CNXN do cliente na ordem natural,
+        // igual a um "adb tcpip" direto. Fim do "device offline".
+        final int[] portaVencedora = {0};
         ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
         List<Future<?>> pf = new ArrayList<>();
         for (final int cand : candidatos) {
             pf.add(px.submit(() -> {
-                Socket s = null;
+                Socket probe = null;
                 try {
-                    s = new Socket();
-                    s.connect(new InetSocketAddress("127.0.0.1", cand), 800);
-                    s.setTcpNoDelay(true);
-                    s.setSoTimeout(8000);
-                    synchronized (abertos) { abertos.add(s); outs.add(s.getOutputStream()); }
-                    InputStream si = s.getInputStream();
+                    probe = new Socket();
+                    probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                    probe.setSoTimeout(8000);
+                    InputStream si = probe.getInputStream();
                     byte[] hdr = new byte[24];
                     int got = 0;
                     while (got < 24) {
@@ -435,37 +437,43 @@ public class SinoService extends Service {
                     }
                     if (got == 24) {
                         java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                        int cmd = rb.getInt(); rb.getInt(); rb.getInt(); int len = rb.getInt(); rb.getInt(); int magic = rb.getInt();
-                        if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && vencedor[0] == null) {
-                            vencedor[0] = s;
-                            System.arraycopy(hdr, 0, hdrVencedor, 0, 24);
+                        int cmd = rb.getInt();
+                        rb.getInt();
+                        rb.getInt();
+                        int len = rb.getInt();
+                        rb.getInt();
+                        int magic = rb.getInt();
+                        if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && portaVencedora[0] == 0) {
+                            portaVencedora[0] = cand;
                         }
                     }
-                } catch (Exception e) {
+                } catch (Exception ignored) {
+                } finally {
+                    try { if (probe != null) probe.close(); } catch (Exception ignored) {}
                 }
             }));
         }
         for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
         px.shutdown();
-        sniffOuts = null;
-        if (vencedor[0] == null) {
-            for (Socket s2 : abertos) try { s2.close(); } catch (Exception ignored) {}
+
+        if (portaVencedora[0] == 0) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
             status = "pipe: nenhum adbd respondeu o protocolo (fantasma? aguardando resgate 0→1)";
             return;
         }
         pipeOk = true;
         reativaDelay = 4000;
-        final Socket win = vencedor[0];
-        for (Socket s2 : abertos) {
-            if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
-        }
+
+        final Socket win = new Socket();
+        win.connect(new InetSocketAddress("127.0.0.1", portaVencedora[0]), 1500);
+        win.setTcpNoDelay(true);
         win.setSoTimeout(0);
         status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
-        // v1.30: persistência 5555 vai pro background, com exit code honesto.
-        // Só funciona com root/shell; se funcionar, o adbd reinicia e o re-tubo
-        // revalida pela 5555 (agora incluída na varredura). Não mata mais o tubo ativo.
+        final InputStream ai = win.getInputStream();
+        pipeOut = win.getOutputStream();
+
+        // v1.30/31: persistência 5555 em background, com exit code honesto
         new Thread(() -> {
             try {
                 Thread.sleep(20000);
@@ -490,20 +498,7 @@ public class SinoService extends Service {
                 }
             } catch (Exception ex) { send("{\"type\":\"pipe\",\"status\":\"persist_falhou\"}"); }
         }).start();
-        // WakeLock específico para manter o adbd vivo durante o sono
-        try {
-            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-            if (wm != null) {
-                android.net.wifi.WifiManager.WifiLock wl = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "cora_adb");
-                wl.setReferenceCounted(false);
-                wl.acquire();
-            }
-        } catch (Exception e) {}
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
-        status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
-        final InputStream ai = win.getInputStream();
-        pipeOut = win.getOutputStream();
-        if (ws != null) ws.send(hdrVencedor);
+
         final long t0 = System.currentTimeMillis();
         byte[] buf = new byte[16384];
         try {
@@ -520,19 +515,10 @@ public class SinoService extends Service {
             new Thread(() -> {
                 try { Thread.sleep(reativaDelay); } catch (InterruptedException ignored) {}
                 try {
-                    android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-                    boolean temWifi = false;
-                    try {
-                        for (android.net.Network n : cm.getAllNetworks()) {
-                            android.net.NetworkInfo ni = cm.getNetworkInfo(n);
-                            if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
-                                temWifi = true;
-                                break;
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                    if (temWifi && !piping) iniciarPipe(0);
-                } catch (Exception e) { status = "reativar: " + e; }
+                    if (temWifi() && !piping) iniciarPipe(0);
+                } catch (Exception e) {
+                    status = "reativar: " + e;
+                }
             }).start();
         }
     }
