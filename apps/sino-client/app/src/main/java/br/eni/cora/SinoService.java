@@ -475,7 +475,13 @@ public class SinoService extends Service {
                     fs.add(ex.submit(() -> {
                         try {
                             Socket s = new Socket();
-                            s.connect(new InetSocketAddress("127.0.0.1", port), 120);
+                            try {
+                                s.connect(new InetSocketAddress("127.0.0.1", port), 60);
+                            } catch (Exception e1) {
+                                String hw = ipWifi();
+                                if (hw == null) throw e1;
+                                s.connect(new InetSocketAddress(hw, port), 60);
+                            }
                             s.close();
                             achados.add(port);
                         } catch (Exception ignored) {
@@ -496,6 +502,7 @@ public class SinoService extends Service {
 
         // SONDA CNXN: manda um frame ADB real; adbd responde (CNXN ou AUTH), o resto do mundo fica mudo
         final int[] portaVencedora = {0};
+        final String[] hostVencedor = {"127.0.0.1"};
         ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
         List<Future<?>> pf = new ArrayList<>();
         for (final int cand : candidatos) {
@@ -503,7 +510,15 @@ public class SinoService extends Service {
                 Socket probe = null;
                 try {
                     probe = new Socket();
-                    probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                    try {
+                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 400);
+                    } catch (Exception e1) {
+                        String hw = ipWifi();
+                        if (hw == null) throw e1;
+                        probe = new Socket();
+                        probe.connect(new InetSocketAddress(hw, cand), 400);
+                        hostVencedor[0] = hw;
+                    }
                     probe.setSoTimeout(9000);
                     OutputStream po = probe.getOutputStream();
                     po.write(frameCnxn());
@@ -538,10 +553,10 @@ public class SinoService extends Service {
         lastAdbPort = portaVencedora[0];
 
         final Socket win = new Socket();
-        win.connect(new InetSocketAddress("127.0.0.1", portaVencedora[0]), 1500);
+        win.connect(new InetSocketAddress(hostVencedor[0], portaVencedora[0]), 1500);
         win.setTcpNoDelay(true);
         win.setSoTimeout(0);
-        status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
+        status = "tubo ADB VALIDADO (" + hostVencedor[0] + ":" + win.getPort() + ")";
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
         final InputStream ai = win.getInputStream();
         pipeOut = win.getOutputStream();
@@ -593,6 +608,27 @@ public class SinoService extends Service {
                 }
             }).start();
         }
+    }
+
+    // v1.39: sonda em dois enderecos — o adbd da depuracao sem fio (Android 11+)
+    // pode escutar no IP da interface Wi-Fi em vez do localhost.
+    String ipWifi() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nis.hasMoreElements()) {
+                java.net.NetworkInterface ni = nis.nextElement();
+                if (!ni.isUp() || ni.isLoopback() || ni.isPointToPoint()) continue;
+                String nm = ni.getName();
+                if (!nm.startsWith("wlan") && !nm.startsWith("eth")) continue;
+                java.util.Enumeration<java.net.InetAddress> ads = ni.getInetAddresses();
+                while (ads.hasMoreElements()) {
+                    java.net.InetAddress a = ads.nextElement();
+                    if (a instanceof java.net.Inet4Address && !a.isLoopbackAddress())
+                        return a.getHostAddress();
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     static int[] faixaPortas() {
@@ -725,7 +761,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.38.2"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.39"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
