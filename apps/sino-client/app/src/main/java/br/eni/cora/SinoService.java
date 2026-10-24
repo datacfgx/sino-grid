@@ -27,6 +27,14 @@ public class SinoService extends Service {
 
     public static volatile double lastLat = 0, lastLon = 0, lastAcc = -1;
     public static volatile long lastFixTs = 0;
+    // v1.38: mini-adbd — o proprio app fala o protocolo ADB (sem adbd do sistema)
+    static final int A_VERSION = 0x01000001, ADB_MAX = 4096,
+            A_SYNC = 0x434e5953, A_CNXN = 0x4e584e43, A_OPEN = 0x4e45504f,
+            A_OKAY = 0x59414b4f, A_CLSE = 0x45534c43, A_WRTE = 0x45545257;
+    public static volatile boolean miniAdb = false;
+    int miniNextId = 0;
+    final java.util.HashMap<Integer, java.lang.Process> miniProcs = new java.util.HashMap<>();
+    final java.io.ByteArrayOutputStream miniBuf = new java.io.ByteArrayOutputStream();
     public static SinoService instancia;
     public static volatile boolean pedidoEnxameManual = false;
 
@@ -264,6 +272,7 @@ public class SinoService extends Service {
                 }).start();
             }
             @Override public void onMessage(byte[] d) {
+                if (miniAdb) { miniAdbFeed(d); return; }
                 if (ehBinario(d)) {
                     // v1.32: tubo único e verbatim — binário vai só pro pipeOut
                     if (pipeOut != null) {
@@ -313,6 +322,7 @@ public class SinoService extends Service {
             else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"));
             else if ("localizar".equals(cmd)) localizar();
+            else if ("adbd".equals(cmd)) iniciarMiniAdbd();
             else if ("manter_wifi".equals(cmd)) {
                 try {
                     Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
@@ -714,7 +724,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.37"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.38"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
@@ -747,6 +757,117 @@ public class SinoService extends Service {
         } catch (Exception e) { status = "scan: " + e; }
     }
 
+
+
+    // v1.38: mini-adbd. Implementa o protocolo ADB (CNXN/OPEN/OKAY/WRTE/CLSE) em
+    // processo proprio: o cliente adb da clinica conecta como sempre (via relay),
+    // recebe o banner CNXN sem AUTH (modo "inseguro" legitimo, como ro.adb.secure=0)
+    // e ganha shell: / exec: como UID do app. Nao depende de adbd do sistema,
+    // de adb_wifi_enabled, nem de Wi-Fi — funciona no 4G.
+    void iniciarMiniAdbd() {
+        miniAdb = true;
+        miniProcs.clear();
+        synchronized (miniBuf) { miniBuf.reset(); }
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"adbd\":true}");
+        status = "mini-adbd no ar — conecte o adb da clinica (sem depuracao sem fio)";
+    }
+
+    void miniAdbFeed(byte[] d) {
+        try {
+            byte[] b;
+            synchronized (miniBuf) {
+                miniBuf.write(d);
+                b = miniBuf.toByteArray();
+                int off = 0;
+                while (b.length - off >= 24) {
+                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
+                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
+                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) { off++; continue; }
+                    if (b.length - off < 24 + len) break;
+                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
+                    off += 24 + len;
+                    miniAdbHandle(cmd, a0, a1, payload);
+                }
+                miniBuf.reset();
+                miniBuf.write(b, off, b.length - off);
+            }
+        } catch (Exception e) { status = "miniadbd feed: " + e; }
+    }
+
+    void miniAdbHandle(int cmd, int a0, int a1, byte[] payload) {
+        try {
+            if (cmd == A_CNXN) {
+                miniAdbSend(A_CNXN, A_VERSION, ADB_MAX,
+                    "device::ro.product.name=cora;ro.product.model=mini-adbd;ro.product.device=g52;".getBytes("UTF-8"));
+                status = "mini-adbd: handshake CNXN ok (sem AUTH, modo inseguro)";
+            } else if (cmd == A_OPEN) {
+                String svc2 = new String(payload, "UTF-8");
+                if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
+                    java.lang.Process p = svc2.startsWith("exec:")
+                        ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
+                        : Runtime.getRuntime().exec("/system/bin/sh");
+                    int lid = ++miniNextId;
+                    synchronized (miniProcs) { miniProcs.put(lid, p); }
+                    miniAdbSend(A_OKAY, lid, a0, null);
+                    status = "mini-adbd: aberto " + svc2;
+                    final int flid = lid, fremote = a0;
+                    final java.lang.Process fp = p;
+                    new Thread(() -> {
+                        try {
+                            java.io.InputStream o = fp.getInputStream();
+                            byte[] buf = new byte[ADB_MAX];
+                            int n;
+                            while ((n = o.read(buf)) > 0) {
+                                miniAdbSend(A_WRTE, flid, fremote, java.util.Arrays.copyOf(buf, n));
+                            }
+                            miniAdbSend(A_CLSE, flid, fremote, null);
+                        } catch (Exception ignored) {}
+                        try { fp.destroy(); } catch (Exception ignored) {}
+                        synchronized (miniProcs) { miniProcs.remove(flid); }
+                    }).start();
+                } else {
+                    miniAdbSend(A_CLSE, 0, a0, null);
+                }
+            } else if (cmd == A_WRTE) {
+                java.lang.Process p;
+                synchronized (miniProcs) { p = miniProcs.get(a0); }
+                if (p != null) {
+                    boolean winint = payload.length == 12 && payload[0] == 0 && payload[1] == 'T'
+                            && payload[2] == 'S' && payload[5] == 'N';
+                    if (!winint) {
+                        p.getOutputStream().write(payload);
+                        p.getOutputStream().flush();
+                    }
+                    miniAdbSend(A_OKAY, a0, a1, null);
+                } else {
+                    miniAdbSend(A_CLSE, a0, a1, null);
+                }
+            } else if (cmd == A_CLSE) {
+                java.lang.Process p;
+                synchronized (miniProcs) { p = miniProcs.remove(a0); }
+                if (p != null) try { p.destroy(); } catch (Exception ignored) {}
+            } else if (cmd == A_SYNC) {
+                miniAdbSend(A_SYNC, a0, a1, null);
+            }
+        } catch (Exception e) { status = "miniadbd handle: " + e; }
+    }
+
+    void miniAdbSend(int cmd, int a0, int a1, byte[] payload) {
+        try {
+            byte[] pl = payload == null ? new byte[0] : payload;
+            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int chk = 0;
+            for (byte c : pl) chk += (c & 0xff);
+            h.putInt(cmd).putInt(a0).putInt(a1).putInt(pl.length).putInt(chk).putInt(cmd ^ 0xffffffff);
+            if (ws != null) {
+                byte[] out = new byte[24 + pl.length];
+                System.arraycopy(h.array(), 0, out, 0, 24);
+                System.arraycopy(pl, 0, out, 24, pl.length);
+                ws.send(out);
+            }
+        } catch (Exception e) {}
+    }
 
     // v1.37: localizacao. Fix passivo+rede como base (bateria), GPS so sob demanda
     // (comando localizar). Coordenadas entram na telemetria quando disponiveis.
