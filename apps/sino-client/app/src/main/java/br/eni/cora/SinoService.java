@@ -272,7 +272,7 @@ public class SinoService extends Service {
                 }).start();
             }
             @Override public void onMessage(byte[] d) {
-                if (miniAdb) { miniAdbFeed(d); return; }
+                if (miniAdb && ehBinario(d)) { miniAdbFeed(d); return; }
                 if (ehBinario(d)) {
                     // v1.32: tubo único e verbatim — binário vai só pro pipeOut
                     if (pipeOut != null) {
@@ -724,7 +724,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.38"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.38.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
