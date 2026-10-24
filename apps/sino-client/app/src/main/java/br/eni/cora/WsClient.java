@@ -13,12 +13,14 @@ public class WsClient {
     }
     private final Listener l;
     private OutputStream out;
+    private SSLSocket sock;
     private volatile boolean running = true;
 
     public WsClient(Listener l) { this.l = l; }
 
     public void connect(String host, int port, String path) throws Exception {
         SSLSocket sock = (SSLSocket) SSLSocketFactory.getDefault().createSocket(host, port);
+        this.sock = sock;
         sock.setTcpNoDelay(true);
         out = sock.getOutputStream();
         InputStream in = sock.getInputStream();
@@ -80,5 +82,8 @@ public class WsClient {
 
     public void send(String s) throws IOException { sendFrame(1, s.getBytes("UTF-8")); }
     public void send(byte[] b) throws IOException { sendFrame(2, b); }
-    public void close() { running = false; }
+    public void close() {
+        running = false;
+        try { if (sock != null) sock.close(); } catch (Exception ignored) {}
+    }
 }
