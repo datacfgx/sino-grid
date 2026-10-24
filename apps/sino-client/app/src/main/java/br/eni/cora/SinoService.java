@@ -632,14 +632,14 @@ public class SinoService extends Service {
                 ses.fsync(os);
                 os.close();
 
-                android.content.Intent i = new android.content.Intent(this, MainActivity.class);
-                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
-                android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, sid, i, 
-                        android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
+                android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
+                si.setAction("br.eni.cora.INSTALL_STATUS");
+                int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+                if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
+                android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, sid, si, fl);
                 ses.commit(pi.getIntentSender());
                 send("{\"type\":\"install\",\"status\":\"confirmacao_sistema\"}");
-                status = "confirme a instalação na tela do sistema";
+                status = "aguardando tela de confirmacao do sistema...";
             } catch (Exception e) {
                 status = "install: " + e;
                 send("{\"type\":\"install\",\"status\":\"erro\",\"msg\":\"" + e.getMessage() + "\"}");
@@ -735,5 +735,51 @@ public class SinoService extends Service {
             for (int p : open) a.put(p);
             send(new JSONObject().put("type", "scan").put("id", Prefs.id(this)).put("ports", a).toString());
         } catch (Exception e) { status = "scan: " + e; }
+    }
+
+    // v1.36: fluxo de instalacao via receiver. O commit com PendingIntent de Activity (v1.35)
+    // nao levantava a tela de confirmacao no Android 13 (Moto). O receiver recebe
+    // STATUS_PENDING_USER_ACTION com EXTRA_INTENT e lanca a confirmacao direto,
+    // com notificacao de reserva se o start em background for bloqueado.
+    public static class InstallReceiver extends android.content.BroadcastReceiver {
+        @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+            int st = i.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999);
+            String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+            if (st == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                try {
+                    android.content.Intent confirm = i.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
+                    confirm.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    c.startActivity(confirm);
+                    SinoService.status = "confirme a instalacao na tela do sistema";
+                } catch (Throwable t1) {
+                    try {
+                        android.content.Intent confirm2 = i.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
+                        android.app.PendingIntent npi = android.app.PendingIntent.getActivity(c,
+                                (int) (System.currentTimeMillis() % 100000), confirm2,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+                        android.app.NotificationManager nm = (android.app.NotificationManager) c.getSystemService("notification");
+                        String ch = "instalacao";
+                        if (android.os.Build.VERSION.SDK_INT >= 26) {
+                            nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Instalacoes", android.app.NotificationManager.IMPORTANCE_HIGH));
+                        }
+                        android.app.Notification n = new android.app.Notification.Builder(c)
+                                .setContentTitle("CORA")
+                                .setContentText("toque para confirmar a instalacao")
+                                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                                .setContentIntent(npi)
+                                .setAutoCancel(true)
+                                .build();
+                        nm.notify(77, n);
+                        SinoService.status = "toque na notificacao para confirmar a instalacao";
+                    } catch (Throwable t2) {
+                        SinoService.status = "confirm UI falhou: " + t2;
+                    }
+                }
+            } else if (st == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
+                SinoService.status = "instalado com sucesso";
+            } else {
+                SinoService.status = "install status " + st + ": " + msg;
+            }
+        }
     }
 }
