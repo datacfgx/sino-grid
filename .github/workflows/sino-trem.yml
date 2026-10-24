@@ -16,7 +16,7 @@ jobs:
           import urllib.request, json, os
           API = "https://fde-proximotrem-prd-hhbqdtdzdyhtgxhr.a01.azurefd.net/api/v1/lines/L8/stations/{}/next-train"
           NOMES = {"JSI": "Jardim Silveira", "IPV": "Itapevi"}
-          DEST = {"JDI": "Jandira", "IPV": "Itapevi", "ECD": "Eng. Cardoso", "JBE": "Jardim Belval"}
+          DEST = {"JDI": "Jandira", "IPV": "Itapevi", "ECD": "Engenheiro Cardoso", "JBE": "Jardim Belval"}
           def get(code):
               with urllib.request.urlopen(API.format(code), timeout=12) as r:
                   return json.loads(r.read().decode())
