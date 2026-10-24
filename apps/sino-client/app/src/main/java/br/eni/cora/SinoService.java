@@ -468,10 +468,6 @@ public class SinoService extends Service {
                 ex.shutdown();
                 candidatos.addAll(achados);
             }
-            try {
-                int tp = android.os.SystemProperties.getInt("service.adb.tcp.port", 0);
-                if (tp > 0 && !candidatos.contains(tp)) candidatos.add(tp);
-            } catch (Throwable ignored) {}
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
