@@ -19,6 +19,7 @@ public class SinoService extends Service {
     volatile OutputStream pipeOut;
     volatile boolean piping = false;
     volatile boolean pipeOk = false;
+    volatile int reativaDelay = 4000;
     volatile String lastPortsJson = "[]";
     public static volatile int lastBatt = -1, lastAdb = -1;
     public static volatile String pendingInstall = null;
@@ -148,6 +149,9 @@ public class SinoService extends Service {
     }
 
     void connectOnce() throws Exception {
+        // v1.31: MORTE AOS IRMÃOS — reconexões antigas deixavam socket vivo na sala;
+        // os zumbis recebiam broadcast do tubo, enchiam o buffer TCP e sufocavam o envio
+        try { if (ws != null) ws.close(); } catch (Exception ignored) {}
         // auto-resgate: so se adbd sumiu, nao temos tubo validado, e temos Wi-Fi
         if (lastAdb == 0 && !piping && !status.contains("VALIDADO")) {
             try {
@@ -397,15 +401,14 @@ public class SinoService extends Service {
             ex.shutdown();
             Collections.sort(achados);
             candidatos.addAll(achados);
-            candidatos.add(0, 5555); // v1.30: persistência/opção B mora aqui fora da faixa efêmera
+            if (!candidatos.contains(5555)) candidatos.add(5555); // v1.31: fim da fila, sem fingir prioridade
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
             status = "pipe: nenhuma porta aberta na faixa (adbd morto ou ainda subindo)";
             return;
         }
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + candidatos.get(0) + ",\"enxame\":" + candidatos.size() + "}");
-        status = "enxame: " + candidatos.size() + " farejadores em campo";
+        status = "enxame: " + candidatos.size() + " farejadores farejando (aguardando validação)...";
         final List<Socket> abertos = Collections.synchronizedList(new ArrayList<>());
         final List<OutputStream> outs = Collections.synchronizedList(new ArrayList<>());
         sniffOuts = outs;
@@ -452,6 +455,7 @@ public class SinoService extends Service {
             return;
         }
         pipeOk = true;
+        reativaDelay = 4000;
         final Socket win = vencedor[0];
         for (Socket s2 : abertos) {
             if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
@@ -500,18 +504,21 @@ public class SinoService extends Service {
         final InputStream ai = win.getInputStream();
         pipeOut = win.getOutputStream();
         if (ws != null) ws.send(hdrVencedor);
+        final long t0 = System.currentTimeMillis();
         byte[] buf = new byte[16384];
         try {
             int n;
             while ((n = ai.read(buf)) > 0) {
                 if (ws != null) ws.send(Arrays.copyOf(buf, n));
             }
+            status = "tubo encerrou após " + ((System.currentTimeMillis() - t0) / 1000) + "s — adbd fechou? doze? rede?";
         } finally {
             pipeOut = null;
             try { win.close(); } catch (Exception ignored) {}
-            status = "reativando tubo em 4s...";
+            reativaDelay = Math.min(30000, reativaDelay * 2);
+            status = "reativando tubo em " + (reativaDelay / 1000) + "s (backoff)...";
             new Thread(() -> {
-                try { Thread.sleep(4000); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(reativaDelay); } catch (InterruptedException ignored) {}
                 try {
                     android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
                     boolean temWifi = false;
