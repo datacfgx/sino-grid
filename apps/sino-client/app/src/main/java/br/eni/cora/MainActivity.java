@@ -145,6 +145,33 @@ public class MainActivity extends Activity {
         });
         r.addView(par, bg3);
 
+        // v1.30: libera o CORA da otimização de bateria — o Doze mata a rede no sono
+        Button bateria = new Button(this);
+        bateria.setText("\uD83D\uDD0B bateria: liberar CORA do sono");
+        bateria.setTextColor(0xFFFFB224);
+        bateria.setTypeface(null, android.graphics.Typeface.BOLD);
+        GradientDrawable bbg = r(0x00000000, 10);
+        bbg.setStroke(dp(1), 0xFFFFB224);
+        bateria.setBackground(bbg);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, dp(42));
+        blp.topMargin = dp(8);
+        bateria.setOnClickListener(v -> {
+            try {
+                android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                String pkg = getPackageName();
+                if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg)) {
+                    android.content.Intent i = new android.content.Intent(
+                            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            android.net.Uri.parse("package:" + pkg));
+                    startActivity(i);
+                    SinoService.status = "confirme 'Permitir' na tela para o CORA dormir menos";
+                } else {
+                    SinoService.status = "bateria já liberada para o CORA ✓";
+                }
+            } catch (Exception e) { SinoService.status = "bateria: " + e; }
+        });
+        r.addView(bateria, blp);
+
         // status
         status = new TextView(this);
         status.setTextSize(13f);
@@ -193,7 +220,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("br.eni.cora · v1.3");
+        f2.setText("br.eni.cora · v1.30");
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
