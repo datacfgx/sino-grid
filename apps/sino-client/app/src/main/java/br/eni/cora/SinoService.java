@@ -381,30 +381,6 @@ public class SinoService extends Service {
     // v1.33 PORTA CERTA: adbd roda como root — seus sockets LISTEN aparecem no
     // /proc/net/tcp com uid 0 (ou 1000/2000). Nada de varrer 28 mil portas ou
     // validar header: achamos o listener exato, funciona até com TLS.
-    // Raio-X: devolve TODOS os sockets LISTEN como "porta:uid" (até 20)
-    List<String> escutaDiag() {
-        List<String> out = new ArrayList<>();
-        for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
-            BufferedReader r = null;
-            try {
-                r = new BufferedReader(new FileReader(f));
-                r.readLine();
-                String l;
-                while ((l = r.readLine()) != null && out.size() < 20) {
-                    String[] p = l.trim().split("\\s+");
-                    if (p.length < 8 || !"0A".equals(p[3])) continue;
-                    String local = p[1];
-                    int port = Integer.parseInt(local.substring(local.indexOf(':') + 1), 16);
-                    out.add(port + ":" + p[7]);
-                }
-            } catch (Exception ignored) {
-            } finally {
-                try { if (r != null) r.close(); } catch (Exception ignored) {}
-            }
-        }
-        return out;
-    }
-
     List<Integer> portasAdbd() {
         List<Integer> out = new ArrayList<>();
         for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
@@ -431,22 +407,47 @@ public class SinoService extends Service {
         return out;
     }
 
+    public static volatile int lastAdbPort = -1;
+
+    // v1.35: frame CNXN real do protocolo ADB ("host::" + features) — a pergunta
+    // que o adbd (TLS ou texto) SEMPRE responde. Quem não é adbd fica mudo.
+    byte[] frameCnxn() {
+        int cmd = 0x4e584e43; // 'CNXN' little-endian
+        byte[] pl = "host::features=shell_v2,cmd".getBytes();
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(24 + pl.length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        b.putInt(cmd);
+        b.putInt(0x01000000);
+        b.putInt(0x00100000);
+        b.putInt(pl.length);
+        b.putInt(cmd ^ 0xffffffff);
+        b.put(pl);
+        return b.array();
+    }
+
+    // resposta válida = CNXN (0x4e584e43) ou AUTH (0x48545541) com magic certo
+    boolean respostaEAdbd(byte[] hdr) {
+        if (hdr == null || hdr.length < 24) return false;
+        java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        int cmd = rb.getInt();
+        rb.getInt();
+        rb.getInt();
+        int len = rb.getInt();
+        rb.getInt();
+        int magic = rb.getInt();
+        if (len < 0 || len >= 1048576 || magic != (cmd ^ 0xffffffff)) return false;
+        return cmd == 0x4e584e43 || cmd == 0x48545541;
+    }
+
     void iniciarPipe2(int porta) throws Exception {
         pipeOk = false;
         final List<Integer> candidatos = new ArrayList<>();
-        final boolean[] doProc = {false};
         if (porta > 0) {
             candidatos.add(porta);
         } else {
+            // candidatos do /proc (adbd = uid 0/1000/2000 LISTEN) primeiro
             candidatos.addAll(portasAdbd());
-            doProc[0] = !candidatos.isEmpty();
-            try {
-                JSONArray dl = new JSONArray();
-                for (String e : escutaDiag()) dl.put(e);
-                send(new JSONObject().put("type", "pipe").put("status", "procscan").put("listen", dl).toString());
-            } catch (Exception ignored) {}
-            if (!doProc[0]) {
-                // fallback: adbd em modo texto (tcpip/root) — varredura + validação legada
+            if (candidatos.isEmpty()) {
+                // fallback: varredura TCP da faixa efêmera inteira
                 final int[] faixa = faixaPortas();
                 final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
                 ExecutorService ex = Executors.newFixedThreadPool(200);
@@ -465,98 +466,62 @@ public class SinoService extends Service {
                 }
                 for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
                 ex.shutdown();
-                for (final int cand : achados) {
-                    Socket probe = null;
-                    try {
-                        probe = new Socket();
-                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
-                        probe.setSoTimeout(5000);
-                        InputStream si = probe.getInputStream();
-                        byte[] hdr = new byte[24];
-                        int got = 0;
-                        while (got < 24) {
-                            int n = si.read(hdr, got, 24 - got);
-                            if (n < 0) break;
-                            got += n;
-                        }
-                        if (got == 24) {
-                            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                            int cmd = rb.getInt();
-                            rb.getInt();
-                            rb.getInt();
-                            int len = rb.getInt();
-                            rb.getInt();
-                            int magic = rb.getInt();
-                            if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff)) candidatos.add(cand);
-                        }
-                    } catch (Exception ignored) {
-                    } finally {
-                        try { if (probe != null) probe.close(); } catch (Exception ignored) {}
-                    }
-                }
-                if (!candidatos.contains(5555)) candidatos.add(5555);
+                candidatos.addAll(achados);
             }
+            try {
+                int tp = android.os.SystemProperties.getInt("service.adb.tcp.port", 0);
+                if (tp > 0 && !candidatos.contains(tp)) candidatos.add(tp);
+            } catch (Throwable ignored) {}
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: nenhuma porta aberta na faixa (adbd morto ou ainda subindo)";
+            status = "pipe: nenhuma porta aberta (adbd morto ou ainda subindo)";
             return;
         }
-        status = doProc[0]
-                ? "porta certa via /proc: adbd root em " + candidatos.get(0)
-                : "enxame: " + candidatos.size() + " farejadores farejando (aguardando validação)...";
+        status = "enxame: " + candidatos.size() + " farejadores farejando (sonda CNXN v1.35)...";
 
-        // sonda só no fallback legado; /proc e porta explícita são certeza
+        // SONDA CNXN: manda um frame ADB real; adbd responde (CNXN ou AUTH), o resto do mundo fica mudo
         final int[] portaVencedora = {0};
-        if (porta > 0 || doProc[0]) {
-            portaVencedora[0] = candidatos.get(0);
-        } else {
-            ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
-            List<Future<?>> pf = new ArrayList<>();
-            for (final int cand : candidatos) {
-                pf.add(px.submit(() -> {
-                    Socket probe = null;
-                    try {
-                        probe = new Socket();
-                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
-                        probe.setSoTimeout(8000);
-                        InputStream si = probe.getInputStream();
-                        byte[] hdr = new byte[24];
-                        int got = 0;
-                        while (got < 24) {
-                            int n = si.read(hdr, got, 24 - got);
-                            if (n < 0) break;
-                            got += n;
-                        }
-                        if (got == 24) {
-                            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                            int cmd = rb.getInt();
-                            rb.getInt();
-                            rb.getInt();
-                            int len = rb.getInt();
-                            rb.getInt();
-                            int magic = rb.getInt();
-                            if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && portaVencedora[0] == 0) {
-                                portaVencedora[0] = cand;
-                            }
-                        }
-                    } catch (Exception ignored) {
-                    } finally {
-                        try { if (probe != null) probe.close(); } catch (Exception ignored) {}
+        ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
+        List<Future<?>> pf = new ArrayList<>();
+        for (final int cand : candidatos) {
+            pf.add(px.submit(() -> {
+                Socket probe = null;
+                try {
+                    probe = new Socket();
+                    probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                    probe.setSoTimeout(9000);
+                    OutputStream po = probe.getOutputStream();
+                    po.write(frameCnxn());
+                    po.flush();
+                    InputStream si = probe.getInputStream();
+                    byte[] hdr = new byte[24];
+                    int got = 0;
+                    while (got < 24) {
+                        int n = si.read(hdr, got, 24 - got);
+                        if (n < 0) break;
+                        got += n;
                     }
-                }));
-            }
-            for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
-            px.shutdown();
+                    if (got == 24 && respostaEAdbd(hdr) && portaVencedora[0] == 0) {
+                        portaVencedora[0] = cand;
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    try { if (probe != null) probe.close(); } catch (Exception ignored) {}
+                }
+            }));
         }
+        for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
+        px.shutdown();
 
         if (portaVencedora[0] == 0) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: nenhum adbd respondeu o protocolo (fantasma? aguardando resgate 0→1)";
+            status = "pipe: nenhum adbd respondeu CNXN/AUTH (fantasma? aguardando resgate 0→1)";
             return;
         }
         pipeOk = true;
         reativaDelay = 4000;
+        lastAdbPort = portaVencedora[0];
 
         final Socket win = new Socket();
         win.connect(new InetSocketAddress("127.0.0.1", portaVencedora[0]), 1500);
