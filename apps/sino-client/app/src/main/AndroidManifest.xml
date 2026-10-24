@@ -23,5 +23,10 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+        <receiver android:name=".SinoService$InstallReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="br.eni.cora.INSTALL_STATUS" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
