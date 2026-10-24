@@ -58,9 +58,12 @@ public class SinoService extends Service {
         try {
             android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
             android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
-            ses.commit(android.app.PendingIntent.getActivity(this, sid, 
-                    new android.content.Intent(this, MainActivity.class), 
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT).getIntentSender());
+            android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
+            si.setAction("br.eni.cora.INSTALL_STATUS");
+            int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+            if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
+            ses.commit(android.app.PendingIntent.getBroadcast(this, sid, si, fl).getIntentSender());
+            status = "aguardando tela de confirmacao do sistema...";
         } catch (Exception e) {}
     }
 
