@@ -61,7 +61,8 @@ public class SinoService extends Service {
             android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
             si.setAction("br.eni.cora.INSTALL_STATUS");
             int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
-            if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
+            if (android.os.Build.VERSION.SDK_INT >= 31) fl |= android.app.PendingIntent.FLAG_MUTABLE;
+                else if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
             ses.commit(android.app.PendingIntent.getBroadcast(this, sid, si, fl).getIntentSender());
             status = "aguardando tela de confirmacao do sistema...";
         } catch (Exception e) {}
@@ -638,7 +639,8 @@ public class SinoService extends Service {
                 android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
                 si.setAction("br.eni.cora.INSTALL_STATUS");
                 int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
-                if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
+                if (android.os.Build.VERSION.SDK_INT >= 31) fl |= android.app.PendingIntent.FLAG_MUTABLE;
+                else if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
                 android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, sid, si, fl);
                 ses.commit(pi.getIntentSender());
                 send("{\"type\":\"install\",\"status\":\"confirmacao_sistema\"}");
@@ -747,6 +749,7 @@ public class SinoService extends Service {
     public static class InstallReceiver extends android.content.BroadcastReceiver {
         @Override public void onReceive(android.content.Context c, android.content.Intent i) {
             int st = i.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999);
+            if (st == -999 && msg == null) { SinoService.status = "status sem extras: verificar FLAG_MUTABLE do commit"; return; }
             String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
             if (st == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 try {
