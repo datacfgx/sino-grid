@@ -478,7 +478,7 @@ public class SinoService extends Service {
             android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
             i.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
             i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            i.setPackage("com.google.android.packageinstaller");
+            i.setPackage(null); // deixa Android escolher o instalador padrao
             int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
             android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 77, i, 
                     android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
