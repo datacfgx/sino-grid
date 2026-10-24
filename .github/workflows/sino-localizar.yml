@@ -33,9 +33,11 @@ jobs:
           ws.close()
           print("FIX:", json.dumps(fix))
           if fix:
+              maps = f"https://www.google.com/maps?q={fix['lat']:.6f},{fix['lon']:.6f}"
               txt = ("LOCALIZACAO g52\n"
                      f"lat {fix['lat']:.6f}\nlon {fix['lon']:.6f}\n"
-                     f"precisao {fix.get('acc', -1):.0f}m"
+                     f"precisao {fix.get('acc', -1):.0f}m\n"
+                     f"{maps}"
                      + ("\n(fix antigo, sem GPS novo)" if fix.get("stale") else ""))
           else:
               txt = "LOCALIZACAO g52: sem resposta do aparelho (sala vazia ou sem permissao ainda)"
