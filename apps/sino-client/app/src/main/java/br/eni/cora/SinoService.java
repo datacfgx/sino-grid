@@ -53,6 +53,16 @@ public class SinoService extends Service {
         try { if (ws != null) ws.send(s); } catch (Exception ignored) {}
     }
 
+    void abrirSessao(int sid) {
+        try {
+            android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
+            android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
+            ses.commit(android.app.PendingIntent.getActivity(this, sid, 
+                    new android.content.Intent(this, MainActivity.class), 
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT).getIntentSender());
+        } catch (Exception e) {}
+    }
+
     android.content.BroadcastReceiver installReceiver = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, android.content.Intent i) {
             int sid = i.getIntExtra("session", -1);
@@ -63,9 +73,9 @@ public class SinoService extends Service {
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
         try {
-            android.content.IntentFilter f = new android.content.IntentFilter("br.eni.cora.INSTALL_");
-            f.addDataScheme("package");
-            registerReceiver(installReceiver, f);
+            android.content.IntentFilter filtro = new android.content.IntentFilter("br.eni.cora.INSTALL_");
+            filtro.addDataScheme("package");
+            registerReceiver(installReceiver, filtro);
         } catch (Exception e) {}
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
