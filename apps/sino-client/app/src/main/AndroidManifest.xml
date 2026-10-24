@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <application android:label="CORA 💓" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -17,11 +18,6 @@
         </activity>
         <service android:name=".SinoService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".CoraJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
-        <receiver android:name=".SinoService$InstallReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="br.eni.cora.INSTALL_*" />
-            </intent-filter>
-        </receiver>
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
