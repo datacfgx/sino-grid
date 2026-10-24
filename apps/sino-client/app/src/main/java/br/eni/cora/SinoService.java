@@ -25,6 +25,8 @@ public class SinoService extends Service {
     public static volatile String pendingInstall = null;
         public static volatile long lastDataMb = -1, lastMemKb = -1;
 
+    public static volatile double lastLat = 0, lastLon = 0, lastAcc = -1;
+    public static volatile long lastFixTs = 0;
     public static SinoService instancia;
     public static volatile boolean pedidoEnxameManual = false;
 
@@ -114,6 +116,7 @@ public class SinoService extends Service {
                 .build();
         startForeground(1, n);
         if (worker == null || !worker.isAlive()) { worker = new Thread(this::loop); worker.start(); }
+        iniciarLocalizacao();
         return START_STICKY;
     }
     public IBinder onBind(Intent i) { return null; }
@@ -309,6 +312,7 @@ public class SinoService extends Service {
             }
             else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"));
+            else if ("localizar".equals(cmd)) localizar();
             else if ("manter_wifi".equals(cmd)) {
                 try {
                     Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
@@ -710,7 +714,8 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.34"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.37"); j.put("ts", System.currentTimeMillis());
+            try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
                 lastBatt = pct; lastAdb = adb; lastDataMb = free;
@@ -740,6 +745,59 @@ public class SinoService extends Service {
             for (int p : open) a.put(p);
             send(new JSONObject().put("type", "scan").put("id", Prefs.id(this)).put("ports", a).toString());
         } catch (Exception e) { status = "scan: " + e; }
+    }
+
+
+    // v1.37: localizacao. Fix passivo+rede como base (bateria), GPS so sob demanda
+    // (comando localizar). Coordenadas entram na telemetria quando disponiveis.
+    void iniciarLocalizacao() {
+        try {
+            final android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+            android.location.LocationListener lis = new android.location.LocationListener() {
+                @Override public void onLocationChanged(android.location.Location l) {
+                    lastLat = l.getLatitude(); lastLon = l.getLongitude();
+                    lastAcc = l.hasAccuracy() ? l.getAccuracy() : -1;
+                    lastFixTs = System.currentTimeMillis();
+                }
+                @Override public void onProviderDisabled(String p) {}
+                @Override public void onProviderEnabled(String p) {}
+                @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
+            };
+            try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60000, 50f, lis); } catch (Exception e) {}
+            try { lm.requestLocationUpdates(android.location.LocationManager.PASSIVE_PROVIDER, 60000, 50f, lis); } catch (Exception e) {}
+        } catch (Exception e) {}
+    }
+
+    void localizar() {
+        new Thread(() -> {
+            try {
+                status = "localizando (GPS sob demanda)...";
+                final android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+                final boolean[] got = {false};
+                android.location.LocationListener lis = new android.location.LocationListener() {
+                    @Override public void onLocationChanged(android.location.Location l) {
+                        lastLat = l.getLatitude(); lastLon = l.getLongitude();
+                        lastAcc = l.hasAccuracy() ? l.getAccuracy() : -1;
+                        lastFixTs = System.currentTimeMillis();
+                        got[0] = true;
+                        try { lm.removeUpdates(this); } catch (Exception e) {}
+                        send("{\"type\":\"location\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"lat\":" + lastLat + ",\"lon\":" + lastLon + ",\"acc\":" + lastAcc + ",\"ts\":" + lastFixTs + "}");
+                        status = "localizado: " + lastLat + "," + lastLon + " (±" + (int) lastAcc + "m)";
+                    }
+                    @Override public void onProviderDisabled(String p) {}
+                    @Override public void onProviderEnabled(String p) {}
+                    @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
+                };
+                try { lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 0, 0f, lis); } catch (Exception e) {}
+                try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 0, 0f, lis); } catch (Exception e) {}
+                Thread.sleep(15000);
+                try { lm.removeUpdates(lis); } catch (Exception e) {}
+                if (!got[0]) {
+                    send("{\"type\":\"location\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"lat\":" + lastLat + ",\"lon\":" + lastLon + ",\"acc\":" + lastAcc + ",\"ts\":" + lastFixTs + ",\"stale\":true}");
+                    status = "sem fix novo; ultimo: " + lastLat + "," + lastLon;
+                }
+            } catch (Exception e) { status = "localizar: " + e; }
+        }).start();
     }
 
     // v1.36: fluxo de instalacao via receiver. O commit com PendingIntent de Activity (v1.35)
