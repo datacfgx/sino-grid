@@ -18,6 +18,7 @@ public class SinoService extends Service {
     android.os.PowerManager.WakeLock wakeLock;
     volatile OutputStream pipeOut;
     volatile boolean piping = false;
+    volatile boolean pipeOk = false;
     volatile String lastPortsJson = "[]";
     public static volatile int lastBatt = -1, lastAdb = -1;
     public static volatile String pendingInstall = null;
@@ -70,12 +71,29 @@ public class SinoService extends Service {
         }
     };
 
+    android.content.BroadcastReceiver wakeWatcher = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+            new Thread(() -> {
+                try { Thread.sleep(1500); } catch (Exception ex) { return; }
+                try { if (!piping && temWifi()) iniciarPipe(0); } catch (Exception ex) {}
+            }).start();
+        }
+    };
+
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
         try {
             android.content.IntentFilter filtro = new android.content.IntentFilter("br.eni.cora.INSTALL_");
             filtro.addDataScheme("package");
             registerReceiver(installReceiver, filtro);
+        } catch (Exception e) {}
+        // v1.30: vigia de despertar — acordou do sono/trocou de Wi-Fi, enxame dispara sozinho
+        try {
+            android.content.IntentFilter wf = new android.content.IntentFilter();
+            wf.addAction(android.content.Intent.ACTION_SCREEN_ON);
+            wf.addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION);
+            wf.addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION);
+            registerReceiver(wakeWatcher, wf);
         } catch (Exception e) {}
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
@@ -227,6 +245,13 @@ public class SinoService extends Service {
                         } catch (Exception e) { return; }
                     }
                 }).start();
+                // v1.30: re-tubo automático — toda reconexão (sono, troca de rede)
+                // redispara o enxame sem precisar de comando da clínica
+                new Thread(() -> {
+                    try { Thread.sleep(3000); } catch (Exception e) { return; }
+                    try { if (!piping && temWifi()) iniciarPipe(0); }
+                    catch (Exception e) { status = "re-tubo: " + e; }
+                }).start();
             }
             @Override public void onMessage(byte[] d) {
                 if (ehBinario(d)) {
@@ -308,13 +333,52 @@ public class SinoService extends Service {
         return false;
     }
 
+    boolean temWifi() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkInfo ni = cm.getNetworkInfo(n);
+                if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    // v1.30: adbd "fantasma" — a setting diz ON mas o listener morreu (sono/doze da Lenovo).
+    // O toggle 0→1 força o framework a derrubar e subir o adbd de novo, com porta nova.
+    boolean adbdFantasmaReligado() {
+        int adb = 0;
+        try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
+        if (adb != 1) return false;
+        try {
+            status = "adbd fantasma (depuração=ON mas sumiu): religando 0→1...";
+            Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 0);
+            Thread.sleep(1500);
+            Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
+            Thread.sleep(4000);
+            return true;
+        } catch (Exception e) {
+            status = "fantasma: sem permissão — rode uma vez: adb shell pm grant br.eni.cora android.permission.WRITE_SECURE_SETTINGS";
+            return false;
+        }
+    }
+
     void iniciarPipe(int porta) throws Exception {
         if (piping) { send("{\"type\":\"pipe\",\"status\":\"busy\"}"); return; }
         piping = true;
-        try { iniciarPipe2(porta); } finally { piping = false; }
+        try {
+            iniciarPipe2(porta);
+            // v1.30: varredura falhou com Wi-Fi → tenta o resgate do adbd fantasma e revarre uma vez
+            if (!pipeOk && porta <= 0 && temWifi() && adbdFantasmaReligado()) {
+                status = "reattempt: enxame de novo em campo após religar adbd...";
+                iniciarPipe2(0);
+                if (!pipeOk) status = "adbd recusou voltar — abra a notificação de depuração no aparelho e confirme";
+            }
+        } finally { piping = false; }
     }
 
     void iniciarPipe2(int porta) throws Exception {
+        pipeOk = false;
         final List<Integer> candidatos = new ArrayList<>();
         if (porta > 0) {
             candidatos.add(porta);
@@ -333,10 +397,11 @@ public class SinoService extends Service {
             ex.shutdown();
             Collections.sort(achados);
             candidatos.addAll(achados);
+            candidatos.add(0, 5555); // v1.30: persistência/opção B mora aqui fora da faixa efêmera
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
+            status = "pipe: nenhuma porta aberta na faixa (adbd morto ou ainda subindo)";
             return;
         }
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + candidatos.get(0) + ",\"enxame\":" + candidatos.size() + "}");
@@ -383,31 +448,44 @@ public class SinoService extends Service {
         if (vencedor[0] == null) {
             for (Socket s2 : abertos) try { s2.close(); } catch (Exception ignored) {}
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: adbd nao encontrado (ligue a depuração sem fio)";
+            status = "pipe: nenhum adbd respondeu o protocolo (fantasma? aguardando resgate 0→1)";
             return;
         }
+        pipeOk = true;
         final Socket win = vencedor[0];
         for (Socket s2 : abertos) {
             if (s2 != win) try { s2.close(); } catch (Exception ignored) {}
         }
         win.setSoTimeout(0);
-        // Persistir adbd na porta 5555 (Opção B - não muda mais)
-        try {
-            java.lang.Process p = Runtime.getRuntime().exec(new String[]{"setprop", "persist.adb.tcp.port", "5555"});
-            p.waitFor();
-            p = Runtime.getRuntime().exec(new String[]{"setprop", "service.adb.tcp.port", "5555"});
-            p.waitFor();
-            p = Runtime.getRuntime().exec(new String[]{"stop", "adbd"});
-            p.waitFor();
-            Thread.sleep(1000);
-            p = Runtime.getRuntime().exec(new String[]{"start", "adbd"});
-            p.waitFor();
-            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + ",\"persist\":5555}");
-            status = "tubo ADB VALIDADO (porta " + win.getPort() + ") - adbd persistente em 5555";
-        } catch (Exception e) {
-            send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
-            status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
-        }
+        status = "tubo ADB VALIDADO (porta " + win.getPort() + ")";
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
+        // v1.30: persistência 5555 vai pro background, com exit code honesto.
+        // Só funciona com root/shell; se funcionar, o adbd reinicia e o re-tubo
+        // revalida pela 5555 (agora incluída na varredura). Não mata mais o tubo ativo.
+        new Thread(() -> {
+            try {
+                Thread.sleep(20000);
+                java.lang.Process pa = Runtime.getRuntime().exec(new String[]{"setprop", "persist.adb.tcp.port", "5555"});
+                int ra = pa.waitFor();
+                java.lang.Process pb = Runtime.getRuntime().exec(new String[]{"setprop", "service.adb.tcp.port", "5555"});
+                int rb = pb.waitFor();
+                if (ra != 0 || rb != 0) {
+                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + ra + "}");
+                    return;
+                }
+                java.lang.Process pc = Runtime.getRuntime().exec(new String[]{"stop", "adbd"});
+                int rc = pc.waitFor();
+                Thread.sleep(1000);
+                java.lang.Process pd = Runtime.getRuntime().exec(new String[]{"start", "adbd"});
+                int rd = pd.waitFor();
+                if (rc == 0 && rd == 0) {
+                    status = "adbd migrado para 5555 persistente";
+                    send("{\"type\":\"pipe\",\"status\":\"persist_5555\"}");
+                } else {
+                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + rc + "}");
+                }
+            } catch (Exception ex) { send("{\"type\":\"pipe\",\"status\":\"persist_falhou\"}"); }
+        }).start();
         // WakeLock específico para manter o adbd vivo durante o sono
         try {
             android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
