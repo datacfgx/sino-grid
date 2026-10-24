@@ -378,83 +378,148 @@ public class SinoService extends Service {
         } finally { piping = false; }
     }
 
+    // v1.33 PORTA CERTA: adbd roda como root — seus sockets LISTEN aparecem no
+    // /proc/net/tcp com uid 0 (ou 1000/2000). Nada de varrer 28 mil portas ou
+    // validar header: achamos o listener exato, funciona até com TLS.
+    List<Integer> portasAdbd() {
+        List<Integer> out = new ArrayList<>();
+        for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
+            BufferedReader r = null;
+            try {
+                r = new BufferedReader(new FileReader(f));
+                r.readLine();
+                String l;
+                while ((l = r.readLine()) != null) {
+                    String[] p = l.trim().split("\\s+");
+                    if (p.length < 8) continue;
+                    String local = p[1];
+                    if (!"0A".equals(p[3])) continue; // LISTEN
+                    String uid = p[7];
+                    if (!"0".equals(uid) && !"1000".equals(uid) && !"2000".equals(uid)) continue;
+                    int port = Integer.parseInt(local.substring(local.indexOf(':') + 1), 16);
+                    if (port >= 1024 && !out.contains(port)) out.add(port);
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try { if (r != null) r.close(); } catch (Exception ignored) {}
+            }
+        }
+        return out;
+    }
+
     void iniciarPipe2(int porta) throws Exception {
         pipeOk = false;
         final List<Integer> candidatos = new ArrayList<>();
+        final boolean[] doProc = {false};
         if (porta > 0) {
             candidatos.add(porta);
         } else {
-            final int[] faixa = faixaPortas();
-            final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-            ExecutorService ex = Executors.newFixedThreadPool(200);
-            List<Future<?>> fs = new ArrayList<>();
-            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
-                final int port = p;
-                fs.add(ex.submit(() -> {
+            candidatos.addAll(portasAdbd());
+            doProc[0] = !candidatos.isEmpty();
+            if (!doProc[0]) {
+                // fallback: adbd em modo texto (tcpip/root) — varredura + validação legada
+                final int[] faixa = faixaPortas();
+                final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+                ExecutorService ex = Executors.newFixedThreadPool(200);
+                List<Future<?>> fs = new ArrayList<>();
+                for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
+                    final int port = p;
+                    fs.add(ex.submit(() -> {
+                        try {
+                            Socket s = new Socket();
+                            s.connect(new InetSocketAddress("127.0.0.1", port), 120);
+                            s.close();
+                            achados.add(port);
+                        } catch (Exception ignored) {
+                        }
+                    }));
+                }
+                for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+                ex.shutdown();
+                for (final int cand : achados) {
+                    Socket probe = null;
                     try {
-                        Socket s = new Socket();
-                        s.connect(new InetSocketAddress("127.0.0.1", port), 120);
-                        s.close();
-                        achados.add(port);
+                        probe = new Socket();
+                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                        probe.setSoTimeout(5000);
+                        InputStream si = probe.getInputStream();
+                        byte[] hdr = new byte[24];
+                        int got = 0;
+                        while (got < 24) {
+                            int n = si.read(hdr, got, 24 - got);
+                            if (n < 0) break;
+                            got += n;
+                        }
+                        if (got == 24) {
+                            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                            int cmd = rb.getInt();
+                            rb.getInt();
+                            rb.getInt();
+                            int len = rb.getInt();
+                            rb.getInt();
+                            int magic = rb.getInt();
+                            if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff)) candidatos.add(cand);
+                        }
                     } catch (Exception ignored) {
+                    } finally {
+                        try { if (probe != null) probe.close(); } catch (Exception ignored) {}
                     }
-                }));
+                }
+                if (!candidatos.contains(5555)) candidatos.add(5555);
             }
-            for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-            ex.shutdown();
-            Collections.sort(achados);
-            candidatos.addAll(achados);
-            if (!candidatos.contains(5555)) candidatos.add(5555); // fim da fila
         }
         if (candidatos.isEmpty()) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
             status = "pipe: nenhuma porta aberta na faixa (adbd morto ou ainda subindo)";
             return;
         }
-        status = "enxame: " + candidatos.size() + " farejadores farejando (aguardando validação)...";
+        status = doProc[0]
+                ? "porta certa via /proc: adbd root em " + candidatos.get(0)
+                : "enxame: " + candidatos.size() + " farejadores farejando (aguardando validação)...";
 
-        // v1.32 TUBO VERDADEIRO: a sonda só LÊ 24 bytes e MORRE (close em tudo).
-        // O tubo real abre DEPOIS, num socket fresquinho, forward byte-a-byte puro,
-        // SEM injeção de header — o adbd responde o CNXN do cliente na ordem natural,
-        // igual a um "adb tcpip" direto. Fim do "device offline".
+        // sonda só no fallback legado; /proc e porta explícita são certeza
         final int[] portaVencedora = {0};
-        ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
-        List<Future<?>> pf = new ArrayList<>();
-        for (final int cand : candidatos) {
-            pf.add(px.submit(() -> {
-                Socket probe = null;
-                try {
-                    probe = new Socket();
-                    probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
-                    probe.setSoTimeout(8000);
-                    InputStream si = probe.getInputStream();
-                    byte[] hdr = new byte[24];
-                    int got = 0;
-                    while (got < 24) {
-                        int n = si.read(hdr, got, 24 - got);
-                        if (n < 0) break;
-                        got += n;
-                    }
-                    if (got == 24) {
-                        java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                        int cmd = rb.getInt();
-                        rb.getInt();
-                        rb.getInt();
-                        int len = rb.getInt();
-                        rb.getInt();
-                        int magic = rb.getInt();
-                        if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && portaVencedora[0] == 0) {
-                            portaVencedora[0] = cand;
+        if (porta > 0 || doProc[0]) {
+            portaVencedora[0] = candidatos.get(0);
+        } else {
+            ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
+            List<Future<?>> pf = new ArrayList<>();
+            for (final int cand : candidatos) {
+                pf.add(px.submit(() -> {
+                    Socket probe = null;
+                    try {
+                        probe = new Socket();
+                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 800);
+                        probe.setSoTimeout(8000);
+                        InputStream si = probe.getInputStream();
+                        byte[] hdr = new byte[24];
+                        int got = 0;
+                        while (got < 24) {
+                            int n = si.read(hdr, got, 24 - got);
+                            if (n < 0) break;
+                            got += n;
                         }
+                        if (got == 24) {
+                            java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                            int cmd = rb.getInt();
+                            rb.getInt();
+                            rb.getInt();
+                            int len = rb.getInt();
+                            rb.getInt();
+                            int magic = rb.getInt();
+                            if (len >= 0 && len < 1048576 && magic == (cmd ^ 0xffffffff) && portaVencedora[0] == 0) {
+                                portaVencedora[0] = cand;
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        try { if (probe != null) probe.close(); } catch (Exception ignored) {}
                     }
-                } catch (Exception ignored) {
-                } finally {
-                    try { if (probe != null) probe.close(); } catch (Exception ignored) {}
-                }
-            }));
+                }));
+            }
+            for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
+            px.shutdown();
         }
-        for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
-        px.shutdown();
 
         if (portaVencedora[0] == 0) {
             send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
@@ -473,7 +538,6 @@ public class SinoService extends Service {
         final InputStream ai = win.getInputStream();
         pipeOut = win.getOutputStream();
 
-        // v1.30/31: persistência 5555 em background, com exit code honesto
         new Thread(() -> {
             try {
                 Thread.sleep(20000);
