@@ -748,9 +748,9 @@ public class SinoService extends Service {
     // com notificacao de reserva se o start em background for bloqueado.
     public static class InstallReceiver extends android.content.BroadcastReceiver {
         @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+            String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
             int st = i.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999);
             if (st == -999 && msg == null) { SinoService.status = "status sem extras: verificar FLAG_MUTABLE do commit"; return; }
-            String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
             if (st == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 try {
                     android.content.Intent confirm = i.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
