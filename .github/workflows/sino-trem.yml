@@ -11,35 +11,35 @@ jobs:
         env:
           TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
           TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
-      run: |
-        python3 <<'PYEOF'
-        import urllib.request, json, os
-        API = "https://fde-proximotrem-prd-hhbqdtdzdyhtgxhr.a01.azurefd.net/api/v1/lines/L8/stations/{}/next-train"
-        NOMES = {"JSI": "Jardim Silveira", "IPV": "Itapevi"}
-        DEST = {"JDI": "Jandira", "IPV": "Itapevi", "ECD": "Eng. Cardoso"}
-        def get(code):
-            with urllib.request.urlopen(API.format(code), timeout=12) as r:
-                return json.loads(r.read().decode())
-        def linhas(nome, code):
-            try:
-                t = get(code)
-            except Exception:
-                return f"{nome} ({code})\n  (fonte sem resposta)"
-            if not t:
-                return f"{nome} ({code})\n  (nenhum trem previsto)"
-            partes = []
-            for x in t[:2]:
-                alvo = DEST.get(x.get("estacao_destino",""), x.get("estacao_destino","?"))
-                sec = x.get("proximo_em") or 0
-                prev = x.get("hora_previsto_chegada","?")
-                stt = x.get("status","")
-                partes.append(f"{alvo}: {prev} ({sec//60} min) {stt}")
-            return f"{nome} ({code})\n" + "\n".join(partes)
-        msg = "TREM L8 - DIAMANTE\n\n" + "\n\n".join(linhas(NOMES[c], c) for c in ("JSI","IPV"))
-        print(msg)
-        req = urllib.request.Request(
-        f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
-        data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": msg}).encode(),
-        headers={"Content-Type": "application/json"})
-        print(urllib.request.urlopen(req).read().decode())
-        PYEOF
+        run: |
+          python3 <<'PYEOF'
+          import urllib.request, json, os
+          API = "https://fde-proximotrem-prd-hhbqdtdzdyhtgxhr.a01.azurefd.net/api/v1/lines/L8/stations/{}/next-train"
+          NOMES = {"JSI": "Jardim Silveira", "IPV": "Itapevi"}
+          DEST = {"JDI": "Jandira", "IPV": "Itapevi", "ECD": "Eng. Cardoso"}
+          def get(code):
+              with urllib.request.urlopen(API.format(code), timeout=12) as r:
+                  return json.loads(r.read().decode())
+          def linhas(nome, code):
+              try:
+                  t = get(code)
+              except Exception:
+                  return f"{nome} ({code})\n  (fonte sem resposta)"
+              if not t:
+                  return f"{nome} ({code})\n  (nenhum trem previsto)"
+              partes = []
+              for x in t[:2]:
+                  alvo = DEST.get(x.get("estacao_destino",""), x.get("estacao_destino","?"))
+                  sec = x.get("proximo_em") or 0
+                  prev = x.get("hora_previsto_chegada","?")
+                  stt = x.get("status","")
+                  partes.append(f"{alvo}: {prev} ({sec//60} min) {stt}")
+              return f"{nome} ({code})\n" + "\n".join(partes)
+          msg = "TREM L8 - DIAMANTE\n\n" + "\n\n".join(linhas(NOMES[c], c) for c in ("JSI","IPV"))
+          print(msg)
+          req = urllib.request.Request(
+          f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+          data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": msg}).encode(),
+          headers={"Content-Type": "application/json"})
+          print(urllib.request.urlopen(req).read().decode())
+          PYEOF
