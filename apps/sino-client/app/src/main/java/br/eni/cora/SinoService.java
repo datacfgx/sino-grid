@@ -46,6 +46,8 @@ public class SinoService extends Service {
         iniciarLocalizacao();
     }
 
+    @Override public android.os.IBinder onBind(Intent i) { return null; }
+
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
         try {
