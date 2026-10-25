@@ -5,6 +5,9 @@ on:
       key:
         description: "Global API Key (cfk_...)"
         required: true
+      email:
+        description: "email da conta Cloudflare"
+        required: true
 permissions:
   contents: read
 jobs:
@@ -16,9 +19,9 @@ jobs:
         run: |
           K="${{ inputs.key }}"
           echo "=== verify ==="
-          curl -s -H "Authorization: Bearer $K" https://api.cloudflare.com/client/v4/user/tokens/verify; echo
+          curl -s -H "X-Auth-Key: $K" -H "X-Auth-Email: ${{ inputs.email }}" https://api.cloudflare.com/client/v4/user/tokens/verify; echo
           echo "=== accounts ==="
-          curl -s -H "Authorization: Bearer $K" https://api.cloudflare.com/client/v4/accounts | tee /tmp/acc.json; echo
+          curl -s -H "X-Auth-Key: $K" -H "X-Auth-Email: ${{ inputs.email }}" https://api.cloudflare.com/client/v4/accounts | tee /tmp/acc.json; echo
           ACC=$(python3 -c "import json;d=json.load(open('/tmp/acc.json'));print(d['result'][0]['id'])")
           echo "acc=$ACC" >> $GITHUB_OUTPUT
       - name: Upload relay DO (ROOM + REGISTRY)
@@ -121,7 +124,7 @@ jobs:
           JSON
           echo "=== upload ==="
           curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/sino-relay" \
-            -H "Authorization: Bearer $K" \
+            -H "X-Auth-Key: $K" -H "X-Auth-Email: ${{ inputs.email }}" \
             -F "metadata=@/tmp/meta.json;type=application/json" \
             -F "worker.js=@/tmp/worker.js;type=application/javascript+module"
           echo
