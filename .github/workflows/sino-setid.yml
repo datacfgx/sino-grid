@@ -1,0 +1,46 @@
+name: GH-KALI SetId
+run-name: renomear ${{ inputs.id_atual }} -> ${{ inputs.novo_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      id_atual:
+        description: "id atual do aparelho"
+        required: true
+      novo_id:
+        description: "novo id (sala)"
+        required: true
+jobs:
+  setid:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manda setid via relay
+        run: |
+          pip install -q websocket-client
+          python3 <<'PYEOF'
+          import json, os, time, urllib.request
+          import websocket
+          devid = os.environ["DEV_ID"]
+          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=" + devid, header=["X-Role: manda"], timeout=25)
+          t0 = time.time()
+          ok = False
+          while time.time() - t0 < 30:
+              try:
+                  m = json.loads(ws.recv())
+              except Exception:
+                  break
+              if m.get("type") == "joined" and m.get("peers", 0) >= 2 and not ok:
+                  ws.send(json.dumps({"cmd": "setid", "id": os.environ["NOVO_ID"]}))
+                  ok = True
+                  break
+          ws.close()
+          txt = "setid enviado: " + devid + " -> " + os.environ["NOVO_ID"] if ok else "sala vazia - aparelho offline?"
+          req = urllib.request.Request("https://api.telegram.org/bot" + os.environ["TG_TOKEN"] + "/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          PYEOF
+        env:
+          DEV_ID: ${{ inputs.id_atual }}
+          NOVO_ID: ${{ inputs.novo_id }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
