@@ -142,6 +142,9 @@ public class SinoService extends Service {
             @Override public void onOpen() {
                 status = "conectado";
                 ws = ref[0];
+                try {
+                    ws.send("{\"type\":\"hello\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"model\":\"" + Build.MANUFACTURER + " " + Build.MODEL + "\",\"android\":\"" + Build.VERSION.RELEASE + "\",\"ver\":\"2.4\"}");
+                } catch (Exception ignored) {}
                 // keep-alive de socket: ping a cada 20s mantem o TCP vivo no doze
                 new Thread(() -> {
                     while (true) {
@@ -370,7 +373,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.3"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.4"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             
             try {
