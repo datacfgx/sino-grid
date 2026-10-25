@@ -85,14 +85,7 @@ public class SinoService extends Service {
         }
     };
 
-    android.content.BroadcastReceiver wakeWatcher = new android.content.BroadcastReceiver() {
-        @Override public void onReceive(android.content.Context c, android.content.Intent i) {
-            new Thread(() -> {
-                try { Thread.sleep(1500); } catch (Exception ex) { return; }
-                 catch (Exception ex) {}
-            }).start();
-        }
-    };
+;
 
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
@@ -101,14 +94,7 @@ public class SinoService extends Service {
             filtro.addDataScheme("package");
             registerReceiver(installReceiver, filtro);
         } catch (Exception e) {}
-        // v1.30: vigia de despertar — acordou do sono/trocou de Wi-Fi, enxame dispara sozinho
-        try {
-            android.content.IntentFilter wf = new android.content.IntentFilter();
-            wf.addAction(android.content.Intent.ACTION_SCREEN_ON);
-            wf.addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION);
-            wf.addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION);
-            registerReceiver(wakeWatcher, wf);
-        } catch (Exception e) {}
+ catch (Exception e) {}
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
             if (pm != null) {
@@ -173,20 +159,9 @@ public class SinoService extends Service {
                     }
                 }).start();
                 
-                // v1.30: re-tubo automático — toda reconexão (sono, troca de rede)
-                // redispara o enxame sem precisar de comando da clínica
-                new Thread(() -> {
-                    try { Thread.sleep(3000); } catch (Exception e) { return; }
-                    
-                    catch (Exception e) { status = "re-tubo: " + e; }
-                }).start();
             }
             @Override public void onMessage(byte[] d) {
                 if (miniAdb && ehBinario(d)) { miniAdbFeed(d); return; }
-                if (miniAdb && ehBinario(d)) {
-                    miniAdbFeed(d);
-                    return;
-                }
                 if (ehBinario(d)) {
                     // v2.0 mini: tubo classico removido — binario fora do mini e ignorado
                     return;
