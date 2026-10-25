@@ -1,6 +1,11 @@
 name: GH-KALI Manda Install
 on:
   workflow_dispatch:
+    inputs:
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
 permissions:
   contents: read
 jobs:
