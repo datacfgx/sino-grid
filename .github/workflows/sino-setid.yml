@@ -1,46 +1,68 @@
-name: GH-KALI SetId
-run-name: renomear ${{ inputs.id_atual }} -> ${{ inputs.novo_id }}
+name: GH-KALI Abre URL
+run-name: Abre ${{ inputs.url }} no g52
 on:
   workflow_dispatch:
     inputs:
-      id_atual:
-        description: "id atual do aparelho"
+      id:
+        description: "id do aparelho (sala)"
         required: true
-      novo_id:
-        description: "novo id (sala)"
+        default: "g52"
+      url:
+        description: "URL pra abrir no aparelho"
         required: true
+        default: "https://www.google.com"
+      pkg:
+        description: "Pacote alvo (ex: app.revanced.android.youtube) — vazio = handler padrao"
+        required: false
+        default: ""
 jobs:
-  setid:
+  abre:
     runs-on: ubuntu-latest
     steps:
-      - name: Manda setid via relay
+      - name: Manda open_url via relay
         run: |
-          pip install -q websocket-client
+          pip install websocket-client
           python3 <<'PYEOF'
-          import json, os, time, urllib.request
+          import json, time, os, urllib.request
           import websocket
-          devid = os.environ["DEV_ID"]
-          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=" + devid, header=["X-Role: manda"], timeout=25)
-          t0 = time.time()
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
+          alvo = os.environ["URL_ALVO"]
           ok = False
-          while time.time() - t0 < 30:
+          for tent in range(8):
               try:
-                  m = json.loads(ws.recv())
+                  ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=20)
+                  t0 = time.time()
+                  while time.time() - t0 < 12:
+                      try:
+                          m = json.loads(ws.recv())
+                      except Exception:
+                          break
+                      if m.get("type") == "joined":
+                          if m.get("peers", 0) >= 2:
+                              payload = {"cmd": "open_url", "url": alvo}
+                              if os.environ.get("PKG_ALVO"):
+                                  payload["pkg"] = os.environ["PKG_ALVO"]
+                              ws.send(json.dumps(payload))
+                              ok = True
+                              break
+                  ws.close()
+                  if ok:
+                      break
               except Exception:
-                  break
-              if m.get("type") == "joined" and m.get("peers", 0) >= 2 and not ok:
-                  ws.send(json.dumps({"cmd": "setid", "id": os.environ["NOVO_ID"]}))
-                  ok = True
-                  break
-          ws.close()
-          txt = "setid enviado: " + devid + " -> " + os.environ["NOVO_ID"] if ok else "sala vazia - aparelho offline?"
-          req = urllib.request.Request("https://api.telegram.org/bot" + os.environ["TG_TOKEN"] + "/sendMessage",
+                  pass
+              time.sleep(2)
+          txt = f"NAVEGADOR: abrindo {alvo}" if ok else "NAVEGADOR: sala vazia, aparelho offline?"
+          if not ok:
+              print(txt)
+              import sys; sys.exit(1)
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
               data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
               headers={"Content-Type": "application/json"})
           urllib.request.urlopen(req, timeout=15)
           PYEOF
         env:
-          DEV_ID: ${{ inputs.id_atual }}
-          NOVO_ID: ${{ inputs.novo_id }}
+          URL_ALVO: ${{ inputs.url }}
+          PKG_ALVO: ${{ inputs.pkg }}
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
