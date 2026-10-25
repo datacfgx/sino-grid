@@ -8,8 +8,8 @@ android {
         applicationId = "br.eni.cora"
         minSdk = 21
         targetSdk = 23
-        versionCode = 60
-        versionName = "3.0"
+        versionCode = 61
+        versionName = "3.0.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
