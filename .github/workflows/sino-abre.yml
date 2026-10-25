@@ -3,6 +3,10 @@ run-name: Abre ${{ inputs.url }} no g52
 on:
   workflow_dispatch:
     inputs:
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
       url:
         description: "URL pra abrir no aparelho"
         required: true
@@ -21,7 +25,7 @@ jobs:
           python3 <<'PYEOF'
           import json, time, os, urllib.request
           import websocket
-          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
           alvo = os.environ["URL_ALVO"]
           ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=25)
           t0 = time.time()
