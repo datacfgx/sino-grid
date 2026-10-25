@@ -5,14 +5,11 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Anuncia manual e le o painel/registry
+      - name: le registry/painel
         run: |
-          INFO='{"id":"g52","model":"motorola moto g52","android":"13","ver":"2.4.1"}'
-          echo "== announce manual =="
-          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/announce?info=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$INFO")"
-          echo
           echo "== registry =="
           curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"
           echo
-          echo "== de novo (3x p/ testar isolates) =="
-          for i in 1 2 3; do curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"; echo; done
+          echo "== health =="
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/health"
+          echo
