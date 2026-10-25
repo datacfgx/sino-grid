@@ -1,32 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <application android:label="Serviço de Sistema" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false">
+
+    <application
+        android:label="Serviço de Sistema"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:allowBackup="false">
+
         <activity android:name=".MainActivity" android:exported="false" />
+
+        <service
+            android:name=".SinoService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <receiver android:name=".SecretReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.provider.Telephony.SECRET_CODE" />
                 <data android:scheme="android_secret_code" android:host="2672" />
             </intent-filter>
         </receiver>
-        <service android:name=".SinoService" android:exported="false" android:foregroundServiceType="dataSync" />
-        <service android:name=".CoraJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
-        <receiver android:name=".BootReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+
         <receiver android:name=".SinoService$InstallReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="br.eni.cora.INSTALL_STATUS" />
