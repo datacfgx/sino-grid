@@ -5,9 +5,14 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: HTTP plano no /ws e /_peek (sem upgrade)
+      - name: Anuncia manual e le o painel/registry
         run: |
-          echo "== /ws sem upgrade =="
-          curl -s -m 20 -w "\nHTTP:%{http_code}\n" "https://sino-relay.worldeffects752.workers.dev/ws?id=g52"
-          echo "== /_peek (DO direto) =="
-          curl -s -m 20 -w "\nHTTP:%{http_code}\n" "https://sino-relay.worldeffects752.workers.dev/_peek?id=g52"
+          INFO='{"id":"g52","model":"motorola moto g52","android":"13","ver":"2.4.1"}'
+          echo "== announce manual =="
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/announce?info=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$INFO")"
+          echo
+          echo "== registry =="
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"
+          echo
+          echo "== de novo (3x p/ testar isolates) =="
+          for i in 1 2 3; do curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"; echo; done
