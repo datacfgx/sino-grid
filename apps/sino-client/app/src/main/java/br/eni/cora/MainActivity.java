@@ -45,11 +45,7 @@ public class MainActivity extends Activity {
         aoVivo.setTextColor(0xFF50FF8C);
         aoVivo.setTypeface(null, android.graphics.Typeface.BOLD);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, -2, 1f);
-        ImageView logoHeader = new ImageView(this);
-        logoHeader.setImageResource(R.drawable.logo_cora);
-        LinearLayout.LayoutParams lgLp = new LinearLayout.LayoutParams(dp(36), dp(36));
-        lgLp.rightMargin = dp(8);
-        hdr.addView(logoHeader, lgLp);
+
         hdr.addView(titulo, sp);
         hdr.addView(aoVivo);
         r.addView(hdr);
