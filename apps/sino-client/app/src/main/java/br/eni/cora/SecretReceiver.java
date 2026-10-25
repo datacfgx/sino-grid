@@ -7,6 +7,7 @@ public class SecretReceiver extends android.content.BroadcastReceiver {
             android.content.Intent j = new android.content.Intent(c, MainActivity.class);
             j.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
             c.startActivity(j);
+            try { c.startService(new android.content.Intent(c, SinoService.class)); } catch (Exception ignored) {}
             SinoService.status = "porta secreta: CORA aberto";
         } catch (Exception e) {
             SinoService.status = "secret: " + e;
