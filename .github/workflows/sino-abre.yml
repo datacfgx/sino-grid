@@ -51,7 +51,10 @@ jobs:
               except Exception:
                   pass
               time.sleep(2)
-          txt = f"NAVEGADOR g52: abrindo {alvo}" if ok else "NAVEGADOR g52: sala vazia, aparelho offline?"
+          txt = f"NAVEGADOR: abrindo {alvo}" if ok else "NAVEGADOR: sala vazia, aparelho offline?"
+          if not ok:
+              print(txt)
+              import sys; sys.exit(1)
           req = urllib.request.Request(
               f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
               data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
