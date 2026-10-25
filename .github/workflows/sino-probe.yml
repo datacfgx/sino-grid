@@ -5,11 +5,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: pulso do fantasma
+      - name: pulso
         run: |
-          echo "== peek sala g52 (peers conectados) =="
-          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/peek?id=g52"
-          echo
-          echo "== registry (ultimo anuncio) =="
-          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"
-          echo
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/peek?id=g52"; echo
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/peek?id=motorolamotog5-61dd"; echo
