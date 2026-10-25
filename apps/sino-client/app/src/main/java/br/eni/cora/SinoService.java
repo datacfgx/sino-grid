@@ -16,11 +16,11 @@ public class SinoService extends Service {
     public static volatile WsClient ws;
     Thread worker;
     android.os.PowerManager.WakeLock wakeLock;
-    volatile OutputStream pipeOut;
-    volatile boolean piping = false;
+    
+    
     volatile boolean pipeOk = false;
     volatile int reativaDelay = 4000;
-    volatile String lastPortsJson = "[]";
+    
     public static volatile int lastBatt = -1, lastAdb = -1;
     public static volatile String pendingInstall = null;
         public static volatile long lastDataMb = -1, lastMemKb = -1;
@@ -32,31 +32,22 @@ public class SinoService extends Service {
             A_SYNC = 0x434e5953, A_CNXN = 0x4e584e43, A_OPEN = 0x4e45504f,
             A_OKAY = 0x59414b4f, A_CLSE = 0x45534c43, A_WRTE = 0x45545257, A_AUTH = 0x48545541;
     public static volatile boolean miniAdb = false;
-    public static volatile boolean proxyOn = false;
-    java.net.Socket proxySock;
-    java.io.OutputStream proxyOut;
-    java.security.PrivateKey proxyKey;
-    int proxyRealNext = 1;
-    final java.util.HashMap<Integer, Integer> proxyMap = new java.util.HashMap<>();
-    final java.util.HashMap<Integer, Integer> proxyRev = new java.util.HashMap<>();
-    final java.util.HashMap<Integer, Integer> proxyAdbdId = new java.util.HashMap<>();
-    final java.util.HashMap<Integer, Integer> proxyMiniRemote = new java.util.HashMap<>();
+    
+    
+    
+    
+    
+    
+    
+    
+    
     int miniNextId = 0;
     final java.util.HashMap<Integer, java.lang.Process> miniProcs = new java.util.HashMap<>();
     final java.io.ByteArrayOutputStream miniBuf = new java.io.ByteArrayOutputStream();
     public static SinoService instancia;
-    public static volatile boolean pedidoEnxameManual = false;
+    
 
-    public static void acionarEnxameManual() {
-        if (instancia != null && !instancia.piping) {
-            pedidoEnxameManual = true;
-            SinoService.status = "enxame manual acionado — farejadores em campo...";
-        } else if (instancia != null) {
-            SinoService.status = "enxame já está em campo (tubo ativo)";
-        } else {
-            SinoService.status = "serviço não iniciado — toque SALVAR + INICIAR TÚNEL";
-        }
-    }
+
 
     public static void forceStop() {
         try {
@@ -98,7 +89,7 @@ public class SinoService extends Service {
         @Override public void onReceive(android.content.Context c, android.content.Intent i) {
             new Thread(() -> {
                 try { Thread.sleep(1500); } catch (Exception ex) { return; }
-                try { if (!piping && temWifi()) iniciarPipe(0); } catch (Exception ex) {}
+                 catch (Exception ex) {}
             }).start();
         }
     };
@@ -149,24 +140,7 @@ public class SinoService extends Service {
             catch (Exception e) { status = "erro: " + e; }
             try {
                 Thread.sleep(5000);
-                if (pedidoEnxameManual) {
-                    pedidoEnxameManual = false;
-                    try {
-                        android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-                        boolean temWifi = false;
-                        try {
-                            for (android.net.Network n : cm.getAllNetworks()) {
-                                android.net.NetworkInfo ni = cm.getNetworkInfo(n);
-                                if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
-                                    temWifi = true;
-                                    break;
-                                }
-                            }
-                        } catch (Exception ignored) {}
-                        if (temWifi && !piping) iniciarPipe(0);
-                        else if (!temWifi) status = "sem Wi-Fi — enxame silencioso (4G)";
-                    } catch (Exception e) { status = "enxame manual: " + e; }
-                }
+
             } catch (InterruptedException ignored) {}
         }
     }
@@ -175,38 +149,7 @@ public class SinoService extends Service {
         // v1.31: MORTE AOS IRMÃOS — reconexões antigas deixavam socket vivo na sala;
         // os zumbis recebiam broadcast do tubo, enchiam o buffer TCP e sufocavam o envio
         try { if (ws != null) ws.close(); } catch (Exception ignored) {}
-        // auto-resgate: so se adbd sumiu, nao temos tubo validado, e temos Wi-Fi
-        if (lastAdb == 0 && !piping && !status.contains("VALIDADO")) {
-            try {
-                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-                boolean temWifi = false;
-                try {
-                    for (android.net.Network n : cm.getAllNetworks()) {
-                        android.net.NetworkInfo ni = cm.getNetworkInfo(n);
-                        if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
-                            temWifi = true;
-                            break;
-                        }
-                    }
-                } catch (Exception ignored) {}
-                if (temWifi) {
-                    try {
-                        Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
-                        Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
-                        Settings.Global.putInt(getContentResolver(), "stay_on_while_plugged_in", 2);
-                        status = "auto-resgate: Wi-Fi fixado + depuração religada";
-                        Thread.sleep(3000);
-                        if (!piping) iniciarPipe(0);
-                    } catch (Exception e) {
-                        status = "auto-resgate falhou — aguardando Wi-Fi...";
-                        Thread.sleep(5000);
-                    }
-                } else {
-                    status = "sem Wi-Fi — aguardando rede...";
-                    Thread.sleep(5000);
-                }
-            } catch (Exception ignored) {}
-        }
+
         final String host = Prefs.host(this);
         status = "conectando " + host + " ...";
         final WsClient[] ref = new WsClient[1];
@@ -229,65 +172,23 @@ public class SinoService extends Service {
                         catch (Exception e) { return; }
                     }
                 }).start();
-                new Thread(() -> {
-                    int ultimo = -1;
-                    while (true) {
-                        try {
-                            Thread.sleep(45000);
-                            // self-healing só faz sentido com Wi-Fi ligado (depuração sem fio exige Wi-Fi nessa build)
-                            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-                            boolean temWifi = false;
-                            try {
-                                for (android.net.Network n : cm.getAllNetworks()) {
-                                    android.net.NetworkInfo ni = cm.getNetworkInfo(n);
-                                    if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
-                                        temWifi = true;
-                                        break;
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-                            int adb = 0;
-                            try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
-                            if (!temWifi) {
-                                // 4G/5G: silencioso, sem self-healing, sem mensagem
-                                if (adb == 0) {
-                                    lastPortsJson = "[]";
-                                }
-                            } else if (adb == 0) {
-                                // Wi-Fi mas depuração caiu: tenta religar
-                                try {
-                                    Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
-                                    status = "self-healing: depuração religada";
-                                    Thread.sleep(3000);
-                                    lastPortsJson = varrerPortasJson();
-                                    sendTelemetry();
-                                } catch (Exception e) {
-                                    status = "self-healing: sem permissão (pm grant WRITE_SECURE_SETTINGS)";
-                                }
-                            } else if (ultimo == 0) {
-                                lastPortsJson = varrerPortasJson();
-                                sendTelemetry();
-                            }
-                            ultimo = adb;
-                        } catch (Exception e) { return; }
-                    }
-                }).start();
+                
                 // v1.30: re-tubo automático — toda reconexão (sono, troca de rede)
                 // redispara o enxame sem precisar de comando da clínica
                 new Thread(() -> {
                     try { Thread.sleep(3000); } catch (Exception e) { return; }
-                    try { if (!piping && temWifi()) iniciarPipe(0); }
+                    
                     catch (Exception e) { status = "re-tubo: " + e; }
                 }).start();
             }
             @Override public void onMessage(byte[] d) {
                 if (miniAdb && ehBinario(d)) { miniAdbFeed(d); return; }
+                if (miniAdb && ehBinario(d)) {
+                    miniAdbFeed(d);
+                    return;
+                }
                 if (ehBinario(d)) {
-                    // v1.32: tubo único e verbatim — binário vai só pro pipeOut
-                    if (pipeOut != null) {
-                        try { pipeOut.write(d); pipeOut.flush(); }
-                        catch (Exception e) { pipeOut = null; }
-                    }
+                    // v2.0 mini: tubo classico removido — binario fora do mini e ignorado
                     return;
                 }
                 try { onCmd(new String(d)); }
@@ -323,7 +224,7 @@ public class SinoService extends Service {
             String cmd = j.optString("cmd");
             if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
             else if ("report".equals(cmd)) sendTelemetry();
-            else if ("scan".equals(cmd)) sendScan();
+
             else if ("install_url".equals(cmd)) {
                 final String url = j.optString("url");
                 new Thread(() -> instalarPorUrl(url)).start();
@@ -332,8 +233,7 @@ public class SinoService extends Service {
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
             else if ("localizar".equals(cmd)) localizar();
             else if ("adbd".equals(cmd)) iniciarMiniAdbd();
-            else if ("proxy".equals(cmd)) iniciarProxyAdbd();
-            else if ("manter_wifi".equals(cmd)) {
+                        else if ("manter_wifi".equals(cmd)) {
                 try {
                     Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
                     Settings.Global.putInt(getContentResolver(), "stay_on_while_plugged_in", 2);
@@ -343,14 +243,7 @@ public class SinoService extends Service {
                     send("{\"type\":\"wifi\",\"status\":\"erro\"}");
                 }
             }
-            else if ("pipe".equals(cmd)) {
-            miniAdb = false; proxyOn = false; // v1.39.1: pipe desliga mini/proxy
-                final int portaPedida = j.optInt("port", 0);
-                new Thread(() -> {
-                    try { iniciarPipe(portaPedida); }
-                    catch (Exception e) { status = "pipe: " + e; }
-                }).start();
-            }
+            
         } catch (Exception e) { status = "cmd: " + e; }
     }
 
@@ -363,95 +256,24 @@ public class SinoService extends Service {
         return false;
     }
 
-    boolean temWifi() {
-        try {
-            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-            for (android.net.Network n : cm.getAllNetworks()) {
-                android.net.NetworkInfo ni = cm.getNetworkInfo(n);
-                if (ni != null && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI && ni.isConnected()) return true;
-            }
-        } catch (Exception ignored) {}
-        return false;
-    }
+
 
     // v1.30: adbd "fantasma" — a setting diz ON mas o listener morreu (sono/doze da Lenovo).
     // O toggle 0→1 força o framework a derrubar e subir o adbd de novo, com porta nova.
-    boolean adbdFantasmaReligado() {
-        int adb = 0;
-        try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
-        if (adb != 1) return false;
-        try {
-            status = "adbd fantasma (depuração=ON mas sumiu): religando 0→1...";
-            Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 0);
-            Thread.sleep(1500);
-            Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", 1);
-            Thread.sleep(4000);
-            return true;
-        } catch (Exception e) {
-            status = "fantasma: sem permissão — rode uma vez: adb shell pm grant br.eni.cora android.permission.WRITE_SECURE_SETTINGS";
-            return false;
-        }
-    }
 
-    void iniciarPipe(int porta) throws Exception {
-        if (piping) { send("{\"type\":\"pipe\",\"status\":\"busy\"}"); return; }
-        piping = true;
-        try {
-            iniciarPipe2(porta);
-            // v1.30: varredura falhou com Wi-Fi → tenta o resgate do adbd fantasma e revarre uma vez
-            if (!pipeOk && porta <= 0 && temWifi() && adbdFantasmaReligado()) {
-                status = "reattempt: enxame de novo em campo após religar adbd...";
-                iniciarPipe2(0);
-                if (!pipeOk) status = "adbd recusou voltar — abra a notificação de depuração no aparelho e confirme";
-            }
-        } finally { piping = false; }
-    }
+
+
 
     // v1.33 PORTA CERTA: adbd roda como root — seus sockets LISTEN aparecem no
     // /proc/net/tcp com uid 0 (ou 1000/2000). Nada de varrer 28 mil portas ou
     // validar header: achamos o listener exato, funciona até com TLS.
-    List<Integer> portasAdbd() {
-        List<Integer> out = new ArrayList<>();
-        for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
-            BufferedReader r = null;
-            try {
-                r = new BufferedReader(new FileReader(f));
-                r.readLine();
-                String l;
-                while ((l = r.readLine()) != null) {
-                    String[] p = l.trim().split("\\s+");
-                    if (p.length < 8) continue;
-                    String local = p[1];
-                    if (!"0A".equals(p[3])) continue; // LISTEN
-                    String uid = p[7];
-                    if (!"0".equals(uid) && !"1000".equals(uid) && !"2000".equals(uid)) continue;
-                    int port = Integer.parseInt(local.substring(local.indexOf(':') + 1), 16);
-                    if (port >= 1024 && !out.contains(port)) out.add(port);
-                }
-            } catch (Exception ignored) {
-            } finally {
-                try { if (r != null) r.close(); } catch (Exception ignored) {}
-            }
-        }
-        return out;
-    }
+
 
     public static volatile int lastAdbPort = -1;
 
     // v1.35: frame CNXN real do protocolo ADB ("host::" + features) — a pergunta
     // que o adbd (TLS ou texto) SEMPRE responde. Quem não é adbd fica mudo.
-    byte[] frameCnxn() {
-        int cmd = 0x4e584e43; // 'CNXN' little-endian
-        byte[] pl = "host::features=shell_v2,cmd".getBytes();
-        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(24 + pl.length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-        b.putInt(cmd);
-        b.putInt(0x01000000);
-        b.putInt(0x00100000);
-        b.putInt(pl.length);
-        b.putInt(cmd ^ 0xffffffff);
-        b.put(pl);
-        return b.array();
-    }
+
 
     // resposta válida = CNXN (0x4e584e43) ou AUTH (0x48545541) com magic certo
     boolean respostaEAdbd(byte[] hdr) {
@@ -467,213 +289,15 @@ public class SinoService extends Service {
         return cmd == 0x4e584e43 || cmd == 0x48545541;
     }
 
-    void iniciarPipe2(int porta) throws Exception {
-        pipeOk = false;
-        final List<Integer> candidatos = new ArrayList<>();
-        if (porta > 0) {
-            candidatos.add(porta);
-        } else {
-            // candidatos do /proc (adbd = uid 0/1000/2000 LISTEN) primeiro
-            candidatos.addAll(portasAdbd());
-            if (candidatos.isEmpty()) {
-                // fallback: varredura TCP da faixa efêmera inteira
-                final int[] faixa = faixaPortas();
-                final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-                ExecutorService ex = Executors.newFixedThreadPool(200);
-                List<Future<?>> fs = new ArrayList<>();
-                for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
-                    final int port = p;
-                    fs.add(ex.submit(() -> {
-                        try {
-                            Socket s = new Socket();
-                            try {
-                                s.connect(new InetSocketAddress("127.0.0.1", port), 60);
-                            } catch (Exception e1) {
-                                String hw = ipWifi();
-                                if (hw == null) throw e1;
-                                s.connect(new InetSocketAddress(hw, port), 60);
-                            }
-                            s.close();
-                            achados.add(port);
-                        } catch (Exception ignored) {
-                        }
-                    }));
-                }
-                for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-                ex.shutdown();
-                candidatos.addAll(achados);
-            }
-        }
-        if (candidatos.isEmpty()) {
-            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: nenhuma porta aberta (adbd morto ou ainda subindo)";
-            return;
-        }
-        status = "enxame: " + candidatos.size() + " farejadores farejando (sonda CNXN v1.35)...";
 
-        // SONDA CNXN: manda um frame ADB real; adbd responde (CNXN ou AUTH), o resto do mundo fica mudo
-        final int[] portaVencedora = {0};
-        final String[] hostVencedor = {"127.0.0.1"};
-        ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
-        List<Future<?>> pf = new ArrayList<>();
-        for (final int cand : candidatos) {
-            pf.add(px.submit(() -> {
-                Socket probe = null;
-                try {
-                    probe = new Socket();
-                    try {
-                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 400);
-                    } catch (Exception e1) {
-                        String hw = ipWifi();
-                        if (hw == null) throw e1;
-                        probe = new Socket();
-                        probe.connect(new InetSocketAddress(hw, cand), 400);
-                        hostVencedor[0] = hw;
-                    }
-                    probe.setSoTimeout(9000);
-                    OutputStream po = probe.getOutputStream();
-                    po.write(frameCnxn());
-                    po.flush();
-                    InputStream si = probe.getInputStream();
-                    byte[] hdr = new byte[24];
-                    int got = 0;
-                    while (got < 24) {
-                        int n = si.read(hdr, got, 24 - got);
-                        if (n < 0) break;
-                        got += n;
-                    }
-                    if (got == 24 && respostaEAdbd(hdr) && portaVencedora[0] == 0) {
-                        portaVencedora[0] = cand;
-                    }
-                } catch (Exception ignored) {
-                } finally {
-                    try { if (probe != null) probe.close(); } catch (Exception ignored) {}
-                }
-            }));
-        }
-        for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
-        px.shutdown();
-
-        if (portaVencedora[0] == 0) {
-            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
-            status = "pipe: nenhum adbd respondeu CNXN/AUTH (fantasma? aguardando resgate 0→1)";
-            return;
-        }
-        pipeOk = true;
-        reativaDelay = 4000;
-        lastAdbPort = portaVencedora[0];
-
-        final Socket win = new Socket();
-        win.connect(new InetSocketAddress(hostVencedor[0], portaVencedora[0]), 1500);
-        win.setTcpNoDelay(true);
-        win.setSoTimeout(0);
-        status = "tubo ADB VALIDADO (" + hostVencedor[0] + ":" + win.getPort() + ")";
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
-        final InputStream ai = win.getInputStream();
-        pipeOut = win.getOutputStream();
-
-        new Thread(() -> {
-            try {
-                Thread.sleep(20000);
-                java.lang.Process pa = Runtime.getRuntime().exec(new String[]{"setprop", "persist.adb.tcp.port", "5555"});
-                int ra = pa.waitFor();
-                java.lang.Process pb = Runtime.getRuntime().exec(new String[]{"setprop", "service.adb.tcp.port", "5555"});
-                int rb = pb.waitFor();
-                if (ra != 0 || rb != 0) {
-                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + ra + "}");
-                    return;
-                }
-                java.lang.Process pc = Runtime.getRuntime().exec(new String[]{"stop", "adbd"});
-                int rc = pc.waitFor();
-                Thread.sleep(1000);
-                java.lang.Process pd = Runtime.getRuntime().exec(new String[]{"start", "adbd"});
-                int rd = pd.waitFor();
-                if (rc == 0 && rd == 0) {
-                    status = "adbd migrado para 5555 persistente";
-                    send("{\"type\":\"pipe\",\"status\":\"persist_5555\"}");
-                } else {
-                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + rc + "}");
-                }
-            } catch (Exception ex) { send("{\"type\":\"pipe\",\"status\":\"persist_falhou\"}"); }
-        }).start();
-
-        final long t0 = System.currentTimeMillis();
-        byte[] buf = new byte[16384];
-        try {
-            int n;
-            while ((n = ai.read(buf)) > 0) {
-                if (ws != null) ws.send(Arrays.copyOf(buf, n));
-            }
-            status = "tubo encerrou após " + ((System.currentTimeMillis() - t0) / 1000) + "s — adbd fechou? doze? rede?";
-        } finally {
-            pipeOut = null;
-            try { win.close(); } catch (Exception ignored) {}
-            reativaDelay = Math.min(30000, reativaDelay * 2);
-            status = "reativando tubo em " + (reativaDelay / 1000) + "s (backoff)...";
-            new Thread(() -> {
-                try { Thread.sleep(reativaDelay); } catch (InterruptedException ignored) {}
-                try {
-                    if (temWifi() && !piping) iniciarPipe(0);
-                } catch (Exception e) {
-                    status = "reativar: " + e;
-                }
-            }).start();
-        }
-    }
 
     // v1.39: sonda em dois enderecos — o adbd da depuracao sem fio (Android 11+)
     // pode escutar no IP da interface Wi-Fi em vez do localhost.
-    String ipWifi() {
-        try {
-            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
-            while (nis.hasMoreElements()) {
-                java.net.NetworkInterface ni = nis.nextElement();
-                if (!ni.isUp() || ni.isLoopback() || ni.isPointToPoint()) continue;
-                String nm = ni.getName();
-                if (!nm.startsWith("wlan") && !nm.startsWith("eth")) continue;
-                java.util.Enumeration<java.net.InetAddress> ads = ni.getInetAddresses();
-                while (ads.hasMoreElements()) {
-                    java.net.InetAddress a = ads.nextElement();
-                    if (a instanceof java.net.Inet4Address && !a.isLoopbackAddress())
-                        return a.getHostAddress();
-                }
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
 
-    static int[] faixaPortas() {
-        try {
-            BufferedReader r = new BufferedReader(new FileReader("/proc/sys/net/ipv4/ip_local_port_range"));
-            String[] partes = r.readLine().trim().split("\\s+");
-            r.close();
-            return new int[]{Integer.parseInt(partes[0]), Integer.parseInt(partes[1])};
-        } catch (Exception e) {
-            return new int[]{32768, 60999};
-        }
-    }
 
-    String varrerPortasJson() {
-        final int[] faixa = faixaPortas();
-        final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
-        ExecutorService ex = Executors.newFixedThreadPool(120);
-        List<Future<?>> fs = new ArrayList<>();
-        for (int p = faixa[0]; p <= faixa[1] && achados.size() < 12; p++) {
-            final int port = p;
-            fs.add(ex.submit(() -> {
-                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
-            }));
-        }
-        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-        ex.shutdown();
-        Collections.sort(achados);
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < Math.min(5, achados.size()); i++) {
-            if (i > 0) sb.append(",");
-            sb.append(achados.get(i));
-        }
-        return sb.append("]").toString();
-    }
+
+
+
 
     void instalarPorUrl(String url) {
         new Thread(() -> {
@@ -772,9 +396,9 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.40.1"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.0"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
-            try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
+            
             try {
                 lastBatt = pct; lastAdb = adb; lastDataMb = free;
                 java.util.regex.Matcher mm = java.util.regex.Pattern.compile("(\\d+)").matcher(memAv);
@@ -786,24 +410,7 @@ public class SinoService extends Service {
         } catch (Exception e) { status = "tel: " + e; }
     }
 
-    void sendScan() {
-        final Set<Integer> open = Collections.synchronizedSet(new TreeSet<Integer>());
-        ExecutorService ex = Executors.newFixedThreadPool(150);
-        List<Future<?>> fs = new ArrayList<>();
-        for (int p = 30000; p <= 50000 && open.size() < 6; p++) {
-            final int port = p;
-            fs.add(ex.submit(() -> {
-                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 150); s.close(); open.add(port); } catch (Exception ignored) {}
-            }));
-        }
-        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-        ex.shutdown();
-        try {
-            JSONArray a = new JSONArray();
-            for (int p : open) a.put(p);
-            send(new JSONObject().put("type", "scan").put("id", Prefs.id(this)).put("ports", a).toString());
-        } catch (Exception e) { status = "scan: " + e; }
-    }
+
 
 
 
@@ -812,248 +419,25 @@ public class SinoService extends Service {
     // Frente: mini-adbd (ja existente). Fundo: conexao PROPRIA no adbd real,
     // autenticada com a chave privada da clinica (asset adbkey, ja autorizada
     // no aparelho). Sessoes espelhadas: shell da clinica roda como uid=2000.
-    void iniciarProxyAdbd() {
-        new Thread(() -> {
-            try {
-                miniAdb = true;
-                proxyOn = false;
-                proxyMap.clear(); proxyRev.clear(); proxyAdbdId.clear(); proxyMiniRemote.clear();
-                proxyRealNext = 1;
-                synchronized (miniBuf) { miniBuf.reset(); }
-                status = "proxy: carregando chave e procurando adbd...";
-                proxyKey = carregarChaveProxy();
-                if (proxyKey == null) {
-                    send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"adbd\":true}");
-                    status = "proxy: SEM chave asset — cai no mini-adbd puro";
-                    return;
-                }
-                java.util.List<String> cands = sweepCandidatos();
-                boolean ok = false;
-                int tent = 0;
-                for (String hp : cands) {
-                    if (tent++ >= 8) break;
-                    String[] H = hp.split(":");
-                    if (tentarHandshake(H[0], Integer.parseInt(H[1]))) { ok = true; break; }
-                }
-                if (!ok) {
-                    status = "proxy: adbd nao encontrado/autenticado — ligue a depuracao sem fio";
-                    send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
-                    return;
-                }
-                proxyOn = true;
-                send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"proxy\":true}");
-                status = "proxy ADB autenticado NO AR — shell da clinica = uid=2000 (adbd real)";
-            } catch (Exception e) {
-                status = "proxy: " + e;
-                send("{\"type\":\"pipe\",\"status\":\"erro\"}");
-            }
-        }).start();
-    }
 
-    java.security.PrivateKey carregarChaveProxy() {
-        try {
-            java.io.InputStream in = getAssets().open("adbkey");
-            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
-            byte[] b = new byte[4096];
-            int n;
-            while ((n = in.read(b)) > 0) bo.write(b, 0, n);
-            in.close();
-            String pem2 = bo.toString("UTF-8");
-            pem2 = pem2.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-                       .replaceAll("\\s", "");
-            byte[] der = android.util.Base64.decode(pem2, android.util.Base64.DEFAULT);
-            return java.security.KeyFactory.getInstance("RSA")
-                    .generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(der));
-        } catch (Exception e) { return null; }
-    }
 
-    java.util.List<String> sweepCandidatos() {
-        java.util.List<String> out = new java.util.ArrayList<>();
-        String[] files = {"/proc/net/tcp", "/proc/net/tcp6"};
-        for (String f : files) {
-            try {
-                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
-                String l;
-                r.readLine();
-                while ((l = r.readLine()) != null) {
-                    try {
-                        String[] p = l.trim().split("\\s+");
-                        if (p.length < 4 || !p[3].equals("0A")) continue;
-                        String[] hap = p[1].split(":");
-                        int port = Integer.parseInt(hap[1], 16);
-                        String host = decodeHexIp(hap[0]);
-                        if (host == null || port <= 0) continue;
-                        if (host.equals("0.0.0.0")) host = "127.0.0.1";
-                        String hp = host + ":" + port;
-                        if (!out.contains(hp)) out.add(hp);
-                    } catch (Exception ignored) {}
-                }
-                r.close();
-            } catch (Exception ignored) {}
-        }
-        return out;
-    }
 
-    String decodeHexIp(String hex) {
-        try {
-            if (hex.length() == 8) {
-                long v = Long.parseLong(hex, 16);
-                return ((v >> 0) & 0xff) + "." + ((v >> 8) & 0xff) + "." + ((v >> 16) & 0xff) + "." + ((v >> 24) & 0xff);
-            }
-            if (hex.length() == 32 && hex.startsWith("00000000000000000000FFFF")) {
-                long v = Long.parseLong(hex.substring(24), 16);
-                return ((v >> 0) & 0xff) + "." + ((v >> 8) & 0xff) + "." + ((v >> 16) & 0xff) + "." + ((v >> 24) & 0xff);
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
 
-    boolean tentarHandshake(String host, int port) {
-        java.net.Socket s = null;
-        try {
-            s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress(host, port), 900);
-            s.setSoTimeout(6000);
-            s.setTcpNoDelay(true);
-            proxySock = s;
-            proxyOut = s.getOutputStream();
-            realSend(A_CNXN, A_VERSION, ADB_MAX, "host::".getBytes("UTF-8"));
-            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-            byte[] tmp = new byte[8192];
-            long t0 = System.currentTimeMillis();
-            while (System.currentTimeMillis() - t0 < 8000) {
-                int n = s.getInputStream().read(tmp);
-                if (n < 0) return false;
-                buf.write(tmp, 0, n);
-                byte[] b = buf.toByteArray();
-                int off = 0;
-                boolean progress = false;
-                while (b.length - off >= 24) {
-                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
-                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
-                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) return false;
-                    if (b.length - off < 24 + len) break;
-                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
-                    off += 24 + len;
-                    if (cmd == A_AUTH && a0 == 1) {
-                        java.security.Signature sig = java.security.Signature.getInstance("SHA512withRSA");
-                        sig.initSign(proxyKey);
-                        sig.update(payload);
-                        realSend(A_AUTH, 2, 0, sig.sign());
-                        progress = true;
-                    } else if (cmd == A_CNXN) {
-                        s.setSoTimeout(0);
-                        new Thread(this::proxyRealReader).start();
-                        return true;
-                    } else if (cmd == A_CLSE) {
-                        return false;
-                    }
-                }
-                buf.reset();
-                buf.write(b, off, b.length - off);
-                if (!progress && off == 0) break;
-            }
-            return false;
-        } catch (Exception e) {
-            try { if (s != null) s.close(); } catch (Exception ignored) {}
-            return false;
-        }
-    }
 
-    synchronized void realSend(int cmd, int a0, int a1, byte[] payload) {
-        try {
-            byte[] pl = payload == null ? new byte[0] : payload;
-            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            int chk = 0;
-            for (byte c : pl) chk += (c & 0xff);
-            h.putInt(cmd).putInt(a0).putInt(a1).putInt(pl.length).putInt(chk).putInt(cmd ^ 0xffffffff);
-            proxyOut.write(h.array());
-            proxyOut.write(pl);
-            proxyOut.flush();
-        } catch (Exception e) { proxyOn = false; status = "proxy send: " + e; }
-    }
 
-    void proxyRealReader() {
-        try {
-            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-            byte[] tmp = new byte[16384];
-            int n;
-            while (proxyOn && (n = proxySock.getInputStream().read(tmp)) > 0) {
-                buf.write(tmp, 0, n);
-                byte[] b = buf.toByteArray();
-                int off = 0;
-                while (b.length - off >= 24) {
-                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
-                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
-                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) { off++; continue; }
-                    if (b.length - off < 24 + len) break;
-                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
-                    off += 24 + len;
-                    if (cmd == A_OKAY) {
-                        proxyAdbdId.put(a1, a0);
-                        Integer miniLid = proxyRev.get(a1);
-                        if (miniLid != null) {
-                            Integer mrem = proxyMiniRemote.get(miniLid);
-                            miniAdbSend(A_OKAY, miniLid, mrem == null ? 0 : mrem, null);
-                        }
-                    } else if (cmd == A_WRTE) {
-                        Integer miniLid = proxyRev.get(a1);
-                        if (miniLid != null) {
-                            Integer mrem = proxyMiniRemote.get(miniLid);
-                            miniAdbSend(A_WRTE, miniLid, mrem == null ? 0 : mrem, payload);
-                            realSend(A_OKAY, a1, a0, null);
-                        } else {
-                            realSend(A_CLSE, a1, a0, null);
-                        }
-                    } else if (cmd == A_CLSE) {
-                        Integer miniLid = proxyRev.remove(a1);
-                        proxyMap.remove(miniLid);
-                        proxyMiniRemote.remove(miniLid);
-                        proxyAdbdId.remove(a1);
-                        if (miniLid != null) {
-                            Integer mrem = proxyMiniRemote.get(miniLid);
-                            miniAdbSend(A_CLSE, miniLid, mrem == null ? 0 : mrem, null);
-                        }
-                    }
-                }
-                buf.reset();
-                buf.write(b, off, b.length - off);
-            }
-        } catch (Exception e) { proxyOn = false; status = "proxy reader: " + e; }
-    }
 
-    synchronized void proxyOpen(int miniLid, String svc) {
-        int rid = ++proxyRealNext;
-        proxyMap.put(miniLid, rid);
-        proxyRev.put(rid, miniLid);
-        try { realSend(A_OPEN, rid, 0, svc.getBytes("UTF-8")); }
-        catch (Exception e) { proxyOn = false; }
-    }
 
-    void proxyWrite(int miniLid, byte[] payload) {
-        Integer rid = proxyMap.get(miniLid);
-        Integer adbd = rid == null ? null : proxyAdbdId.get(rid);
-        if (rid == null || adbd == null) {
-            Integer mrem = proxyMiniRemote.get(miniLid);
-            miniAdbSend(A_CLSE, miniLid, mrem == null ? 0 : mrem, null);
-            return;
-        }
-        realSend(A_WRTE, rid, adbd, payload);
-        Integer mrem = proxyMiniRemote.get(miniLid);
-        miniAdbSend(A_OKAY, miniLid, mrem == null ? 0 : mrem, null);
-    }
 
-    void proxyClose(int miniLid) {
-        Integer rid = proxyMap.remove(miniLid);
-        Integer mrem = proxyMiniRemote.remove(miniLid);
-        if (rid != null) {
-            proxyRev.remove(rid);
-            Integer adbd = proxyAdbdId.remove(rid);
-            realSend(A_CLSE, rid, adbd == null ? 0 : adbd, null);
-        }
-    }
+
+
+
+
+
+
+
+
+
+
 
     // v1.38: mini-adbd. Implementa o protocolo ADB (CNXN/OPEN/OKAY/WRTE/CLSE) em
     // processo proprio: o cliente adb da clinica conecta como sempre (via relay),
@@ -1065,7 +449,7 @@ public class SinoService extends Service {
         miniProcs.clear();
         synchronized (miniBuf) { miniBuf.reset(); }
         send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"adbd\":true}");
-        status = "mini-adbd no ar — conecte o adb da clinica (sem depuracao sem fio)";
+        status = "CORA Mini v2.0 no ar — mini-adb (4G/5G), sem Wi-Fi, sem depuracao";
     }
 
     void miniAdbFeed(byte[] d) {
@@ -1099,7 +483,7 @@ public class SinoService extends Service {
                 status = "mini-adbd: handshake CNXN ok (sem AUTH, modo inseguro)";
             } else if (cmd == A_OPEN) {
                 String svc2 = new String(payload, "UTF-8");
-                if (proxyOn) { proxyMiniRemote.put(a0, a1); proxyOpen(a0, svc2); return; }
+                
                 if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
                     java.lang.Process p = svc2.startsWith("exec:")
                         ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
@@ -1127,7 +511,7 @@ public class SinoService extends Service {
                     miniAdbSend(A_CLSE, 0, a0, null);
                 }
             } else if (cmd == A_WRTE) {
-                if (proxyOn) { proxyWrite(a0, payload); return; }
+                
                 java.lang.Process p;
                 synchronized (miniProcs) { p = miniProcs.get(a0); }
                 if (p != null) {
@@ -1142,7 +526,7 @@ public class SinoService extends Service {
                     miniAdbSend(A_CLSE, a0, a1, null);
                 }
             } else if (cmd == A_CLSE) {
-                if (proxyOn) { proxyClose(a0); return; }
+                
                 java.lang.Process p;
                 synchronized (miniProcs) { p = miniProcs.remove(a0); }
                 if (p != null) try { p.destroy(); } catch (Exception ignored) {}
