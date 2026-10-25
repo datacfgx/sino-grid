@@ -13,7 +13,7 @@ public class MainActivity extends Activity {
     TextView status, battV, memV, dataV, aoVivo, adbdV;
     View barB, barM, barD;
     TextView chipAdb;
-    EditText host, devid;
+    
     Handler h = new Handler();
     int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
     GradientDrawable r(int color, float rad) {
@@ -203,44 +203,57 @@ public class MainActivity extends Activity {
         r.addView(status, st);
 
         // config discreta
-        TextView cfg = new TextView(this);
-        cfg.setText("configuração");
-        cfg.setTextSize(10f);
-        cfg.setTextColor(0xFF5A6078);
-        LinearLayout.LayoutParams cg = new LinearLayout.LayoutParams(-1, -2);
-        cg.topMargin = dp(14);
-        r.addView(cfg, cg);
-        TextView ident = new TextView(this);
-        ident.setText("\uD83D\uDCF1 " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " \u00B7 sala " + Prefs.id(this));
-        ident.setTextSize(12f);
-        ident.setTextColor(0xFF50FF8C);
-        LinearLayout.LayoutParams idp = new LinearLayout.LayoutParams(-1, -2);
-        idp.topMargin = dp(6);
-        r.addView(ident, idp);
-        host = new EditText(this);
-        host.setText(Prefs.host(this));
-        host.setTextColor(0xFFC8CCDC);
-        host.setTextSize(13f);
-        host.setHintTextColor(0xFF5A6078);
-        r.addView(host);
-        devid = new EditText(this);
-        devid.setText(Prefs.id(this));
-        devid.setTextColor(0xFFC8CCDC);
-        devid.setTextSize(13f);
-        r.addView(devid);
-        Button salvar = new Button(this);
-        salvar.setText("SALVAR + RECONECTAR");
-        salvar.setTextColor(0xFFC8CCDC);
-        salvar.setBackground(r(0xFF1A1D28, 10));
-        LinearLayout.LayoutParams svlp = new LinearLayout.LayoutParams(-1, dp(40));
-        svlp.topMargin = dp(6);
-        salvar.setOnClickListener(v -> {
-            Prefs.set(this, host.getText().toString().trim(), devid.getText().toString().trim());
-            SinoService.status = "salvo \u00B7 reconectando...";
+        // v2.2: etiqueta de patrimônio — identidade da família (config foi pro DNA do app)
+        LinearLayout tag = new LinearLayout(this);
+        tag.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable tagBg = new GradientDrawable();
+        tagBg.setColor(0xFF0D1020);
+        tagBg.setCornerRadius(dp(8));
+        tagBg.setStroke(dp(1), 0xFF3A4160, dp(4), dp(4));
+        tag.setBackground(tagBg);
+        tag.setPadding(dp(10), dp(8), dp(10), dp(10));
+        LinearLayout.LayoutParams tagLp = new LinearLayout.LayoutParams(-1, -2);
+        tagLp.topMargin = dp(12);
+        tag.setLayoutParams(tagLp);
+        LinearLayout r1 = new LinearLayout(this);
+        TextView k1 = new TextView(this); k1.setText("PATRIMÔNIO"); k1.setTextSize(7.5f); k1.setTextColor(0xFF5A6078); k1.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView v1 = new TextView(this); v1.setText(Prefs.id(this)); v1.setTextSize(11f); v1.setTextColor(0xFF50FF8C); v1.setTypeface(android.graphics.Typeface.MONOSPACE);
+        r1.addView(k1, new LinearLayout.LayoutParams(0, -2, 1f)); r1.addView(v1);
+        LinearLayout r2 = new LinearLayout(this);
+        TextView k2 = new TextView(this); k2.setText("MODELO"); k2.setTextSize(7.5f); k2.setTextColor(0xFF5A6078); k2.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView v2 = new TextView(this); v2.setText(android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL); v2.setTextSize(10f); v2.setTextColor(0xFFF2F3F7);
+        r2.addView(k2, new LinearLayout.LayoutParams(0, -2, 1f)); r2.addView(v2);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, -2); rlp.topMargin = dp(4);
+        r2.setLayoutParams(rlp);
+        LinearLayout barcode = new LinearLayout(this);
+        barcode.setOrientation(LinearLayout.HORIZONTAL);
+        int[] larg = {3,1,2,1,1,3,1,2,4,1,2,1,3,1,1,2,1,3,2,1,1,4,1,2};
+        for (int w : larg) {
+            View bv = new View(this);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(w), dp(14));
+            blp.rightMargin = dp(1);
+            bv.setLayoutParams(blp);
+            bv.setBackgroundColor(0xFF50FF8C);
+            barcode.addView(bv);
+        }
+        LinearLayout.LayoutParams bcp = new LinearLayout.LayoutParams(-1, -2); bcp.topMargin = dp(7);
+        barcode.setLayoutParams(bcp);
+        tag.addView(r1); tag.addView(r2); tag.addView(barcode);
+        r.addView(tag);
+        Button recon = new Button(this);
+        recon.setText("\uD83D\uDD01 RECONECTAR");
+        recon.setTextColor(0xFF9AA0B4);
+        GradientDrawable rebg = r(0x00000000, 10);
+        rebg.setStroke(dp(1), 0xFF5A6078);
+        recon.setBackground(rebg);
+        LinearLayout.LayoutParams rclp = new LinearLayout.LayoutParams(-1, dp(40));
+        rclp.topMargin = dp(8);
+        recon.setOnClickListener(v -> {
+            SinoService.status = "reconectando...";
             if (SinoService.ws != null) SinoService.ws.close();
             else startService(new Intent(this, SinoService.class));
         });
-        r.addView(salvar, svlp);
+        r.addView(recon, rclp);
 
         // footer
         LinearLayout foot = new LinearLayout(this);
@@ -251,7 +264,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("v2.1 · " + android.os.Build.MODEL);
+        f2.setText("v2.2 · " + android.os.Build.MODEL);
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
