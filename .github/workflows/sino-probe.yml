@@ -5,9 +5,11 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: anuncia g52 no KV e le de volta
+      - name: pulso do fantasma
         run: |
-          INFO='{"id":"g52","model":"motorola moto g52","android":"13","ver":"2.4.1"}'
-          E=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$INFO")
-          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/announce?info=$E"; echo
-          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"; echo
+          echo "== peek sala g52 (peers conectados) =="
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/peek?id=g52"
+          echo
+          echo "== registry (ultimo anuncio) =="
+          curl -s -m 20 "https://sino-relay.worldeffects752.workers.dev/registry"
+          echo
