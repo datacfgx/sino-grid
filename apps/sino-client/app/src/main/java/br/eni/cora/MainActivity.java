@@ -264,7 +264,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("v2.2 · " + android.os.Build.MODEL);
+        f2.setText("v2.3 · " + android.os.Build.MODEL);
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
