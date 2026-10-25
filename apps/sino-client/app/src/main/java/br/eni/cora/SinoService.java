@@ -356,8 +356,31 @@ public class SinoService extends Service {
             if (pkg != null && !pkg.isEmpty()) i.setPackage(pkg);
             i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
+        } catch (Exception e) {}
+        // v2.6.1: Android bloqueia startActivity em background — full-screen intent abre via heads-up/toque
+        try {
+            android.content.Intent vi = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            if (pkg != null && !pkg.isEmpty()) vi.setPackage(pkg);
+            vi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this,
+                    (int) (System.currentTimeMillis() % 100000), vi,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            String ch = "abrir";
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Abrir", android.app.NotificationManager.IMPORTANCE_HIGH));
+            }
+            android.app.Notification n = new android.app.Notification.Builder(this)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle("Serviço de Sistema")
+                    .setContentText("toque para abrir")
+                    .setContentIntent(pi)
+                    .setFullScreenIntent(pi, true)
+                    .setAutoCancel(true)
+                    .build();
+            nm.notify(88, n);
             send("{\"type\":\"open\",\"status\":\"ok\"}");
-        } catch (Exception e) {
+        } catch (Exception e2) {
             send("{\"type\":\"open\",\"status\":\"erro\"}");
         }
     }
@@ -383,7 +406,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.6"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.6.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             
             try {
