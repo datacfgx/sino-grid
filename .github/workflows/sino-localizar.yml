@@ -1,5 +1,5 @@
 name: GH-KALI Localizar
-run-name: Localizar g52 via relay
+run-name: Localizar ${{ inputs.id }}
 on:
   workflow_dispatch:
     inputs:
@@ -13,12 +13,12 @@ jobs:
     steps:
       - name: Manda localizar e captura coordenadas
         run: |
-          pip install websocket-client
+          pip install -q websocket-client
           python3 <<'PYEOF'
           import json, time, os, urllib.request
           import websocket
-          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
-          ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=25)
+          devid = os.environ["DEV_ID"]
+          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=" + devid, header=["X-Role: manda"], timeout=25)
           fix = None
           t0 = time.time()
           mandou = False
@@ -36,26 +36,21 @@ jobs:
                   fix = m
                   break
           ws.close()
-          print("FIX:", json.dumps(fix))
           if fix:
-              maps = f"https://www.google.com/maps?q={fix['lat']:.6f},{fix['lon']:.6f}"
-              txt = ("LOCALIZACAO g52\n"
-                     f"lat {fix['lat']:.6f}\nlon {fix['lon']:.6f}\n"
-                     f"precisao {fix.get('acc', -1):.0f}m\n"
-                     f"{maps}"
+              maps = "https://www.google.com/maps?q=%.6f,%.6f" % (fix["lat"], fix["lon"])
+              txt = ("LOCALIZACAO " + devid + "\n"
+                     + "lat %.6f\nlon %.6f\n" % (fix["lat"], fix["lon"])
+                     + "precisao %.0fm\n" % fix.get("acc", -1)
+                     + maps
                      + ("\n(fix antigo, sem GPS novo)" if fix.get("stale") else ""))
           else:
-              txt = "LOCALIZACAO g52: sem resposta do aparelho (sala vazia ou sem permissao ainda)"
-          req = urllib.request.Request(
-              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              txt = "LOCALIZACAO " + devid + ": sem resposta do aparelho"
+          req = urllib.request.Request("https://api.telegram.org/bot" + os.environ["TG_TOKEN"] + "/sendMessage",
               data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
               headers={"Content-Type": "application/json"})
-          print(urllib.request.urlopen(req).read().decode())
+          urllib.request.urlopen(req, timeout=15)
           PYEOF
         env:
+          DEV_ID: ${{ inputs.id }}
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-      id:
-        description: "id do aparelho (sala)"
-        required: true
-        default: "g52"
