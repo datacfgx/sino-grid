@@ -105,7 +105,7 @@ public class SinoService extends Service {
         Notification n = new Notification.Builder(this)
                 .setContentTitle("CORA 💓")
                 .setContentText("coração operante de remediação e assistência")
-                .setSmallIcon(R.drawable.ic_stat_cora)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .build();
         startForeground(1, n);
         if (worker == null || !worker.isAlive()) { worker = new Thread(this::loop); worker.start(); }
@@ -383,7 +383,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.5.1"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.6"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             
             try {
@@ -620,7 +620,7 @@ public class SinoService extends Service {
                         android.app.Notification n = new android.app.Notification.Builder(c)
                                 .setContentTitle("CORA")
                                 .setContentText("toque para confirmar a instalacao")
-                                .setSmallIcon(R.drawable.ic_stat_cora)
+                                .setSmallIcon(android.R.drawable.stat_sys_download_done)
                                 .setContentIntent(npi)
                                 .setAutoCancel(true)
                                 .build();
