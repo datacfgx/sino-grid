@@ -210,6 +210,13 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cg = new LinearLayout.LayoutParams(-1, -2);
         cg.topMargin = dp(14);
         r.addView(cfg, cg);
+        TextView ident = new TextView(this);
+        ident.setText("\uD83D\uDCF1 " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " \u00B7 sala " + Prefs.id(this));
+        ident.setTextSize(12f);
+        ident.setTextColor(0xFF50FF8C);
+        LinearLayout.LayoutParams idp = new LinearLayout.LayoutParams(-1, -2);
+        idp.topMargin = dp(6);
+        r.addView(ident, idp);
         host = new EditText(this);
         host.setText(Prefs.host(this));
         host.setTextColor(0xFFC8CCDC);
@@ -222,14 +229,16 @@ public class MainActivity extends Activity {
         devid.setTextSize(13f);
         r.addView(devid);
         Button salvar = new Button(this);
-        salvar.setText("SALVAR + INICIAR TÚNEL");
+        salvar.setText("SALVAR + RECONECTAR");
         salvar.setTextColor(0xFFC8CCDC);
         salvar.setBackground(r(0xFF1A1D28, 10));
         LinearLayout.LayoutParams svlp = new LinearLayout.LayoutParams(-1, dp(40));
         svlp.topMargin = dp(6);
         salvar.setOnClickListener(v -> {
             Prefs.set(this, host.getText().toString().trim(), devid.getText().toString().trim());
-            startService(new Intent(this, SinoService.class));
+            SinoService.status = "salvo \u00B7 reconectando...";
+            if (SinoService.ws != null) SinoService.ws.close();
+            else startService(new Intent(this, SinoService.class));
         });
         r.addView(salvar, svlp);
 
@@ -242,7 +251,7 @@ public class MainActivity extends Activity {
         f1.setTextSize(10f);
         f1.setTextColor(0xFF5A6078);
         TextView f2 = new TextView(this);
-        f2.setText("CORA Mini · v2.0");
+        f2.setText("v2.1 · " + android.os.Build.MODEL);
         f2.setTextSize(10f);
         f2.setTextColor(0xFF5A6078);
         foot.addView(f1, new LinearLayout.LayoutParams(0, -2, 1f));
