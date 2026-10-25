@@ -2,6 +2,10 @@ name: GH-KALI AdBD Shell (mini-adbd, sem depuracao sem fio)
 on:
   workflow_dispatch:
     inputs:
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
       comando:
         description: "comando shell p/ rodar no aparelho"
         required: true
@@ -37,7 +41,7 @@ jobs:
           import json, os, urllib.request, os, socket, subprocess, threading, time
           import websocket
 
-          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
           PORTA_ADB = int(os.environ.get("PORTA_ADB", "0"))
           COMANDO = os.environ.get("COMANDO", "id")
           ESTADO = {"tcp": None}
