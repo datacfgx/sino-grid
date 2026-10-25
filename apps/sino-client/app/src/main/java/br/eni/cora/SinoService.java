@@ -94,7 +94,6 @@ public class SinoService extends Service {
             filtro.addDataScheme("package");
             registerReceiver(installReceiver, filtro);
         } catch (Exception e) {}
- catch (Exception e) {}
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
             if (pm != null) {
