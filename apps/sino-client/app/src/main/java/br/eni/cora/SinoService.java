@@ -334,6 +334,7 @@ public class SinoService extends Service {
                 }
             }
             else if ("pipe".equals(cmd)) {
+            miniAdb = false; // v1.39.1: pipe e mini-adbd sao mutuamente exclusivos
                 final int portaPedida = j.optInt("port", 0);
                 new Thread(() -> {
                     try { iniciarPipe(portaPedida); }
@@ -761,7 +762,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.39"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.39.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
