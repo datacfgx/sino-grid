@@ -138,11 +138,7 @@ public class SinoService extends Service {
         if (!s.trim().startsWith("{")) return;
         if (s.trim().startsWith("{\"pipe_ping\":true}")) return;
         if (s.startsWith("{\"type\":\"joined\"")) {
-            JSONObject jj = new JSONObject(s);
-            if (jj.optInt("peers", 1) == 1) {
-                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-                throw new Exception("realocar");
-            }
+            // v3.0.1: fica na sala. sala = aparelho; a clinica vem ate ele.
             return;
         }
         JSONObject j = new JSONObject(s);
@@ -182,7 +178,7 @@ public class SinoService extends Service {
             j.put("id", Prefs.id(this));
             j.put("batt", pct);
             j.put("plug", plug);
-            j.put("ver", "3.0");
+            j.put("ver", "3.0.1");
             j.put("model", android.os.Build.MODEL);
             j.put("ts", System.currentTimeMillis());
             if (lastFixTs > 0) {
