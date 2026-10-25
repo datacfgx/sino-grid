@@ -2,6 +2,11 @@ name: GH-KALI Localizar
 run-name: Localizar g52 via relay
 on:
   workflow_dispatch:
+    inputs:
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
 jobs:
   localizar:
     runs-on: ubuntu-latest
