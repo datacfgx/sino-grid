@@ -1,68 +1,43 @@
 name: GH-KALI Abre URL
-run-name: Abre ${{ inputs.url }} no g52
+run-name: Abre ${{ inputs.url }} via ponte
 on:
   workflow_dispatch:
     inputs:
-      id:
-        description: "id do aparelho (sala)"
-        required: true
-        default: "g52"
       url:
         description: "URL pra abrir no aparelho"
         required: true
         default: "https://www.google.com"
       pkg:
-        description: "Pacote alvo (ex: app.revanced.android.youtube) — vazio = handler padrao"
+        description: "Pacote alvo (opcional)"
         required: false
         default: ""
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
 jobs:
   abre:
     runs-on: ubuntu-latest
     steps:
-      - name: Manda open_url via relay
+      - name: Manda open_url via PONTE (worker-to-worker dentro da CF)
         run: |
-          pip install websocket-client
-          python3 <<'PYEOF'
-          import json, time, os, urllib.request
-          import websocket
-          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
-          alvo = os.environ["URL_ALVO"]
-          ok = False
-          for tent in range(8):
-              try:
-                  ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=20)
-                  t0 = time.time()
-                  while time.time() - t0 < 12:
-                      try:
-                          m = json.loads(ws.recv())
-                      except Exception:
-                          break
-                      if m.get("type") == "joined":
-                          if m.get("peers", 0) >= 2:
-                              payload = {"cmd": "open_url", "url": alvo}
-                              if os.environ.get("PKG_ALVO"):
-                                  payload["pkg"] = os.environ["PKG_ALVO"]
-                              ws.send(json.dumps(payload))
-                              ok = True
-                              break
-                  ws.close()
-                  if ok:
-                      break
-              except Exception:
-                  pass
-              time.sleep(2)
-          txt = f"NAVEGADOR: abrindo {alvo}" if ok else "NAVEGADOR: sala vazia, aparelho offline?"
-          if not ok:
-              print(txt)
-              import sys; sys.exit(1)
-          req = urllib.request.Request(
-              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
-              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
-              headers={"Content-Type": "application/json"})
+          BODY='{"cmd":"open_url","url":"${{ inputs.url }}"'
+          if [ -n "${{ inputs.pkg }}" ]; then BODY="$BODY, \"pkg\": \"${{ inputs.pkg }}\""; fi
+          BODY="$BODY}"
+          echo "body: $BODY"
+          R=$(curl -s -m 35 -X POST "https://sino-bridge.worldeffects752.workers.dev/cmd?id=${{ inputs.id }}&timeout=20000" -d "$BODY")
+          echo "ponte: $R"
+          python3 -c "
+          import json, os, urllib.request
+          r = json.loads('''$R''')
+          ok = r.get('status') == 'enviado'
+          txt = 'NAVEGADOR via ponte: ' + ('comando ENVIADO ao app (peers=%s)' % r.get('peers') if ok else 'FALHOU: ' + json.dumps(r))
+          req = urllib.request.Request('https://api.telegram.org/bot' + os.environ['TG_TOKEN'] + '/sendMessage',
+              data=json.dumps({'chat_id': os.environ['TG_CHAT'], 'text': txt}).encode(),
+              headers={'Content-Type': 'application/json'})
           urllib.request.urlopen(req, timeout=15)
-          PYEOF
+          import sys; sys.exit(0 if ok else 1)
+          "
         env:
-          URL_ALVO: ${{ inputs.url }}
-          PKG_ALVO: ${{ inputs.pkg }}
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
