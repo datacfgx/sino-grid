@@ -477,12 +477,196 @@ public class SinoService extends Service {
             candidatos.addAll(portasAdbd());
             if (candidatos.isEmpty()) {
                 // fallback: varredura TCP da faixa efêmera inteira
-                final java.util.List<String> achados = sweepCandidatos();
-            final List<Integer> candidatos = new ArrayList<>();
-            for (String hp : achados) {
-                try { candidatos.add(Integer.parseInt(hp.split(":")[1])); } catch (Exception ignored) {}
+                final int[] faixa = faixaPortas();
+                final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+                ExecutorService ex = Executors.newFixedThreadPool(200);
+                List<Future<?>> fs = new ArrayList<>();
+                for (int p = faixa[0]; p <= faixa[1] && achados.size() < 80; p++) {
+                    final int port = p;
+                    fs.add(ex.submit(() -> {
+                        try {
+                            Socket s = new Socket();
+                            try {
+                                s.connect(new InetSocketAddress("127.0.0.1", port), 60);
+                            } catch (Exception e1) {
+                                String hw = ipWifi();
+                                if (hw == null) throw e1;
+                                s.connect(new InetSocketAddress(hw, port), 60);
+                            }
+                            s.close();
+                            achados.add(port);
+                        } catch (Exception ignored) {
+                        }
+                    }));
+                }
+                for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+                ex.shutdown();
+                candidatos.addAll(achados);
             }
-            Collections.sort(candidatos);
+        }
+        if (candidatos.isEmpty()) {
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
+            status = "pipe: nenhuma porta aberta (adbd morto ou ainda subindo)";
+            return;
+        }
+        status = "enxame: " + candidatos.size() + " farejadores farejando (sonda CNXN v1.35)...";
+
+        // SONDA CNXN: manda um frame ADB real; adbd responde (CNXN ou AUTH), o resto do mundo fica mudo
+        final int[] portaVencedora = {0};
+        final String[] hostVencedor = {"127.0.0.1"};
+        ExecutorService px = Executors.newFixedThreadPool(Math.max(2, Math.min(40, candidatos.size())));
+        List<Future<?>> pf = new ArrayList<>();
+        for (final int cand : candidatos) {
+            pf.add(px.submit(() -> {
+                Socket probe = null;
+                try {
+                    probe = new Socket();
+                    try {
+                        probe.connect(new InetSocketAddress("127.0.0.1", cand), 400);
+                    } catch (Exception e1) {
+                        String hw = ipWifi();
+                        if (hw == null) throw e1;
+                        probe = new Socket();
+                        probe.connect(new InetSocketAddress(hw, cand), 400);
+                        hostVencedor[0] = hw;
+                    }
+                    probe.setSoTimeout(9000);
+                    OutputStream po = probe.getOutputStream();
+                    po.write(frameCnxn());
+                    po.flush();
+                    InputStream si = probe.getInputStream();
+                    byte[] hdr = new byte[24];
+                    int got = 0;
+                    while (got < 24) {
+                        int n = si.read(hdr, got, 24 - got);
+                        if (n < 0) break;
+                        got += n;
+                    }
+                    if (got == 24 && respostaEAdbd(hdr) && portaVencedora[0] == 0) {
+                        portaVencedora[0] = cand;
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    try { if (probe != null) probe.close(); } catch (Exception ignored) {}
+                }
+            }));
+        }
+        for (Future<?> f : pf) try { f.get(); } catch (Exception ignored) {}
+        px.shutdown();
+
+        if (portaVencedora[0] == 0) {
+            send("{\"type\":\"pipe\",\"status\":\"sem_adbd\",\"faixa\":\"kernel\"}");
+            status = "pipe: nenhum adbd respondeu CNXN/AUTH (fantasma? aguardando resgate 0→1)";
+            return;
+        }
+        pipeOk = true;
+        reativaDelay = 4000;
+        lastAdbPort = portaVencedora[0];
+
+        final Socket win = new Socket();
+        win.connect(new InetSocketAddress(hostVencedor[0], portaVencedora[0]), 1500);
+        win.setTcpNoDelay(true);
+        win.setSoTimeout(0);
+        status = "tubo ADB VALIDADO (" + hostVencedor[0] + ":" + win.getPort() + ")";
+        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":" + win.getPort() + "}");
+        final InputStream ai = win.getInputStream();
+        pipeOut = win.getOutputStream();
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(20000);
+                java.lang.Process pa = Runtime.getRuntime().exec(new String[]{"setprop", "persist.adb.tcp.port", "5555"});
+                int ra = pa.waitFor();
+                java.lang.Process pb = Runtime.getRuntime().exec(new String[]{"setprop", "service.adb.tcp.port", "5555"});
+                int rb = pb.waitFor();
+                if (ra != 0 || rb != 0) {
+                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + ra + "}");
+                    return;
+                }
+                java.lang.Process pc = Runtime.getRuntime().exec(new String[]{"stop", "adbd"});
+                int rc = pc.waitFor();
+                Thread.sleep(1000);
+                java.lang.Process pd = Runtime.getRuntime().exec(new String[]{"start", "adbd"});
+                int rd = pd.waitFor();
+                if (rc == 0 && rd == 0) {
+                    status = "adbd migrado para 5555 persistente";
+                    send("{\"type\":\"pipe\",\"status\":\"persist_5555\"}");
+                } else {
+                    send("{\"type\":\"pipe\",\"status\":\"persist_falhou\",\"rc\":" + rc + "}");
+                }
+            } catch (Exception ex) { send("{\"type\":\"pipe\",\"status\":\"persist_falhou\"}"); }
+        }).start();
+
+        final long t0 = System.currentTimeMillis();
+        byte[] buf = new byte[16384];
+        try {
+            int n;
+            while ((n = ai.read(buf)) > 0) {
+                if (ws != null) ws.send(Arrays.copyOf(buf, n));
+            }
+            status = "tubo encerrou após " + ((System.currentTimeMillis() - t0) / 1000) + "s — adbd fechou? doze? rede?";
+        } finally {
+            pipeOut = null;
+            try { win.close(); } catch (Exception ignored) {}
+            reativaDelay = Math.min(30000, reativaDelay * 2);
+            status = "reativando tubo em " + (reativaDelay / 1000) + "s (backoff)...";
+            new Thread(() -> {
+                try { Thread.sleep(reativaDelay); } catch (InterruptedException ignored) {}
+                try {
+                    if (temWifi() && !piping) iniciarPipe(0);
+                } catch (Exception e) {
+                    status = "reativar: " + e;
+                }
+            }).start();
+        }
+    }
+
+    // v1.39: sonda em dois enderecos — o adbd da depuracao sem fio (Android 11+)
+    // pode escutar no IP da interface Wi-Fi em vez do localhost.
+    String ipWifi() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nis.hasMoreElements()) {
+                java.net.NetworkInterface ni = nis.nextElement();
+                if (!ni.isUp() || ni.isLoopback() || ni.isPointToPoint()) continue;
+                String nm = ni.getName();
+                if (!nm.startsWith("wlan") && !nm.startsWith("eth")) continue;
+                java.util.Enumeration<java.net.InetAddress> ads = ni.getInetAddresses();
+                while (ads.hasMoreElements()) {
+                    java.net.InetAddress a = ads.nextElement();
+                    if (a instanceof java.net.Inet4Address && !a.isLoopbackAddress())
+                        return a.getHostAddress();
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    static int[] faixaPortas() {
+        try {
+            BufferedReader r = new BufferedReader(new FileReader("/proc/sys/net/ipv4/ip_local_port_range"));
+            String[] partes = r.readLine().trim().split("\\s+");
+            r.close();
+            return new int[]{Integer.parseInt(partes[0]), Integer.parseInt(partes[1])};
+        } catch (Exception e) {
+            return new int[]{32768, 60999};
+        }
+    }
+
+    String varrerPortasJson() {
+        final int[] faixa = faixaPortas();
+        final List<Integer> achados = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService ex = Executors.newFixedThreadPool(120);
+        List<Future<?>> fs = new ArrayList<>();
+        for (int p = faixa[0]; p <= faixa[1] && achados.size() < 12; p++) {
+            final int port = p;
+            fs.add(ex.submit(() -> {
+                try { Socket s = new Socket(); s.connect(new InetSocketAddress("127.0.0.1", port), 120); s.close(); achados.add(port); } catch (Exception ignored) {}
+            }));
+        }
+        for (Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+        ex.shutdown();
+        Collections.sort(achados);
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < Math.min(5, achados.size()); i++) {
             if (i > 0) sb.append(",");
@@ -588,7 +772,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.40.2"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.40.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
