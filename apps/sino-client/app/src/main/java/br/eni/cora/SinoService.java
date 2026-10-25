@@ -1083,7 +1083,7 @@ public class SinoService extends Service {
                 status = "mini-adbd: handshake CNXN ok (sem AUTH, modo inseguro)";
             } else if (cmd == A_OPEN) {
                 String svc2 = new String(payload, "UTF-8");
-                if (proxyOn) { proxyOpen(a0, svc2); return; }
+                if (proxyOn) { proxyMiniRemote.put(a0, a1); proxyOpen(a0, svc2); return; }
                 if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
                     java.lang.Process p = svc2.startsWith("exec:")
                         ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
