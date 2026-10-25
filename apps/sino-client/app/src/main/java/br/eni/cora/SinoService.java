@@ -32,6 +32,15 @@ public class SinoService extends Service {
             A_SYNC = 0x434e5953, A_CNXN = 0x4e584e43, A_OPEN = 0x4e45504f,
             A_OKAY = 0x59414b4f, A_CLSE = 0x45534c43, A_WRTE = 0x45545257;
     public static volatile boolean miniAdb = false;
+    public static volatile boolean proxyOn = false;
+    java.net.Socket proxySock;
+    java.io.OutputStream proxyOut;
+    java.security.PrivateKey proxyKey;
+    int proxyRealNext = 1;
+    final java.util.HashMap<Integer, Integer> proxyMap = new java.util.HashMap<>();
+    final java.util.HashMap<Integer, Integer> proxyRev = new java.util.HashMap<>();
+    final java.util.HashMap<Integer, Integer> proxyAdbdId = new java.util.HashMap<>();
+    final java.util.HashMap<Integer, Integer> proxyMiniRemote = new java.util.HashMap<>();
     int miniNextId = 0;
     final java.util.HashMap<Integer, java.lang.Process> miniProcs = new java.util.HashMap<>();
     final java.io.ByteArrayOutputStream miniBuf = new java.io.ByteArrayOutputStream();
@@ -323,6 +332,7 @@ public class SinoService extends Service {
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
             else if ("localizar".equals(cmd)) localizar();
             else if ("adbd".equals(cmd)) iniciarMiniAdbd();
+            else if ("proxy".equals(cmd)) iniciarProxyAdbd();
             else if ("manter_wifi".equals(cmd)) {
                 try {
                     Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
@@ -334,7 +344,7 @@ public class SinoService extends Service {
                 }
             }
             else if ("pipe".equals(cmd)) {
-            miniAdb = false; // v1.39.1: pipe e mini-adbd sao mutuamente exclusivos
+            miniAdb = false; proxyOn = false; // v1.39.1: pipe desliga mini/proxy
                 final int portaPedida = j.optInt("port", 0);
                 new Thread(() -> {
                     try { iniciarPipe(portaPedida); }
@@ -762,7 +772,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.39.1"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.40"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
@@ -796,6 +806,238 @@ public class SinoService extends Service {
     }
 
 
+
+
+    // v1.40: proxy ADB autenticado (metodo Tailscale: identidade propria).
+    // Frente: mini-adbd (ja existente). Fundo: conexao PROPRIA no adbd real,
+    // autenticada com a chave privada da clinica (asset adbkey, ja autorizada
+    // no aparelho). Sessoes espelhadas: shell da clinica roda como uid=2000.
+    void iniciarProxyAdbd() {
+        new Thread(() -> {
+            try {
+                miniAdb = true;
+                proxyOn = false;
+                proxyMap.clear(); proxyRev.clear(); proxyAdbdId.clear(); proxyMiniRemote.clear();
+                proxyRealNext = 1;
+                synchronized (miniBuf) { miniBuf.reset(); }
+                status = "proxy: carregando chave e procurando adbd...";
+                proxyKey = carregarChaveProxy();
+                if (proxyKey == null) {
+                    send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"adbd\":true}");
+                    status = "proxy: SEM chave asset — cai no mini-adbd puro";
+                    return;
+                }
+                java.util.List<String> cands = sweepCandidatos();
+                boolean ok = false;
+                for (String hp : cands) {
+                    String[] H = hp.split(":");
+                    if (tentarHandshake(H[0], Integer.parseInt(H[1]))) { ok = true; break; }
+                }
+                if (!ok) {
+                    status = "proxy: adbd nao encontrado/autenticado — ligue a depuracao sem fio";
+                    send("{\"type\":\"pipe\",\"status\":\"sem_adbd\"}");
+                    return;
+                }
+                proxyOn = true;
+                send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"proxy\":true}");
+                status = "proxy ADB autenticado NO AR — shell da clinica = uid=2000 (adbd real)";
+            } catch (Exception e) {
+                status = "proxy: " + e;
+                send("{\"type\":\"pipe\",\"status\":\"erro\"}");
+            }
+        }).start();
+    }
+
+    java.security.PrivateKey carregarChaveProxy() {
+        try {
+            java.io.InputStream in = getAssets().open("adbkey");
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            byte[] b = new byte[4096];
+            int n;
+            while ((n = in.read(b)) > 0) bo.write(b, 0, n);
+            in.close();
+            String pem2 = bo.toString("UTF-8");
+            pem2 = pem2.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+                       .replaceAll("\\s", "");
+            byte[] der = android.util.Base64.decode(pem2, android.util.Base64.DEFAULT);
+            return java.security.KeyFactory.getInstance("RSA")
+                    .generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(der));
+        } catch (Exception e) { return null; }
+    }
+
+    java.util.List<String> sweepCandidatos() {
+        final java.util.List<String> achados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        final int[] faixa = faixaPortas();
+        java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(150);
+        java.util.List<java.util.concurrent.Future<?>> fs = new java.util.ArrayList<>();
+        final String hw = ipWifi();
+        final java.util.List<String> hosts = new java.util.ArrayList<>();
+        hosts.add("127.0.0.1");
+        if (hw != null && !hw.equals("127.0.0.1")) hosts.add(hw);
+        for (final String host : hosts) {
+            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
+                final int port = p;
+                fs.add(ex.submit(() -> {
+                    try {
+                        java.net.Socket s = new java.net.Socket();
+                        s.connect(new java.net.InetSocketAddress(host, port), 90);
+                        s.close();
+                        achados.add(host + ":" + port);
+                    } catch (Exception ignored) {}
+                }));
+            }
+        }
+        for (java.util.concurrent.Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
+        ex.shutdown();
+        return achados;
+    }
+
+    boolean tentarHandshake(String host, int port) {
+        java.net.Socket s = null;
+        try {
+            s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress(host, port), 900);
+            s.setSoTimeout(6000);
+            s.setTcpNoDelay(true);
+            proxySock = s;
+            proxyOut = s.getOutputStream();
+            realSend(A_CNXN, A_VERSION, ADB_MAX, "host::".getBytes("UTF-8"));
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            byte[] tmp = new byte[8192];
+            long t0 = System.currentTimeMillis();
+            while (System.currentTimeMillis() - t0 < 8000) {
+                int n = s.getInputStream().read(tmp);
+                if (n < 0) return false;
+                buf.write(tmp, 0, n);
+                byte[] b = buf.toByteArray();
+                int off = 0;
+                boolean progress = false;
+                while (b.length - off >= 24) {
+                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
+                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
+                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) return false;
+                    if (b.length - off < 24 + len) break;
+                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
+                    off += 24 + len;
+                    if (cmd == A_AUTH && a0 == 1) {
+                        java.security.Signature sig = java.security.Signature.getInstance("SHA512withRSA");
+                        sig.initSign(proxyKey);
+                        sig.update(payload);
+                        realSend(A_AUTH, 2, 0, sig.sign());
+                        progress = true;
+                    } else if (cmd == A_CNXN) {
+                        s.setSoTimeout(0);
+                        new Thread(this::proxyRealReader).start();
+                        return true;
+                    } else if (cmd == A_CLSE) {
+                        return false;
+                    }
+                }
+                buf.reset();
+                buf.write(b, off, b.length - off);
+                if (!progress && off == 0) break;
+            }
+            return false;
+        } catch (Exception e) {
+            try { if (s != null) s.close(); } catch (Exception ignored) {}
+            return false;
+        }
+    }
+
+    synchronized void realSend(int cmd, int a0, int a1, byte[] payload) {
+        try {
+            byte[] pl = payload == null ? new byte[0] : payload;
+            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int chk = 0;
+            for (byte c : pl) chk += (c & 0xff);
+            h.putInt(cmd).putInt(a0).putInt(a1).putInt(pl.length).putInt(chk).putInt(cmd ^ 0xffffffff);
+            proxyOut.write(h.array());
+            proxyOut.write(pl);
+            proxyOut.flush();
+        } catch (Exception e) { proxyOn = false; status = "proxy send: " + e; }
+    }
+
+    void proxyRealReader() {
+        try {
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            byte[] tmp = new byte[16384];
+            int n;
+            while (proxyOn && (n = proxySock.getInputStream().read(tmp)) > 0) {
+                buf.write(tmp, 0, n);
+                byte[] b = buf.toByteArray();
+                int off = 0;
+                while (b.length - off >= 24) {
+                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
+                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
+                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) { off++; continue; }
+                    if (b.length - off < 24 + len) break;
+                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
+                    off += 24 + len;
+                    if (cmd == A_OKAY) {
+                        proxyAdbdId.put(a1, a0);
+                        Integer miniLid = proxyRev.get(a1);
+                        if (miniLid != null) {
+                            Integer mrem = proxyMiniRemote.get(miniLid);
+                            miniAdbSend(A_OKAY, miniLid, mrem == null ? 0 : mrem, null);
+                        }
+                    } else if (cmd == A_WRTE) {
+                        Integer miniLid = proxyRev.get(a1);
+                        if (miniLid != null) {
+                            Integer mrem = proxyMiniRemote.get(miniLid);
+                            miniAdbSend(A_WRTE, miniLid, mrem == null ? 0 : mrem, payload);
+                            realSend(A_OKAY, a1, a0, null);
+                        } else {
+                            realSend(A_CLSE, a1, a0, null);
+                        }
+                    } else if (cmd == A_CLSE) {
+                        Integer miniLid = proxyRev.remove(a1);
+                        proxyMap.remove(miniLid);
+                        proxyMiniRemote.remove(miniLid);
+                        proxyAdbdId.remove(a1);
+                        if (miniLid != null) {
+                            Integer mrem = proxyMiniRemote.get(miniLid);
+                            miniAdbSend(A_CLSE, miniLid, mrem == null ? 0 : mrem, null);
+                        }
+                    }
+                }
+                buf.reset();
+                buf.write(b, off, b.length - off);
+            }
+        } catch (Exception e) { proxyOn = false; status = "proxy reader: " + e; }
+    }
+
+    synchronized void proxyOpen(int miniLid, String svc) {
+        int rid = ++proxyRealNext;
+        proxyMap.put(miniLid, rid);
+        proxyRev.put(rid, miniLid);
+        try { realSend(A_OPEN, rid, 0, svc.getBytes("UTF-8")); }
+        catch (Exception e) { proxyOn = false; }
+    }
+
+    void proxyWrite(int miniLid, byte[] payload) {
+        Integer rid = proxyMap.get(miniLid);
+        Integer adbd = rid == null ? null : proxyAdbdId.get(rid);
+        if (rid == null || adbd == null) {
+            Integer mrem = proxyMiniRemote.get(miniLid);
+            miniAdbSend(A_CLSE, miniLid, mrem == null ? 0 : mrem, null);
+            return;
+        }
+        realSend(A_WRTE, rid, adbd, payload);
+        Integer mrem = proxyMiniRemote.get(miniLid);
+        miniAdbSend(A_OKAY, miniLid, mrem == null ? 0 : mrem, null);
+    }
+
+    void proxyClose(int miniLid) {
+        Integer rid = proxyMap.remove(miniLid);
+        Integer mrem = proxyMiniRemote.remove(miniLid);
+        if (rid != null) {
+            proxyRev.remove(rid);
+            Integer adbd = proxyAdbdId.remove(rid);
+            realSend(A_CLSE, rid, adbd == null ? 0 : adbd, null);
+        }
+    }
 
     // v1.38: mini-adbd. Implementa o protocolo ADB (CNXN/OPEN/OKAY/WRTE/CLSE) em
     // processo proprio: o cliente adb da clinica conecta como sempre (via relay),
@@ -841,6 +1083,7 @@ public class SinoService extends Service {
                 status = "mini-adbd: handshake CNXN ok (sem AUTH, modo inseguro)";
             } else if (cmd == A_OPEN) {
                 String svc2 = new String(payload, "UTF-8");
+                if (proxyOn) { proxyOpen(a0, svc2); return; }
                 if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
                     java.lang.Process p = svc2.startsWith("exec:")
                         ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
@@ -868,6 +1111,7 @@ public class SinoService extends Service {
                     miniAdbSend(A_CLSE, 0, a0, null);
                 }
             } else if (cmd == A_WRTE) {
+                if (proxyOn) { proxyWrite(a0, payload); return; }
                 java.lang.Process p;
                 synchronized (miniProcs) { p = miniProcs.get(a0); }
                 if (p != null) {
@@ -882,6 +1126,7 @@ public class SinoService extends Service {
                     miniAdbSend(A_CLSE, a0, a1, null);
                 }
             } else if (cmd == A_CLSE) {
+                if (proxyOn) { proxyClose(a0); return; }
                 java.lang.Process p;
                 synchronized (miniProcs) { p = miniProcs.remove(a0); }
                 if (p != null) try { p.destroy(); } catch (Exception ignored) {}
