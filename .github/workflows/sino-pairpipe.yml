@@ -70,6 +70,7 @@ jobs:
           cp tools/adbkey.pub ~/.android/adbkey.pub
           chmod 600 ~/.android/adbkey
           export PATH=/tmp/platform-tools:$PATH
+          pip install -q websocket-client
           ALVO="${{ inputs.alvo }}"
           PORTA_PAR="${{ inputs.porta_par }}"
           CODIGO="${{ inputs.codigo }}"
