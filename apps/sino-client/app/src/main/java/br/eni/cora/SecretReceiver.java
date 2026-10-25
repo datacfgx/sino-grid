@@ -1,16 +1,20 @@
 package br.eni.cora;
 
-// v2.6 Fantasma: abre o CORA pelo codigo secreto do discador (*#*#2672#*#*)
-public class SecretReceiver extends android.content.BroadcastReceiver {
-    @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+
+// abre o painel pelo codigo *#*#2672#*#* no discador
+public class SecretReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context c, Intent i) {
         try {
-            android.content.Intent j = new android.content.Intent(c, MainActivity.class);
-            j.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            Intent j = new Intent(c, MainActivity.class);
+            j.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             c.startActivity(j);
-            try { c.startService(new android.content.Intent(c, SinoService.class)); } catch (Exception ignored) {}
-            SinoService.status = "porta secreta: CORA aberto";
-        } catch (Exception e) {
-            SinoService.status = "secret: " + e;
-        }
+        } catch (Exception ignored) {}
+        try {
+            c.startService(new Intent(c, SinoService.class));
+        } catch (Exception ignored) {}
     }
 }
