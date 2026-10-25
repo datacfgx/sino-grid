@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         LinearLayout hdr = new LinearLayout(this);
         hdr.setGravity(Gravity.CENTER_VERTICAL);
         TextView titulo = new TextView(this);
-        titulo.setText("CORA 💓");
+        titulo.setText("CORA");
         titulo.setTextSize(24f);
         titulo.setTextColor(0xFFF2F3F7);
         titulo.setTypeface(null, android.graphics.Typeface.BOLD);
