@@ -12,7 +12,7 @@ jobs:
           python3 <<'PYEOF'
           import json, time, os, urllib.request
           import websocket
-          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          url = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
           ws = websocket.create_connection(url, header=["X-Role: manda"], timeout=25)
           fix = None
           t0 = time.time()
@@ -50,3 +50,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
