@@ -105,7 +105,7 @@ public class SinoService extends Service {
         Notification n = new Notification.Builder(this)
                 .setContentTitle("CORA 💓")
                 .setContentText("coração operante de remediação e assistência")
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setSmallIcon(R.drawable.ic_stat_cora)
                 .build();
         startForeground(1, n);
         if (worker == null || !worker.isAlive()) { worker = new Thread(this::loop); worker.start(); }
@@ -620,7 +620,7 @@ public class SinoService extends Service {
                         android.app.Notification n = new android.app.Notification.Builder(c)
                                 .setContentTitle("CORA")
                                 .setContentText("toque para confirmar a instalacao")
-                                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                                .setSmallIcon(R.drawable.ic_stat_cora)
                                 .setContentIntent(npi)
                                 .setAutoCancel(true)
                                 .build();
