@@ -29,6 +29,8 @@ jobs:
         env:
           COMANDO: ${{ inputs.comando }}
           PORTA_ADB: ${{ inputs.porta_adb }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           pip install -q websocket-client
           python3 - <<'PYEOF'
