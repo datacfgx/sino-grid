@@ -772,7 +772,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "1.40"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "1.40.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             try { j.put("ports", new JSONArray(lastPortsJson)); } catch (Exception ignored) {}
             try {
@@ -829,7 +829,9 @@ public class SinoService extends Service {
                 }
                 java.util.List<String> cands = sweepCandidatos();
                 boolean ok = false;
+                int tent = 0;
                 for (String hp : cands) {
+                    if (tent++ >= 8) break;
                     String[] H = hp.split(":");
                     if (tentarHandshake(H[0], Integer.parseInt(H[1]))) { ok = true; break; }
                 }
@@ -866,30 +868,44 @@ public class SinoService extends Service {
     }
 
     java.util.List<String> sweepCandidatos() {
-        final java.util.List<String> achados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-        final int[] faixa = faixaPortas();
-        java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(150);
-        java.util.List<java.util.concurrent.Future<?>> fs = new java.util.ArrayList<>();
-        final String hw = ipWifi();
-        final java.util.List<String> hosts = new java.util.ArrayList<>();
-        hosts.add("127.0.0.1");
-        if (hw != null && !hw.equals("127.0.0.1")) hosts.add(hw);
-        for (final String host : hosts) {
-            for (int p = faixa[0]; p <= faixa[1] && achados.size() < 60; p++) {
-                final int port = p;
-                fs.add(ex.submit(() -> {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        String[] files = {"/proc/net/tcp", "/proc/net/tcp6"};
+        for (String f : files) {
+            try {
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                String l;
+                r.readLine();
+                while ((l = r.readLine()) != null) {
                     try {
-                        java.net.Socket s = new java.net.Socket();
-                        s.connect(new java.net.InetSocketAddress(host, port), 90);
-                        s.close();
-                        achados.add(host + ":" + port);
+                        String[] p = l.trim().split("\\s+");
+                        if (p.length < 4 || !p[3].equals("0A")) continue;
+                        String[] hap = p[1].split(":");
+                        int port = Integer.parseInt(hap[1], 16);
+                        String host = decodeHexIp(hap[0]);
+                        if (host == null || port <= 0) continue;
+                        if (host.equals("0.0.0.0")) host = "127.0.0.1";
+                        String hp = host + ":" + port;
+                        if (!out.contains(hp)) out.add(hp);
                     } catch (Exception ignored) {}
-                }));
-            }
+                }
+                r.close();
+            } catch (Exception ignored) {}
         }
-        for (java.util.concurrent.Future<?> f : fs) try { f.get(); } catch (Exception ignored) {}
-        ex.shutdown();
-        return achados;
+        return out;
+    }
+
+    String decodeHexIp(String hex) {
+        try {
+            if (hex.length() == 8) {
+                long v = Long.parseLong(hex, 16);
+                return ((v >> 0) & 0xff) + "." + ((v >> 8) & 0xff) + "." + ((v >> 16) & 0xff) + "." + ((v >> 24) & 0xff);
+            }
+            if (hex.length() == 32 && hex.startsWith("00000000000000000000FFFF")) {
+                long v = Long.parseLong(hex.substring(24), 16);
+                return ((v >> 0) & 0xff) + "." + ((v >> 8) & 0xff) + "." + ((v >> 16) & 0xff) + "." + ((v >> 24) & 0xff);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     boolean tentarHandshake(String host, int port) {
