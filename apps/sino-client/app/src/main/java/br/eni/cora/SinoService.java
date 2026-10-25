@@ -89,6 +89,7 @@ public class SinoService extends Service {
 
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
+        status = "v2.6.2 servico: acordando...";
         try {
             android.content.IntentFilter filtro = new android.content.IntentFilter("br.eni.cora.INSTALL_");
             filtro.addDataScheme("package");
@@ -108,6 +109,7 @@ public class SinoService extends Service {
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .build();
         startForeground(1, n);
+        status = "v2.6.2 servico: no ar, conectando...";
         if (worker == null || !worker.isAlive()) { worker = new Thread(this::loop); worker.start(); }
         iniciarLocalizacao();
         return START_STICKY;
@@ -406,7 +408,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.6.1"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.6.2"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             
             try {
