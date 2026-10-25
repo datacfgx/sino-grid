@@ -230,9 +230,9 @@ public class MainActivity extends Activity {
         int[] larg = {3,1,2,1,1,3,1,2,4,1,2,1,3,1,1,2,1,3,2,1,1,4,1,2};
         for (int w : larg) {
             View bv = new View(this);
-            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(w), dp(14));
-            blp.rightMargin = dp(1);
-            bv.setLayoutParams(blp);
+            LinearLayout.LayoutParams bcLp = new LinearLayout.LayoutParams(dp(w), dp(14));
+            bcLp.rightMargin = dp(1);
+            bv.setLayoutParams(bcLp);
             bv.setBackgroundColor(0xFF50FF8C);
             barcode.addView(bv);
         }
