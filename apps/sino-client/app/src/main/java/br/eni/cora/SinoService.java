@@ -166,7 +166,7 @@ public class SinoService extends Service {
                     return;
                 }
                 try { onCmd(new String(d)); }
-                catch (Exception e) { status = "cmd: " + e; }
+                catch (Exception e) { status = "realocar".equals(e.getMessage()) ? "sala g52 · aguardando a clinica..." : "cmd: " + e; }
             }
             @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
         });
@@ -218,7 +218,7 @@ public class SinoService extends Service {
                 }
             }
             
-        } catch (Exception e) { status = "cmd: " + e; }
+        } catch (Exception e) { status = "realocar".equals(e.getMessage()) ? "sala g52 · aguardando a clinica..." : "cmd: " + e; }
     }
 
     static boolean ehBinario(byte[] d) {
