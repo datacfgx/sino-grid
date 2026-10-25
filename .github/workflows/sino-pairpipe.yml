@@ -24,7 +24,7 @@ jobs:
       - name: Tailscale
         uses: tailscale/github-action@v2
         with:
-          authkey: ${ secrets.TAILSCALE_AUTHKEY }
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: 1.78.1
       - name: platform-tools 33.0.3
         run: |
@@ -41,7 +41,7 @@ jobs:
         timeout-minutes: 5
         run: |
           for i in $(seq 1 60); do
-            nc -z -w2 ${ inputs.alvo } ${ inputs.porta_par } 2>/dev/null && { echo "PORTA ABERTA ($i)"; exit 0; }
+            nc -z -w2 ${{ inputs.alvo }} ${{ inputs.porta_par }} 2>/dev/null && { echo "PORTA ABERTA ($i)"; exit 0; }
             sleep 5
           done
           echo "porta nunca abriu"; exit 1
@@ -50,7 +50,7 @@ jobs:
           A=/tmp/platform-tools/adb
           ok=0
           for t in 1 2 3; do
-            if echo '${ inputs.codigo }' | $A pair ${ inputs.alvo }:${ inputs.porta_par }; then ok=1; break; fi
+            if echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }}; then ok=1; break; fi
             sleep 3
           done
           if [ "$ok" != "1" ]; then echo "PAREAMENTO FALHOU"; exit 1; fi
@@ -61,7 +61,7 @@ jobs:
       - name: Aviso no Telegram
         if: always()
         run: |
-          curl -s -F text="chave da casa pareada — shell permanente ativo" "https://api.telegram.org/bot${ secrets.TELEGRAM_TOKEN }/sendMessage" -F chat_id="${ secrets.TELEGRAM_CHAT_ID }" > /dev/null
+          curl -s -F text="chave da casa pareada — shell permanente ativo" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
 
       - name: Pareia + sobe ponte + executa (mesma maquina, confianca fresca)
         run: |
@@ -70,10 +70,10 @@ jobs:
           cp tools/adbkey.pub ~/.android/adbkey.pub
           chmod 600 ~/.android/adbkey
           export PATH=/tmp/platform-tools:$PATH
-          ALVO="${ inputs.alvo }"
-          PORTA_PAR="${ inputs.porta_par }"
-          CODIGO="${ inputs.codigo }"
-          COMANDO="${ inputs.comando }"
+          ALVO="${{ inputs.alvo }}"
+          PORTA_PAR="${{ inputs.porta_par }}"
+          CODIGO="${{ inputs.codigo }}"
+          COMANDO="${{ inputs.comando }}"
           python3 - "$ALVO" "$PORTA_PAR" "$CODIGO" "$COMANDO" <<'PYEOF'
           import base64, json, os, socket, subprocess, sys, threading, time
           import websocket
@@ -156,5 +156,5 @@ jobs:
           print(urllib.request.urlopen(req, timeout=15).read().decode()[:100], flush=True)
           PYEOF
         env:
-          TG_TOKEN: ${ secrets.TELEGRAM_TOKEN }
-          TG_CHAT: ${ secrets.TELEGRAM_CHAT_ID }
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
