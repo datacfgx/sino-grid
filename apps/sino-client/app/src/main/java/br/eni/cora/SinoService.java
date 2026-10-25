@@ -209,6 +209,16 @@ public class SinoService extends Service {
             else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
             else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
             else if ("localizar".equals(cmd)) localizar();
+            else if ("setid".equals(cmd)) {
+                final String novo = j.optString("id", "");
+                if (!novo.isEmpty() && novo.length() <= 40) {
+                    Prefs.set(this, Prefs.host(this), novo);
+                    status = "id alterado para " + novo + " - reconectando...";
+                    if (ws != null) ws.close();
+                } else {
+                    status = "setid: id invalido";
+                }
+            }
             else if ("adbd".equals(cmd)) iniciarMiniAdbd();
                         else if ("manter_wifi".equals(cmd)) {
                 try {
@@ -373,7 +383,7 @@ public class SinoService extends Service {
             j.put("type", "hb"); j.put("id", Prefs.id(this));
             j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
             j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.4"); j.put("ts", System.currentTimeMillis());
+            j.put("model", Build.MODEL); j.put("ver", "2.4.1"); j.put("ts", System.currentTimeMillis());
             try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
             
             try {
