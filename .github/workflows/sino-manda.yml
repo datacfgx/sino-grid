@@ -13,7 +13,7 @@ jobs:
           python3 - <<'PY'
           import json, time
           import websocket
-          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=g52"
+          URL = "wss://sino-relay.worldeffects752.workers.dev/ws?id=${{ inputs.id }}"
           ws = websocket.create_connection(URL, header=["X-Role: manda"], timeout=30)
           ws.settimeout(10)
           fim = time.time() + 90
@@ -37,3 +37,7 @@ jobs:
         if: always()
         run: |
           curl -s -F text="teste install sem depuração finalizado — veja o log" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
