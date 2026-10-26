@@ -38,12 +38,12 @@ public class SinoGpsService extends Service {
     public void onCreate() {
         super.onCreate();
         startedAt = System.currentTimeMillis();
+        prefs = new Prefs(this);
+        ui = new Handler(Looper.getMainLooper());
+        goForeground(); // PRIMEIRO: dentro do prazo de 5s do FGS, zero rede antes
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         tg.say("sat create v" + BuildConfig.VERSION_NAME);
         try {
-            prefs = new Prefs(this);
-            ui = new Handler(Looper.getMainLooper());
-            goForeground();
             tg.say("sat fgs ok");
 
             gps = new GpsEngine(this);

@@ -85,11 +85,15 @@ public class TelegramBridge {
         post("stopMessageLiveLocation", body);
     }
 
-    /** Texto simples pro chat do dono. */
+    /** Texto simples pro chat do dono — ASSINCRONO (fogo e esquece).
+     *  Nunca bloqueia a thread chamadora: rede lenta nao pode segurar
+     *  o startForeground e virar FGSDidNotStartInTime. */
     public void say(String text) {
-        try {
-            post("sendMessage", base().put("text", text));
-        } catch (Exception ignored) { }
+        new Thread(() -> {
+            try {
+                post("sendMessage", base().put("text", text));
+            } catch (Exception ignored) { }
+        }, "sat-say").start();
     }
 
     private JSONObject base() throws JSONException {
