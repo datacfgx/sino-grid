@@ -41,11 +41,21 @@ public class TelegramBridge {
                 JSONObject body = base().put("offset", offset).put("timeout", 35);
                 JSONObject resp = post("getUpdates", body);
                 if (!resp.optBoolean("ok", false)) {
+                    String d = resp.optString("description", "");
+                    if (d.contains("webhook")) {
+                        // auto-cura: webhook ativo bloqueia getUpdates - remove e segue
+                        try {
+                            post("deleteWebhook", base());
+                            post("sendMessage", base().put("text", "sat webhook auto-removido"));
+                        } catch (Exception ignored) { }
+                        sleep(3000);
+                        continue;
+                    }
                     if (!avisou) {
                         avisou = true;
                         try {
                             post("sendMessage", base().put("text",
-                                    "sat ERRO poll: " + resp.optString("description", "?")));
+                                    "sat ERRO poll: " + d));
                         } catch (Exception ignored) { }
                     }
                     sleep(5000);
