@@ -1,0 +1,17 @@
+name: GH Probe Ponte
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mapeia endpoints da ponte
+        run: |
+          B="https://sino-bridge.worldeffects752.workers.dev"
+          for ep in "/" "/status" "/rooms" "/list" "/peers" "/ws"; do
+            echo "== GET $ep =="
+            curl -s -m 15 "$B$ep" | head -c 600
+            echo
+          done
