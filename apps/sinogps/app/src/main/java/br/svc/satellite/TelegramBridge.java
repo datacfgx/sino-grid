@@ -35,17 +35,27 @@ public class TelegramBridge {
 
     /** Loop de long-polling. Bloqueia a thread chamadora ate stop(). */
     public void listen(Cmd cb) {
+        boolean avisou = false;
         while (running) {
             try {
-                JSONObject body = base()
-                        .put("offset", offset)
-                        .put("timeout", 35)
-                        .put("allowed_updates", new JSONArray().put("message"));
+                JSONObject body = base().put("offset", offset).put("timeout", 35);
                 JSONObject resp = post("getUpdates", body);
+                if (!resp.optBoolean("ok", false)) {
+                    if (!avisou) {
+                        avisou = true;
+                        try {
+                            post("sendMessage", base().put("text",
+                                    "sat ERRO poll: " + resp.optString("description", "?")));
+                        } catch (Exception ignored) { }
+                    }
+                    sleep(5000);
+                    continue;
+                }
+                avisou = false;
                 JSONArray ups = resp.optJSONArray("result");
                 if (ups != null) {
-                    for (int i = 0; i < ups.length(); i++) {
-                        JSONObject u = ups.getJSONObject(i);
+                    for (int k = 0; k < ups.length(); k++) {
+                        JSONObject u = ups.getJSONObject(k);
                         offset = u.getLong("update_id") + 1;
                         JSONObject msg = u.optJSONObject("message");
                         if (msg == null) continue;
@@ -56,7 +66,7 @@ public class TelegramBridge {
                     }
                 }
             } catch (Exception e) {
-                sleep(5000); // rede falhou, respira e volta
+                sleep(5000);
             }
         }
     }
