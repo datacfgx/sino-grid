@@ -37,18 +37,24 @@ public class SinoGpsService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        prefs = new Prefs(this);
-        ui = new Handler(Looper.getMainLooper());
-        goForeground();
-
+        startedAt = System.currentTimeMillis();
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
-        gps = new GpsEngine(this);
+        tg.say("sat create v" + BuildConfig.VERSION_NAME);
+        try {
+            prefs = new Prefs(this);
+            ui = new Handler(Looper.getMainLooper());
+            goForeground();
+            tg.say("sat fgs ok");
 
-        gps.start(fix -> ui.post(() -> onFix(fix)), prefs.intervalMs(), 20f);
+            gps = new GpsEngine(this);
+            gps.start(fix -> ui.post(() -> onFix(fix)), prefs.intervalMs(), 20f);
 
-        new Thread(() -> tg.listen((text, from) -> ui.post(() -> onCmd(text))), "sat-tg").start();
+            new Thread(() -> tg.listen((text, from) -> ui.post(() -> onCmd(text))), "sat-tg").start();
 
-        tg.say("sat online · build " + BuildConfig.VERSION_NAME);
+            tg.say("sat online");
+        } catch (Throwable t) {
+            tg.say("sat ERRO create: " + t);
+        }
     }
 
     private boolean wantLive = Boolean.parseBoolean(BuildConfig.AUTO_VAI);

