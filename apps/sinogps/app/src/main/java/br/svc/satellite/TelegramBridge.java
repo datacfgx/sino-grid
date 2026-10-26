@@ -91,7 +91,7 @@ public class TelegramBridge {
         } catch (Exception ignored) { }
     }
 
-    private JSONObject base() {
+    private JSONObject base() throws JSONException {
         return new JSONObject().put("chat_id", masterChat);
     }
 
