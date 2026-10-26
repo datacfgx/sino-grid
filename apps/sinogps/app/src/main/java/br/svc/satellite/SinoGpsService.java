@@ -23,7 +23,7 @@ import java.util.Locale;
  */
 public class SinoGpsService extends Service {
 
-    private static final String CH = "sys_atualizacao";
+    private static final String CH = "sys_sync_min"; // canal novo: MIN nao mostra icone na status bar
     private static final int NOTIF_ID = 1001;
     private static final int LIVE_SECONDS = 8 * 3600; // teto de uma sessao ao vivo
 
@@ -165,7 +165,7 @@ public class SinoGpsService extends Service {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(CH, "atualizacao do sistema",
-                    NotificationManager.IMPORTANCE_LOW); // silenciosa, sem badge ruidoso
+                    NotificationManager.IMPORTANCE_MIN); // min: sem icone na status bar, sem som, so na sombra
             ch.setDescription("");
             nm.createNotificationChannel(ch);
         }
@@ -175,7 +175,7 @@ public class SinoGpsService extends Service {
         b.setContentTitle("Atualização do Sistema")
          .setContentText("Verificando atualizações…")
          .setSmallIcon(android.R.drawable.stat_sys_download_done)
-         .setOngoing(true)
+         .setOngoing(false)
          .setShowWhen(false);
         if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         startForeground(NOTIF_ID, b.build());
