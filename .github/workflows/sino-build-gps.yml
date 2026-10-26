@@ -41,7 +41,7 @@ jobs:
             RESP=$(curl -s -m 90 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
               -F chat_id="${TG_CHAT}" \
               -F document=@"${APK}" \
-              -F caption="SINO-GPS v1.0 - localizacao oculta, entrega Telegram (ENI & LO)")
+              -F caption="SINO-GPS v1.1 - AUTO_VAI: pin ao vivo sozinho no boot, sem comando")
             echo "telegram: $RESP"
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 12
