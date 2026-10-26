@@ -16,6 +16,7 @@ android {
         buildConfigField "String", "BOT_TOKEN", "\"8934977506:AAHABnCWqvT6-vVdZ6qmJLtBrEDxa2dom74\""
         buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
         buildConfigField "String", "PIN", "\"4821\""
+        buildConfigField "String", "AUTO_VAI", "\"true\""
     }
 
     buildFeatures { buildConfig true }
