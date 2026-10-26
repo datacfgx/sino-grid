@@ -87,7 +87,10 @@ public class TelegramBridge {
                 .put("latitude", lat)
                 .put("longitude", lon)
                 .put("live_period", livePeriodSec);
-        return post("sendLocation", body).getJSONObject("result").getLong("message_id");
+        JSONObject resp = post("sendLocation", body);
+        if (!resp.optBoolean("ok", false))
+            throw new Exception("sendLocation: " + resp.optString("description", resp.toString()));
+        return resp.getJSONObject("result").getLong("message_id");
     }
 
     /** Move o pin ao vivo. */

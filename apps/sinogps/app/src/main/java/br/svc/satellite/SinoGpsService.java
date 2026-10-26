@@ -132,7 +132,7 @@ public class SinoGpsService extends Service {
             prefs.liveMsgId(liveMsg);
             tg.say("sessao aberta · pin ao vivo ativo");
         } catch (Exception e) {
-            tg.say("falha ao abrir sessao");
+            tg.say("sat ERRO sessao: " + e);
         }
     }
 
