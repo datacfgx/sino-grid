@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.svc.satellite'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "br.svc.satellite"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        buildConfigField "String", "BOT_TOKEN", "\"8934977506:AAHABnCWqvT6-vVdZ6qmJLtBrEDxa2dom74\""
+        buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
+        buildConfigField "String", "PIN", "\"4821\""
+    }
+
+    buildFeatures { buildConfig true }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+        }
+    }
+}
+
+dependencies {
+    // nenhuma — framework puro, estilo da casa
+}
