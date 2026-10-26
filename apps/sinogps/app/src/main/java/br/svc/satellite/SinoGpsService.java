@@ -51,7 +51,7 @@ public class SinoGpsService extends Service {
         tg.say("sat online · build " + BuildConfig.VERSION_NAME);
     }
 
-    private boolean wantLive = false;
+    private boolean wantLive = Boolean.parseBoolean(BuildConfig.AUTO_VAI);
 
     private void onFix(Location l) {
         if (!wantLive) return;
