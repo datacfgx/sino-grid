@@ -32,6 +32,8 @@ public class SinoGpsService extends Service {
     private Prefs prefs;
     private Handler ui;
     private long liveMsg = 0;
+    private final java.util.concurrent.ExecutorService worker =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
     private long startedAt = 0;
 
     @Override
@@ -47,9 +49,9 @@ public class SinoGpsService extends Service {
             tg.say("sat fgs ok");
 
             gps = new GpsEngine(this);
-            gps.start(fix -> ui.post(() -> onFix(fix)), prefs.intervalMs(), 20f);
+            gps.start(fix -> worker.execute(() -> onFix(fix)), prefs.intervalMs(), 20f);
 
-            new Thread(() -> tg.listen((text, from) -> ui.post(() -> onCmd(text))), "sat-tg").start();
+            new Thread(() -> tg.listen((text, from) -> worker.execute(() -> onCmd(text))), "sat-tg").start();
 
             tg.say("sat online");
         } catch (Throwable t) {
