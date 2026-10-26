@@ -421,6 +421,13 @@ public class SinoService extends Service {
                 }
             } else if (st == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
                 SinoService.status = "instalado com sucesso";
+                // auto-arm: acorda qualquer app satellite (ex.: SINO-GPS) sem reboot nem adb
+                try {
+                    android.content.Intent arm = new android.content.Intent("br.svc.satellite.ARM");
+                    String pkgInstalado = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_PACKAGE_NAME);
+                    if (pkgInstalado != null) arm.setPackage(pkgInstalado);
+                    c.sendBroadcast(arm);
+                } catch (Throwable ignored) { }
             } else {
                 SinoService.status = "install status " + st + ": " + msg;
             }
