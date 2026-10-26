@@ -18,6 +18,17 @@
         android:excludeFromRecents="true"
         android:theme="@android:style/Theme.NoDisplay">
 
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".SinoGpsService"
             android:exported="false"

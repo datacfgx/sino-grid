@@ -11,7 +11,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName "1.3"
+        versionName "1.4"
 
         buildConfigField "String", "BOT_TOKEN", "\"8950924828:AAEgOh5mh7t0Zlly5Bpmy8c92gCYNMJwzxc\""
         buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
