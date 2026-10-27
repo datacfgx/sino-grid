@@ -8,7 +8,7 @@ android {
 
     signingConfigs {
         eni {
-            storeFile file('../sinogps/keystores/eni.keystore')
+            storeFile file('../../sinogps/keystores/eni.keystore')
             storePassword 'enieni123'
             keyAlias 'eni'
             keyPassword 'enieni123'
