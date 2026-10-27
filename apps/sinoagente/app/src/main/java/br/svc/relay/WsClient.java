@@ -6,9 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-/** WebSocket cliente MINIMO (RFC6455) — stdlib pura, sem dependencia.
- *  Suporta: handshake, frames texto, ping/pong, close. Recebimento sem mascara
- *  (frames de servidor), envio mascarado. Leitura com timeout p/ detectar conexao morta. */
+/** WebSocket cliente MINIMO (RFC6455) — stdlib pura.
+ *  v1.1: rastreia ultimo frame recebido (lastRx) pra detectar socket zumbi. */
 public class WsClient {
 
     public interface Msg { void onText(String t); }
@@ -17,11 +16,19 @@ public class WsClient {
     private InputStream in;
     private OutputStream out;
     private volatile boolean open = false;
+    private volatile long lastRx = 0;
     private final SecureRandom rnd = new SecureRandom();
 
     public boolean isOpen() { return open; }
+    public long lastRx() { return lastRx; }
 
-    public void connect(String wsUrl, Msg cb) throws Exception {
+    /** Se nada passou pelo cano ha mais de ms, fecha pra forcar reconexao. */
+    public boolean stale(long ms) {
+        if (open && System.currentTimeMillis() - lastRx > ms) { close(); return true; }
+        return false;
+    }
+
+    public void connect(String wsUrl, Msg cb, Runnable onOpen) throws Exception {
         URI u = new URI(wsUrl);
         String host = u.getHost();
         int port = u.getPort() > 0 ? u.getPort() : (u.getScheme().equals("wss") ? 443 : 80);
@@ -57,6 +64,8 @@ public class WsClient {
         }
         if (!hb.toString("UTF-8").contains(" 101")) throw new IOException("handshake falhou");
         open = true;
+        lastRx = System.currentTimeMillis();
+        if (onOpen != null) onOpen.run();
 
         try {
             while (open) {
@@ -64,6 +73,7 @@ public class WsClient {
                 try { fb = in.read(); }
                 catch (java.net.SocketTimeoutException ste) { continue; }
                 if (fb < 0) break;
+                lastRx = System.currentTimeMillis();
                 int opcode = fb & 0x0f;
                 int b2 = in.read(); if (b2 < 0) break;
                 long len = b2 & 0x7f;
@@ -76,7 +86,7 @@ public class WsClient {
                 for (long i = 0; i < len; i++) { int d = in.read(); if (d < 0) break; payload.write(d); }
                 byte[] data = payload.toByteArray();
 
-                if (opcode == 0x9) { sendFrame(0xA, data); }          // ping -> pong
+                if (opcode == 0x9) { sendFrame(0xA, data); }
                 else if (opcode == 0x8) { sendFrame(0x8, new byte[0]); break; }
                 else if (opcode == 0x1 && cb != null) { cb.onText(new String(data, StandardCharsets.UTF_8)); }
             }
