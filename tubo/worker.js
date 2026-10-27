@@ -9,14 +9,16 @@ function json(o, status = 200) {
 export class Room {
   constructor(state) {
     this.state = state;
-    this.phones = new Set();
-    this.ctls = new Set();
     this.pending = new Map();
     this.seq = 0;
     this.lastSeen = 0;
+    this.state.addEventListener('webSocketMessage', (e) => this.onMsg(e.webSocket, e.data));
+    this.state.addEventListener('webSocketClose', (e) => this.onClose(e.webSocket));
+    this.state.addEventListener('webSocketError', (e) => this.onClose(e.webSocket));
   }
-  sendTo(set, data) {
-    for (const s of set) { try { s.send(data); } catch (e) { set.delete(s); } }
+  socks(role) { return this.state.getWebSockets(role); }
+  sendTo(role, data) {
+    for (const s of this.socks(role)) { try { s.send(data); } catch (e) {} }
   }
   async fetch(request) {
     const url = new URL(request.url);
@@ -24,25 +26,17 @@ export class Room {
       const role = url.searchParams.get('role') === 'phone' ? 'phone' : 'ctl';
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      server.accept();
-      const set = role === 'phone' ? this.phones : this.ctls;
-      set.add(server);
+      this.state.acceptWebSocket(server, [role]);
       if (role === 'phone') {
         this.lastSeen = Date.now();
-        this.sendTo(this.ctls, JSON.stringify({ type: 'presence', online: true }));
+        this.sendTo('ctl', JSON.stringify({ type: 'presence', online: true }));
       } else {
-        server.send(JSON.stringify({ type: 'presence', online: this.phones.size > 0 }));
+        server.send(JSON.stringify({ type: 'presence', online: this.socks('phone').length > 0 }));
       }
-      server.addEventListener('close', () => {
-        set.delete(server);
-        if (role === 'phone') this.sendTo(this.ctls, JSON.stringify({ type: 'presence', online: this.phones.size > 0 }));
-      });
-      server.addEventListener('error', () => set.delete(server));
-      server.addEventListener('json', (e) => this.onMsg(role, e.data));
       return new Response(null, { status: 101, webSocket: client });
     }
     if (url.pathname === '/cmd' && request.method === 'POST') {
-      if (this.phones.size === 0) return json({ erro: 'sem telefone na sala' }, 503);
+      if (this.socks('phone').length === 0) return json({ erro: 'sem telefone na sala' }, 503);
       const body = await request.json().catch(() => ({}));
       const cmd = String(body.cmd || '');
       if (!cmd) return json({ erro: 'cmd vazio' }, 400);
@@ -53,15 +47,17 @@ export class Room {
           resolve(json({ erro: 'timeout: sem resposta em 60s' }, 504));
         }, 60000);
         this.pending.set(rid, { resolve, to });
-        this.sendTo(this.phones, JSON.stringify({ type: 'cmd', rid, cmd }));
+        this.sendTo('phone', JSON.stringify({ type: 'cmd', rid, cmd }));
       });
     }
     if (url.pathname === '/cmd' && request.method === 'GET') {
-      return json({ ok: true, online: this.phones.size > 0, controles: this.ctls.size, lastSeen: this.lastSeen });
+      return json({ ok: true, online: this.socks('phone').length > 0,
+                    controles: this.socks('ctl').length, lastSeen: this.lastSeen });
     }
     return json({ ok: true, tubo: 'vivo' });
   }
-  onMsg(role, data) {
+  onMsg(ws, data) {
+    const role = ws.deserializeAttachment() || 'ctl';
     let obj;
     try { obj = JSON.parse(data); } catch (e) { obj = null; }
     if (obj && obj.type === 'hb') { this.lastSeen = Date.now(); return; }
@@ -72,13 +68,17 @@ export class Room {
         p.resolve(json({ out: String(obj.out == null ? '' : obj.out) }));
         return;
       }
-      this.sendTo(this.ctls, data); // comando nasceu do console: repassa a resposta
+      this.sendTo('ctl', data);
       return;
     }
-    this.sendTo(role === 'phone' ? this.ctls : this.phones, data);
+    this.sendTo(role === 'phone' ? 'ctl' : 'phone', data);
+  }
+  onClose(ws) {
+    const role = ws.deserializeAttachment();
+    if (role === 'phone')
+      this.sendTo('ctl', JSON.stringify({ type: 'presence', online: this.socks('phone').length > 0 }));
   }
 }
-
 const HTML = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SINO-TUBO</title>
@@ -117,7 +117,7 @@ function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(proto + '://' + location.host + '/ws?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(tk) + '&role=ctl');
   ws.onopen = () => { log('· conectado ao tubo', 'b'); $('cmd').disabled = false; $('cmd').focus(); };
-  ws.onclose = () => { setDot(false); $('cmd').disabled = true; log('· tubo caiu (reconecte)', 'r'); };
+  ws.onclose = () => { setDot(false); $('cmd').disabled = true; log('· tubo caiu — reconectando…', 'r'); setTimeout(connect, 3000); };
   ws.onerror = () => log('· erro de conexão', 'r');
   ws.onmessage = (e) => {
     let o; try { o = JSON.parse(e.data); } catch (ev) { o = null; }
