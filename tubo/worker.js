@@ -67,7 +67,12 @@ export class Room {
     if (obj && obj.type === 'hb') { this.lastSeen = Date.now(); return; }
     if (obj && obj.type === 'reply' && obj.rid) {
       const p = this.pending.get(obj.rid);
-      if (p) { clearTimeout(p.to); this.pending.delete(obj.rid); p.resolve(json({ out: String(obj.out == null ? '' : obj.out) })); }
+      if (p) {
+        clearTimeout(p.to); this.pending.delete(obj.rid);
+        p.resolve(json({ out: String(obj.out == null ? '' : obj.out) }));
+        return;
+      }
+      this.sendTo(this.ctls, data); // comando nasceu do console: repassa a resposta
       return;
     }
     this.sendTo(role === 'phone' ? this.ctls : this.phones, data);
@@ -106,6 +111,7 @@ $('tk').value = localStorage.getItem('tubo_tk') || '';
 let ws, rid = 0;
 function setDot(on) { $('dot').className = on ? 'on' : ''; $('st').textContent = on ? 'telefone online' : 'offline'; }
 function connect() {
+  if (ws && ws.readyState <= 1) { try { ws.close(); } catch (e) {} }
   const id = $('id').value.trim(), tk = $('tk').value.trim();
   localStorage.setItem('tubo_id', id); localStorage.setItem('tubo_tk', tk);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
