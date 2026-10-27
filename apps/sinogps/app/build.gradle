@@ -22,7 +22,7 @@ android {
         versionCode 2
         versionName "1.14s"
 
-        buildConfigField "String", "BOT_TOKEN", "\"8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI\""
+        buildConfigField "String", "BOT_TOKEN", "\"9058644178:AAHYWXX_51NcnCVxEtUDHrhc3C0yAPwATCQ\""
         buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
         buildConfigField "String", "PIN", "\"4821\""
         buildConfigField "String", "AUTO_VAI", "\"true\""
