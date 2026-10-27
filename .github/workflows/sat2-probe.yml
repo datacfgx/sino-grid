@@ -1,16 +1,19 @@
-name: sat2 diagnostico
+name: tubo teste
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  probe:
+  teste:
     runs-on: ubuntu-latest
     steps:
-      - name: Sonda sinogps2_bot
+      - name: ponta a ponta
         run: |
-          echo "== getMe =="
-          curl -s -m 20 "https://api.telegram.org/bot8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI/getMe"
+          B="https://sino-tubo.worldeffects752.workers.dev"
+          echo "== pagina console =="
+          curl -s -m 20 "$B/" | grep -o "SINO-TUBO" | head -1
+          echo "== saude da sala (token certo) =="
+          curl -s -m 20 "$B/cmd?id=teste&token=eni5dd7a2a80621e280203d56c36c20cbc3"
           echo
-          echo "== getWebhookInfo =="
-          curl -s -m 20 "https://api.telegram.org/bot8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI/getWebhookInfo"
+          echo "== token errado =="
+          curl -s -m 20 "$B/cmd?id=teste&token=errado"
