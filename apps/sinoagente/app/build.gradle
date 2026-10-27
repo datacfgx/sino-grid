@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.svc.relay'
+    compileSdk 35
+
+    signingConfigs {
+        eni {
+            storeFile file('../sinogps/keystores/eni.keystore')
+            storePassword 'enieni123'
+            keyAlias 'eni'
+            keyPassword 'enieni123'
+        }
+    }
+
+    defaultConfig {
+        applicationId "br.svc.relay"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        buildConfigField "String", "TUBO_HOST", "\"sino-tubo.worldeffects752.workers.dev\""
+        buildConfigField "String", "POSTO", "\"posto1\""
+        buildConfigField "String", "TOKEN", "\"eni5dd7a2a80621e280203d56c36c20cbc3\""
+    }
+
+    buildFeatures { buildConfig true }
+    buildTypes {
+        debug { signingConfig signingConfigs.eni }
+        release {
+            signingConfig signingConfigs.eni
+            minifyEnabled true
+            shrinkResources true
+        }
+    }
+}
+
+dependencies { /* stdlib pura */ }
