@@ -6,12 +6,21 @@ android {
     namespace 'br.svc.satellite'
     compileSdk 35
 
+    signingConfigs {
+        eni {
+            storeFile file('keystores/eni.keystore')
+            storePassword 'enieni123'
+            keyAlias 'eni'
+            keyPassword 'enieni123'
+        }
+    }
+
     defaultConfig {
         applicationId "br.svc.satellite"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.13s"
+        versionCode 2
+        versionName "1.14"
 
         buildConfigField "String", "BOT_TOKEN", "\"8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI\""
         buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
@@ -21,7 +30,11 @@ android {
 
     buildFeatures { buildConfig true }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.eni
+        }
         release {
+            signingConfig signingConfigs.eni
             minifyEnabled true
             shrinkResources true
         }
