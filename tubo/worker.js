@@ -60,7 +60,11 @@ export class Room {
     const role = ws.deserializeAttachment() || 'ctl';
     let obj;
     try { obj = JSON.parse(data); } catch (e) { obj = null; }
-    if (obj && obj.type === 'hb') { this.lastSeen = Date.now(); return; }
+    if (obj && obj.type === 'hb') {
+      this.lastSeen = Date.now();
+      try { ws.send(JSON.stringify({ type: 'hb' })); } catch (e) {}
+      return;
+    }
     if (obj && obj.type === 'reply' && obj.rid) {
       const p = this.pending.get(obj.rid);
       if (p) {
