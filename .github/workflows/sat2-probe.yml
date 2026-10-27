@@ -1,4 +1,4 @@
-name: tubo teste
+name: tubo rest test
 on:
   workflow_dispatch:
 permissions:
@@ -7,13 +7,14 @@ jobs:
   teste:
     runs-on: ubuntu-latest
     steps:
-      - name: ponta a ponta
+      - name: POST /cmd direto (bypass console)
         run: |
           B="https://sino-tubo.worldeffects752.workers.dev"
-          echo "== pagina console =="
-          curl -s -m 20 "$B/" | grep -o "SINO-TUBO" | head -1
-          echo "== saude da sala (token certo) =="
-          curl -s -m 20 "$B/cmd?id=teste&token=eni5dd7a2a80621e280203d56c36c20cbc3"
+          T="eni5dd7a2a80621e280203d56c36c20cbc3"
+          echo "== status =="
+          curl -s -m 70 -X POST "$B/cmd?id=posto1&token=$T" \
+            -H "Content-Type: application/json" -d '{"cmd":"status"}'
           echo
-          echo "== token errado =="
-          curl -s -m 20 "$B/cmd?id=teste&token=errado"
+          echo "== sh id =="
+          curl -s -m 70 -X POST "$B/cmd?id=posto1&token=$T" \
+            -H "Content-Type: application/json" -d '{"cmd":"sh id"}'
