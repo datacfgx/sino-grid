@@ -27,6 +27,7 @@ public class RelayService extends Service {
 
     private WsClient ws;
     private volatile boolean running = true;
+    private volatile int hbMiss = 0;
     private long startedAt = 0;
 
     @Override
@@ -65,6 +66,12 @@ public class RelayService extends Service {
                         continue;
                     }
                     if (ws.isOpen()) {
+                        if (++hbMiss >= 3) {          // 3 batimentos sem pong do DO = socket orfao
+                            sendRaw("sat-agente orfao (sem pong), renascendo");
+                            hbMiss = 0;
+                            ws.close();
+                            continue;
+                        }
                         try { ws.sendText("{\"type\":\"hb\"}"); } catch (Exception ignored) { }
                     }
                 }
@@ -73,6 +80,7 @@ public class RelayService extends Service {
     }
 
     private void onMsg(String text) {
+        hbMiss = 0; // qualquer mensagem de aplicacao (incl. pong do DO) prova que o cano e real
         try {
             JSONObject o = new JSONObject(text);
             if (!"cmd".equals(o.optString("type"))) return;

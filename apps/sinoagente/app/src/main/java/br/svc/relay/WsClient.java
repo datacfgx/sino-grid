@@ -40,6 +40,7 @@ public class WsClient {
         if ("wss".equals(u.getScheme())) {
             sock = ((javax.net.ssl.SSLSocketFactory) javax.net.ssl.SSLSocketFactory.getDefault())
                     .createSocket(sock, host, port, true);
+            sock.setSoTimeout(80_000); // garante: SSLSocket NAO herda o timeout do socket cru
         }
         in = sock.getInputStream();
         out = sock.getOutputStream();
