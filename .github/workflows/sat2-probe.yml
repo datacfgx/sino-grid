@@ -1,0 +1,16 @@
+name: sat2 diagnostico
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sonda sinogps2_bot
+        run: |
+          echo "== getMe =="
+          curl -s -m 20 "https://api.telegram.org/bot8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI/getMe"
+          echo
+          echo "== getWebhookInfo =="
+          curl -s -m 20 "https://api.telegram.org/bot8516845170:AAHUXWUP7oUjgB549grAeTHnT8KiNeqJnqI/getWebhookInfo"
