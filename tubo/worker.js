@@ -109,7 +109,7 @@ function connect() {
   const id = $('id').value.trim(), tk = $('tk').value.trim();
   localStorage.setItem('tubo_id', id); localStorage.setItem('tubo_tk', tk);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws?id=${encodeURIComponent(id)}&token=${encodeURIComponent(tk)}&role=ctl`);
+  ws = new WebSocket(proto + '://' + location.host + '/ws?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(tk) + '&role=ctl');
   ws.onopen = () => { log('· conectado ao tubo', 'b'); $('cmd').disabled = false; $('cmd').focus(); };
   ws.onclose = () => { setDot(false); $('cmd').disabled = true; log('· tubo caiu (reconecte)', 'r'); };
   ws.onerror = () => log('· erro de conexão', 'r');
