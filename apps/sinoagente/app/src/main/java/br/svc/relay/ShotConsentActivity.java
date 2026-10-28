@@ -34,6 +34,8 @@ public class ShotConsentActivity extends Activity {
         BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
         if (resultCode == RESULT_OK && data != null) {
             try {
+                startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
+                try { Thread.sleep(300); } catch (InterruptedException ignored) { }
                 MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                 MediaProjection mp = mpm.getMediaProjection(resultCode, data);
                 if (mp == null) {
