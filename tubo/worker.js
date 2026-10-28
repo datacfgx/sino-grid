@@ -112,6 +112,7 @@ function connect() {
     let o; try { o = JSON.parse(e.data); } catch (ev) { o = null; }
     if (o && o.type === 'presence') { setDot(!!o.online); log(o.online ? '· telefone entrou na sala' : '· telefone saiu', o.online ? 'g' : 'r'); return; }
     if (o && o.type === 'reply') { log(o.out); return; }
+    if (o && o.type === 'log') { log('· ' + o.m, 'g'); return; }
     log(e.data);
   };
 }
