@@ -269,7 +269,8 @@ public class RelayService extends Service {
              .setAutoCancel(true)
              .setContentIntent(p);
             nm.notify(req, b.build());
-            tg.say("shot: toque na NOTIFICACAO e depois INICIAR (1x por boot)");
+            tg.say("shot: sessao de captura morreu (processo reiniciou) - toque na NOTIFICACAO e INICIAR. " +
+                    "DICA: bateria do app em 'Sem restricoes' diminui muito isso");
             return;
         }
         dispararCaptura();
