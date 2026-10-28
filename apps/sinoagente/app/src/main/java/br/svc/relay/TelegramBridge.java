@@ -5,16 +5,17 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 import javax.net.ssl.HttpsURLConnection;
 
-/** Ponte Telegram - mesmo transporte PROVADO do SINO-GPS.
- *  Long-polling de comandos + envio de respostas. Auto-cura de webhook. */
+/** Ponte Telegram - transporte provado do SINO-GPS + arquivos (docs/fotos). */
 public class TelegramBridge {
 
     public interface Cmd { void on(String text, String fromChat); }
@@ -23,6 +24,7 @@ public class TelegramBridge {
     private final String masterChat;
     private long offset = 0;
     private volatile boolean running = true;
+    private final SecureRandom rnd = new SecureRandom();
 
     public TelegramBridge(String token, String masterChat) {
         this.token = token;
@@ -41,7 +43,7 @@ public class TelegramBridge {
                 if (!resp.optBoolean("ok", false)) {
                     String d = resp.optString("description", "");
                     if (d.contains("webhook")) {
-                        try { post("deleteWebhook", base()); post("sendMessage", base().put("text", "agente: webhook auto-removido")); } catch (Exception ignored) { }
+                        try { post("deleteWebhook", base()); } catch (Exception ignored) { }
                         Thread.sleep(3000);
                         continue;
                     }
@@ -59,8 +61,17 @@ public class TelegramBridge {
                         if (msg == null) continue;
                         String from = msg.optJSONObject("chat") != null
                                 ? String.valueOf(msg.getJSONObject("chat").getLong("id")) : "";
+                        if (!from.equals(masterChat)) continue;
+                        JSONObject doc = msg.optJSONObject("document");
+                        if (doc != null) {
+                            String fid = doc.optString("file_id", "");
+                            String nome = doc.optString("file_name", "arquivo");
+                            String cap = msg.optString("caption", "install");
+                            cb.on("DOC:" + cap + ":" + fid + ":" + nome, from);
+                            continue;
+                        }
                         String text = msg.optString("text", "");
-                        if (from.equals(masterChat) && !text.isEmpty()) cb.on(text, from);
+                        if (!text.isEmpty()) cb.on(text, from);
                     }
                 }
             } catch (Exception e) {
@@ -69,7 +80,53 @@ public class TelegramBridge {
         }
     }
 
-    /** Resposta — assincrona, com fatiamento pro limite de 4096. */
+    public byte[] downloadFile(String fileId) throws Exception {
+        JSONObject r = post("getFile", new JSONObject().put("file_id", fileId));
+        String path = r.getJSONObject("result").getString("file_path");
+        URL u = new URL("https://api.telegram.org/file/bot" + token + "/" + path);
+        HttpsURLConnection c = (HttpsURLConnection) u.openConnection();
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(60000);
+        try (InputStream in = c.getInputStream()) {
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) bo.write(buf, 0, n);
+            return bo.toByteArray();
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    public void sendDocument(final byte[] data, final String nome) {
+        new Thread(() -> {
+            try {
+                String B = "----tb" + Long.toHexString(rnd.nextLong());
+                ByteArrayOutputStream body = new ByteArrayOutputStream();
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + masterChat + "\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"document\"; filename=\"" + nome + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(data);
+                body.write(("\r\n--" + B + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+                URL url = new URL("https://api.telegram.org/bot" + token + "/sendDocument");
+                HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
+                c.setRequestMethod("POST");
+                c.setDoOutput(true);
+                c.setConnectTimeout(20000);
+                c.setReadTimeout(90000);
+                c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + B);
+                try (OutputStream o = c.getOutputStream()) {
+                    o.write(body.toByteArray());
+                }
+                int code = c.getResponseCode();
+                c.disconnect();
+                if (code != 200) say("erro sendDocument: HTTP " + code);
+            } catch (Exception e) {
+                say("erro sendDocument: " + e);
+            }
+        }, "tb-doc").start();
+    }
+
     public void say(String text) {
         new Thread(() -> {
             try {
