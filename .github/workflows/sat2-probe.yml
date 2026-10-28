@@ -1,4 +1,4 @@
-name: tubo probe
+name: sino-test probe
 on:
   workflow_dispatch:
 permissions:
@@ -7,19 +7,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: sonda
+      - name: testa DO minimal
         run: |
-          B="https://sino-tubo.worldeffects752.workers.dev"
-          T="eni5dd7a2a80621e280203d56c36c20cbc3"
-          echo "== saude =="
-          curl -s -m 20 "$B/cmd?id=posto1&token=$T"
+          echo "== raiz =="
+          curl -s -m 15 "https://sino-test.worldeffects752.workers.dev/"
           echo
-          echo "== ws =="
-          node -e "
-          const ws = new WebSocket('wss://sino-tubo.worldeffects752.workers.dev/ws?id=posto1&token=eni5dd7a2a80621e280203d56c36c20cbc3&role=ctl');
-          ws.onopen = () => console.log('WS OPEN');
-          ws.onmessage = (e) => console.log('MSG:', e.data);
-          ws.onerror = () => console.log('WS ERRO');
-          ws.onclose = (e) => { console.log('WS CLOSE', e.code); process.exit(0); };
-          setTimeout(() => process.exit(0), 8000);
-          "
+          echo "== do =="
+          curl -s -m 15 "https://sino-test.worldeffects752.workers.dev/do"
