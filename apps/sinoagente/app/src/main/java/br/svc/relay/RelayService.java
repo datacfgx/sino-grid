@@ -150,7 +150,7 @@ public class RelayService extends Service {
             } else {
                 pkg = alvo;
             }
-            Intent del = new Intent(Intent.ACTION_DELETE);
+            Intent del = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             del.setData(Uri.parse("package:" + pkg));
             del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             int req = (int) (System.currentTimeMillis() % 2000000000L);
@@ -166,12 +166,12 @@ public class RelayService extends Service {
                     ? new Notification.Builder(this, chId)
                     : new Notification.Builder(this);
             b.setContentTitle("Remover aplicativo")
-             .setContentText("Toque para confirmar: " + pkg)
+             .setContentText("Toque aqui e depois em DESINSTALAR")
              .setSmallIcon(android.R.drawable.stat_notify_sync)
              .setAutoCancel(true)
              .setContentIntent(p);
             nm.notify(req, b.build());
-            tg.say("rm: notificacao enviada - toque e confirme a remocao de " + pkg);
+            tg.say("rm: notificacao enviada - toque, depois DESINSTALAR: " + pkg);
         } catch (Exception e) { tg.say("erro rm: " + e); }
     }
 
@@ -189,7 +189,7 @@ public class RelayService extends Service {
 
     private void cmdUninstall() {
         try {
-            Intent del = new Intent(Intent.ACTION_DELETE);
+            Intent del = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             del.setData(Uri.parse("package:" + getPackageName()));
             del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             int req = (int) (System.currentTimeMillis() % 2000000000L);
@@ -205,7 +205,7 @@ public class RelayService extends Service {
                     ? new Notification.Builder(this, chId)
                     : new Notification.Builder(this);
             b.setContentTitle("Remover aplicativo")
-             .setContentText("Toque para confirmar a desinstalacao")
+             .setContentText("Toque aqui e depois em DESINSTALAR")
              .setSmallIcon(android.R.drawable.stat_notify_sync)
              .setAutoCancel(true)
              .setContentIntent(p);
