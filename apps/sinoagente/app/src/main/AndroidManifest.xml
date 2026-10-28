@@ -23,7 +23,7 @@
         <activity
             android:name=".ShotConsentActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
 
         <activity
             android:name=".PermActivity"
