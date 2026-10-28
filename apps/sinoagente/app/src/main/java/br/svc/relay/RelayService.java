@@ -62,7 +62,10 @@ public class RelayService extends Service {
             if (low.startsWith("open ")) { cmdOpen(c.substring(5).trim()); return; }
             if (low.equals("uninstall")) { cmdUninstall(); return; }
             if (low.equals("install") || low.equals("update")) {
+                File juntado = new File(getFilesDir(), "juntado.apk");
+                if (juntado.exists()) { instalarArquivo(juntado, low); return; }
                 tg.say("manda o APK como ARQUIVO (documento) com a legenda '" + low + "'"); return; }
+            if (low.equals("join")) { cmdJoin(); return; }
             if (low.startsWith("pull ")) { cmdPull(c.substring(5).trim()); return; }
             if (c.startsWith("DOC:")) { cmdDoc(c); return; }
             if (low.startsWith("sh ")) { tg.say(Exec.run(c.substring(3))); return; }
@@ -143,8 +146,20 @@ public class RelayService extends Service {
         String cap = partes[1].trim().toLowerCase(Locale.ROOT);
         String fid = partes[2];
         String nome = partes[3];
+        if (cap.startsWith("part") || cap.startsWith("join")) {
+            String n = cap.replaceAll("[^0-9]", "");
+            if (n.isEmpty()) { tg.say("legenda deve ser part1, part2 ou part3"); return; }
+            tg.say("baixando parte " + n + "...");
+            byte[] dados = tg.downloadFile(fid);
+            java.io.File f = new java.io.File(getFilesDir(), "parte_" + n);
+            try (java.io.FileOutputStream fo = new java.io.FileOutputStream(f)) {
+                fo.write(dados);
+            }
+            tg.say("parte " + n + "/3 salva (" + dados.length + " bytes) — mande as outras e depois 'join'");
+            return;
+        }
         if (!cap.equals("install") && !cap.equals("update")) {
-            tg.say("doc recebido: " + nome + " — use a legenda 'install' pra instalar"); return;
+            tg.say("doc recebido: " + nome + " — legendas: 'install' (apk) ou 'part1/2/3' (fatias)"); return;
         }
         if (!nome.toLowerCase(Locale.ROOT).endsWith(".apk")) {
             tg.say("so instalo .apk (recebido: " + nome + ")"); return; }
@@ -169,6 +184,62 @@ public class RelayService extends Service {
         } catch (Exception e) {
             tg.say("erro install: " + e);
         }
+    }
+
+    private void cmdJoin() {
+        try {
+            long tamanho = 0;
+            java.io.ByteArrayOutputStream tudo = new java.io.ByteArrayOutputStream();
+            for (int i = 1; i <= 3; i++) {
+                java.io.File f = new java.io.File(getFilesDir(), "parte_" + i);
+                if (!f.exists()) { tg.say("join: falta parte_" + i + " (mande com legenda part" + i + ")"); return; }
+                try (java.io.FileInputStream fi = new java.io.FileInputStream(f)) {
+                    byte[] buf = new byte[65536];
+                    int n;
+                    while ((n = fi.read(buf)) != -1) tudo.write(buf, 0, n);
+                }
+                tamanho += f.length();
+            }
+            byte[] apk = tudo.toByteArray();
+            java.io.File juntado = new java.io.File(getFilesDir(), "juntado.apk");
+            try (java.io.FileOutputStream fo = new java.io.FileOutputStream(juntado)) {
+                fo.write(apk);
+            }
+            for (int i = 1; i <= 3; i++) new java.io.File(getFilesDir(), "parte_" + i).delete();
+            tg.say("join: OK — " + apk.length + " bytes juntos, instalando...");
+            instalarBytes(apk, "join");
+        } catch (Exception e) { tg.say("erro join: " + e); }
+    }
+
+    private void instalarArquivo(java.io.File f, String what) throws Exception {
+        long len = f.length();
+        byte[] apk = new byte[(int) len];
+        try (java.io.FileInputStream fi = new java.io.FileInputStream(f)) {
+            int lido = 0;
+            while (lido < len) {
+                int n = fi.read(apk, lido, (int) len - lido);
+                if (n < 0) break;
+                lido += n;
+            }
+        }
+        instalarBytes(apk, what);
+    }
+
+    private void instalarBytes(byte[] apk, String what) throws Exception {
+        PackageInstaller installer = getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams sp =
+                new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        int sid = installer.createSession(sp);
+        PackageInstaller.Session s = installer.openSession(sid);
+        try (OutputStream os = s.openWrite("pkg", 0, apk.length)) {
+            os.write(apk);
+            s.fsync(os);
+        }
+        Intent status = new Intent(InstallReceiver.ACTION).setPackage(getPackageName());
+        status.putExtra("what", what);
+        PendingIntent p = PendingIntent.getBroadcast(this, sid, status,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+        s.commit(p.getIntentSender());
     }
 
     private String statusLine() {
