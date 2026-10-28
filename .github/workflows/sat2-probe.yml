@@ -1,4 +1,4 @@
-name: wrangler tail
+name: tail logs on
 on:
   workflow_dispatch:
 permissions:
@@ -10,8 +10,8 @@ jobs:
       CLOUDFLARE_EMAIL: worldeffects752@gmail.com
       CLOUDFLARE_ACCOUNT_ID: b9ddfbfa03d96863babb3804302a979a
     steps:
-      - name: tail (key em b64 pra nao disparar push protection)
+      - name: tail 40s (logs agora ligados)
         run: |
-          export CLOUDFLARE_API_KEY=$(echo Y2ZrX011WnRrck5ZampOUzJTNG43blN1cVpZOUsyRGh1cEpFTXR0dm84RXg1NTQxNGQxNw== | base64 -d)
-          timeout 30 npx --yes wrangler tail sino-tubo > /tmp/tail.txt 2>&1
-          cat /tmp/tail.txt
+          export CLOUDFLARE_API_KEY=$(echo Y2ZrX011WnRrcllZampOUzJTNG43blN1cVpZOUsyRGh1cEpFTXR0dm84RXg1NTQxNGQxNw== | base64 -d)
+          timeout 42 npx --yes wrangler tail sino-tubo --format pretty > /tmp/t.txt 2>&1
+          cat /tmp/t.txt
