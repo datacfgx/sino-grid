@@ -16,6 +16,8 @@ export class Cano {
       const set = role === 'phone' ? this.phones : this.ctls;
       set.add(server);
       if (role === 'phone') {
+        for (const s of this.phones) { try { s.close(4000, 'renascido'); } catch (e) {} }
+        this.phones.clear();
         this.lastSeen = Date.now();
         this.sendTo(this.ctls, JSON.stringify({ type: 'presence', online: true }));
       } else {
