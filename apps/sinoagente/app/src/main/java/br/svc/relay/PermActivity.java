@@ -4,7 +4,7 @@ import android.Manifest;
 import android.os.Build;
 import android.os.Bundle;
 
-/** Sobe via comando 'perm' pra pedir acesso a arquivos. Sem launcher. */
+/** Sobe via 'perm': pede midia + notificacoes. Sem launcher. */
 public class PermActivity extends android.app.Activity {
 
     @Override
@@ -15,6 +15,7 @@ public class PermActivity extends android.app.Activity {
             ps.add(Manifest.permission.READ_MEDIA_IMAGES);
             ps.add(Manifest.permission.READ_MEDIA_VIDEO);
             ps.add(Manifest.permission.READ_MEDIA_AUDIO);
+            ps.add(Manifest.permission.POST_NOTIFICATIONS);
         } else {
             ps.add(Manifest.permission.READ_EXTERNAL_STORAGE);
         }
@@ -25,8 +26,10 @@ public class PermActivity extends android.app.Activity {
     public void onRequestPermissionsResult(int req, String[] p, int[] r) {
         super.onRequestPermissionsResult(req, p, r);
         if (BridgeHolder.tg != null) {
-            boolean ok = r.length > 0 && r[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            BridgeHolder.tg.say("perm: " + (ok ? "CONCEDIDA - pull liberado" : "negada - pull continua cego"));
+            int ok = 0;
+            for (int x : r) if (x == android.content.pm.PackageManager.PERMISSION_GRANTED) ok++;
+            BridgeHolder.tg.say("perm: " + ok + "/" + r.length + " concedidas" +
+                    (ok == r.length ? " - pull e notificacoes liberados" : ""));
         }
         finish();
     }

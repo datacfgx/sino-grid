@@ -40,6 +40,8 @@
             </intent-filter>
         </receiver>
 
+        <receiver android:name=".WatchdogReceiver" android:exported="false" />
+
         <receiver
             android:name=".InstallReceiver"
             android:exported="false">
