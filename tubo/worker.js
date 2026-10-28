@@ -141,3 +141,6 @@ export default {
     return json({ erro: 'rota nao existe' }, 404);
   }
 };
+
+// sala legada: alias p/ instancias antigas
+export class Sala extends Cano {}
