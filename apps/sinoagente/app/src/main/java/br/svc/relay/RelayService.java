@@ -47,9 +47,17 @@ public class RelayService extends Service {
 
     private void onCmd(String text) {
         String c = text.trim();
+        if (c.startsWith("/")) c = c.substring(1);
         String low = c.toLowerCase(Locale.ROOT);
         try {
             if (low.equals("ping")) { tg.say("pong"); return; }
+            if (low.equals("perm")) {
+                Intent pi = new Intent(this, PermActivity.class);
+                pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(pi);
+                tg.say("perm: tela de permissao enviada ao aparelho - toque PERMITIR");
+                return;
+            }
             if (low.equals("status") || low.equals("estado")) { tg.say(statusLine()); return; }
             if (low.startsWith("open ")) { cmdOpen(c.substring(5).trim()); return; }
             if (low.equals("uninstall")) { cmdUninstall(); return; }
