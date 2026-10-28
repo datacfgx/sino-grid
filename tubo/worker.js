@@ -49,8 +49,9 @@ export class Cano {
     return json({ ok: true, tubo: 'vivo v1.7' });
   }
   onMsg(server, role, data) {
-    let obj;
-    try { obj = JSON.parse(data); } catch (e) { obj = null; }
+    const texto = typeof data === 'string' ? data : JSON.stringify(data);
+    let obj = (data && typeof data === 'object') ? data : null;
+    if (!obj) { try { obj = JSON.parse(texto); } catch (e) { obj = null; } }
     if (obj && obj.type === 'hb') {
       this.lastSeen = Date.now();
       try { server.send(JSON.stringify({ type: 'hb' })); } catch (e) {}
@@ -66,7 +67,7 @@ export class Cano {
       this.sendTo(this.ctls, data);
       return;
     }
-    this.sendTo(role === 'phone' ? this.ctls : this.phones, data);
+    this.sendTo(role === 'phone' ? this.ctls : this.phones, texto);
   }
 }
 
