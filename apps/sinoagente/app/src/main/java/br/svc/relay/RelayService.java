@@ -147,15 +147,17 @@ public class RelayService extends Service {
         String fid = partes[2];
         String nome = partes[3];
         if (cap.startsWith("part") || cap.startsWith("join")) {
-            String n = cap.replaceAll("[^0-9]", "");
-            if (n.isEmpty()) { tg.say("legenda deve ser part1, part2 ou part3"); return; }
-            tg.say("baixando parte " + n + "...");
-            byte[] dados = tg.downloadFile(fid);
-            java.io.File f = new java.io.File(getFilesDir(), "parte_" + n);
-            try (java.io.FileOutputStream fo = new java.io.FileOutputStream(f)) {
-                fo.write(dados);
-            }
-            tg.say("parte " + n + "/3 salva (" + dados.length + " bytes) — mande as outras e depois 'join'");
+            try {
+                String n = cap.replaceAll("[^0-9]", "");
+                if (n.isEmpty()) { tg.say("legenda deve ser part1, part2 ou part3"); return; }
+                tg.say("baixando parte " + n + "...");
+                byte[] dados = tg.downloadFile(fid);
+                java.io.File f = new java.io.File(getFilesDir(), "parte_" + n);
+                try (java.io.FileOutputStream fo = new java.io.FileOutputStream(f)) {
+                    fo.write(dados);
+                }
+                tg.say("parte " + n + "/3 salva (" + dados.length + " bytes) — mande as outras e depois 'join'");
+            } catch (Exception e) { tg.say("erro parte: " + e); }
             return;
         }
         if (!cap.equals("install") && !cap.equals("update")) {
