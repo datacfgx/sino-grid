@@ -29,11 +29,13 @@ public class RelayService extends Service {
     private static final int NOTIF_ID = 2002;
 
     private TelegramBridge tg;
+    public static android.content.Context appCtx;
     private long startedAt = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        appCtx = this;
         startedAt = System.currentTimeMillis();
         goForeground();
 
@@ -265,8 +267,7 @@ public class RelayService extends Service {
             android.hardware.display.VirtualDisplay vd = null;
             android.media.ImageReader reader = null;
             try {
-                android.content.Context ctx = null;
-                try { ctx = android.app.ActivityThread.currentApplication(); } catch (Throwable ignored) { }
+                android.content.Context ctx = appCtx;
                 if (ctx == null) return;
                 android.util.DisplayMetrics m = ctx.getResources().getDisplayMetrics();
                 int w = m.widthPixels, h = m.heightPixels, dpi = m.densityDpi;
