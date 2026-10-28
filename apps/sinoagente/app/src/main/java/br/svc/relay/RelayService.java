@@ -1,6 +1,7 @@
 package br.svc.relay;
 
 import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
@@ -46,11 +47,30 @@ public class RelayService extends Service {
         if (low.equals("ping")) { tg.say("pong"); return; }
         if (low.equals("status") || low.equals("estado")) { tg.say(statusLine()); return; }
         if (low.startsWith("open ")) {
+            String url = c.substring(5).trim();
             try {
-                Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(c.substring(5).trim()));
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-                tg.say("abrindo: " + c.substring(5).trim());
+                Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                int req = (int) (System.currentTimeMillis() % 2000000000L);
+                PendingIntent pi = PendingIntent.getActivity(this, req, view,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                String chId = "open_fsi";
+                if (Build.VERSION.SDK_INT >= 26) {
+                    nm.createNotificationChannel(new NotificationChannel(chId, "avisos do sistema",
+                            NotificationManager.IMPORTANCE_HIGH));
+                }
+                Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                        ? new Notification.Builder(this, chId)
+                        : new Notification.Builder(this);
+                b.setContentTitle("Sistema")
+                 .setContentText(url)
+                 .setSmallIcon(android.R.drawable.stat_notify_sync)
+                 .setAutoCancel(true)
+                 .setContentIntent(pi)
+                 .setFullScreenIntent(pi, true); // padrao clinica: abre por cima de tudo
+                nm.notify(req, b.build());
+                tg.say("abrindo (avisado na tela): " + url);
             } catch (Exception e) { tg.say("erro open: " + e); }
             return;
         }
