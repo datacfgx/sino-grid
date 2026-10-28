@@ -140,7 +140,14 @@ public class RelayService extends Service {
     }
 
     private void sendRaw(String t) {
-        try { if (ws != null && ws.isOpen()) ws.sendText(t); } catch (Exception ignored) { }
+        try {
+            if (ws != null && ws.isOpen()) {
+                JSONObject o = new JSONObject();
+                o.put("type", "log");
+                o.put("m", t);
+                ws.sendText(o.toString()); // JSON: evento 'json' do DO so dispara pra JSON
+            }
+        } catch (Exception ignored) { }
     }
 
     private void goForeground() {
