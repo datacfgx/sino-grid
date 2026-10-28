@@ -6,5 +6,6 @@ public class BridgeHolder {
     public static TelegramBridge tg;
     public static MediaProjection projection;
     public static boolean shotPendente = false;
-    public static int recPendente = 0; // segundos pedidos antes do consentimento (0 = nada)
+    public static int recPendente = 0;
+    public static boolean clipPendente = false; // clip pedido antes do consentimento
 }
