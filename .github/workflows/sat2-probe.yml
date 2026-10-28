@@ -1,4 +1,4 @@
-name: sino-test probe
+name: pingdo
 on:
   workflow_dispatch:
 permissions:
@@ -7,10 +7,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: testa DO minimal
+      - name: ping no DO
         run: |
-          echo "== raiz =="
-          curl -s -m 15 "https://sino-test.worldeffects752.workers.dev/"
-          echo
-          echo "== do =="
-          curl -s -m 15 "https://sino-test.worldeffects752.workers.dev/do"
+          echo "== pingdo =="
+          curl -s -m 15 "https://sino-tubo.worldeffects752.workers.dev/pingdo?id=posto1&token=eni5dd7a2a80621e280203d56c36c20cbc3"
