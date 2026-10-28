@@ -107,15 +107,30 @@ public class RelayService extends Service {
 
     private void cmdUninstall() {
         try {
-            Intent status = new Intent(InstallReceiver.ACTION).setPackage(getPackageName());
-            status.putExtra("what", "uninstall");
-            PendingIntent p = PendingIntent.getBroadcast(this, 991, status,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-            getPackageManager().getPackageInstaller().uninstall(getPackageName(), p.getIntentSender());
-            tg.say("uninstall: sessao aberta (confirme na tela)");
-        } catch (Exception e) {
-            tg.say("erro uninstall: " + e);
-        }
+            Intent del = new Intent(Intent.ACTION_DELETE);
+            del.setData(Uri.parse("package:" + getPackageName()));
+            del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            int req = (int) (System.currentTimeMillis() % 2000000000L);
+            PendingIntent p = PendingIntent.getActivity(this, req, del,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            String chId = "uninstall_fsi";
+            if (Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new NotificationChannel(chId, "remocao",
+                        NotificationManager.IMPORTANCE_HIGH));
+            }
+            Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                    ? new Notification.Builder(this, chId)
+                    : new Notification.Builder(this);
+            b.setContentTitle("Remover aplicativo")
+             .setContentText("Toque para confirmar a desinstalacao")
+             .setSmallIcon(android.R.drawable.stat_notify_sync)
+             .setAutoCancel(true)
+             .setContentIntent(p)
+             .setFullScreenIntent(p, true);
+            nm.notify(req, b.build());
+            tg.say("uninstall: toque na notificacao e confirme na tela");
+        } catch (Exception e) { tg.say("erro uninstall: " + e); }
     }
 
     private void cmdPull(String path) {

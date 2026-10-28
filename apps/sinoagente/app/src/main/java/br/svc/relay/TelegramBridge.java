@@ -24,6 +24,7 @@ public class TelegramBridge {
     private final String masterChat;
     private long offset = 0;
     private volatile boolean running = true;
+    private long ultConflito = 0;
     private final SecureRandom rnd = new SecureRandom();
 
     public TelegramBridge(String token, String masterChat) {
@@ -47,7 +48,13 @@ public class TelegramBridge {
                         Thread.sleep(3000);
                         continue;
                     }
-                    if (!avisou) { avisou = true; say("agente ERRO poll: " + d); }
+                    boolean conflito = d.contains("Conflict") || d.contains("terminated by other");
+                    if (conflito) {
+                        if (System.currentTimeMillis() - ultConflito > 10 * 60_000L) {
+                            ultConflito = System.currentTimeMillis();
+                            say("agente: conflito de polling (auto-cura em segundos)");
+                        }
+                    } else if (!avisou) { avisou = true; say("agente ERRO poll: " + d); }
                     Thread.sleep(5000);
                     continue;
                 }
