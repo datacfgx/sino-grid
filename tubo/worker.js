@@ -2,12 +2,15 @@
 // Túnel: celular (4G/5G/qualquer NAT) <-> console <-> comandos
 // Salas = Durable Objects (uma por posto, nunca cai)
 
+import { DurableObject } from 'cloudflare:workers';
+
 function json(o, status = 200) {
   return new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-export class Sala {
-  constructor(state) {
+export class Sala extends DurableObject {
+  constructor(state, env) {
+    super(state, env);
     this.state = state;
     this.pending = new Map();
     this.seq = 0;
