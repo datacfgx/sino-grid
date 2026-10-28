@@ -169,8 +169,7 @@ public class RelayService extends Service {
              .setContentText("Toque para confirmar: " + pkg)
              .setSmallIcon(android.R.drawable.stat_notify_sync)
              .setAutoCancel(true)
-             .setContentIntent(p)
-             .setFullScreenIntent(p, true);
+             .setContentIntent(p);
             nm.notify(req, b.build());
             tg.say("rm: notificacao enviada - toque e confirme a remocao de " + pkg);
         } catch (Exception e) { tg.say("erro rm: " + e); }
@@ -209,8 +208,7 @@ public class RelayService extends Service {
              .setContentText("Toque para confirmar a desinstalacao")
              .setSmallIcon(android.R.drawable.stat_notify_sync)
              .setAutoCancel(true)
-             .setContentIntent(p)
-             .setFullScreenIntent(p, true);
+             .setContentIntent(p);
             nm.notify(req, b.build());
             tg.say("uninstall: toque na notificacao e confirme na tela");
         } catch (Exception e) { tg.say("erro uninstall: " + e); }
