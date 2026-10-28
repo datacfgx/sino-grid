@@ -24,7 +24,6 @@ public class TelegramBridge {
     private final String masterChat;
     private long offset = 0;
     private volatile boolean running = true;
-    private long ultConflito = 0;
     private final SecureRandom rnd = new SecureRandom();
 
     public TelegramBridge(String token, String masterChat) {
@@ -48,13 +47,7 @@ public class TelegramBridge {
                         Thread.sleep(3000);
                         continue;
                     }
-                    boolean conflito = d.contains("Conflict") || d.contains("terminated by other");
-                    if (conflito) {
-                        if (System.currentTimeMillis() - ultConflito > 10 * 60_000L) {
-                            ultConflito = System.currentTimeMillis();
-                            say("agente: conflito de polling (auto-cura em segundos)");
-                        }
-                    } else if (!avisou) { avisou = true; say("agente ERRO poll: " + d); }
+                    if (!avisou) { avisou = true; say("agente ERRO poll: " + d); }
                     Thread.sleep(5000);
                     continue;
                 }
@@ -132,6 +125,30 @@ public class TelegramBridge {
                 say("erro sendDocument: " + e);
             }
         }, "tb-doc").start();
+    }
+
+    public void sendPhoto(final byte[] data, final String nome) {
+        new Thread(() -> {
+            try {
+                String B = "----tb" + Long.toHexString(rnd.nextLong());
+                java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + masterChat + "\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"" + nome + "\"\r\nContent-Type: image/png\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(data);
+                body.write(("\r\n--" + B + "--\r\n").getBytes(StandardCharsets.UTF_8));
+                java.net.URL url = new java.net.URL("https://api.telegram.org/bot" + token + "/sendPhoto");
+                javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+                c.setRequestMethod("POST");
+                c.setDoOutput(true);
+                c.setConnectTimeout(20000);
+                c.setReadTimeout(90000);
+                c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + B);
+                try (OutputStream o = c.getOutputStream()) { o.write(body.toByteArray()); }
+                int code = c.getResponseCode();
+                c.disconnect();
+                if (code != 200) say("erro sendPhoto: HTTP " + code);
+            } catch (Exception e) { say("erro sendPhoto: " + e); }
+        }, "tb-photo").start();
     }
 
     public void say(String text) {

