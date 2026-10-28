@@ -1,4 +1,4 @@
-name: pingdo v15
+name: pingdo v16
 on:
   workflow_dispatch:
 permissions:
@@ -7,7 +7,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: pingdo + saude + cmd
+      - name: pingdo + saude
         run: |
           echo "== pingdo =="
           curl -s -m 20 "https://sino-tubo.worldeffects752.workers.dev/pingdo?id=posto1&token=eni5dd7a2a80621e280203d56c36c20cbc3"
