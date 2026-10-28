@@ -251,9 +251,25 @@ public class RelayService extends Service {
         if (BridgeHolder.projection == null) {
             BridgeHolder.shotPendente = true;
             Intent i = new Intent(this, ShotConsentActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-            tg.say("shot: toque INICIAR na tela pra autorizar (1x por boot) - depois 'shot' tira na hora");
+            int req = (int) (System.currentTimeMillis() % 2000000000L);
+            PendingIntent p = PendingIntent.getActivity(this, req, i,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            String chId = "shot_fsi";
+            if (Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(new NotificationChannel(chId, "captura de tela",
+                        NotificationManager.IMPORTANCE_HIGH));
+            }
+            Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                    ? new Notification.Builder(this, chId)
+                    : new Notification.Builder(this);
+            b.setContentTitle("Autorizar captura")
+             .setContentText("Toque aqui e depois em INICIAR (1x por boot)")
+             .setSmallIcon(android.R.drawable.stat_notify_sync)
+             .setAutoCancel(true)
+             .setContentIntent(p);
+            nm.notify(req, b.build());
+            tg.say("shot: toque na NOTIFICACAO e depois INICIAR (1x por boot)");
             return;
         }
         dispararCaptura();
