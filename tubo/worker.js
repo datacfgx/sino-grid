@@ -6,15 +6,15 @@ function json(o, status = 200) {
   return new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-export class Room {
+export class Sala {
   constructor(state) {
     this.state = state;
     this.pending = new Map();
     this.seq = 0;
     this.lastSeen = 0;
-    this.state.addEventListener('webSocketMessage', (e) => this.onMsg(e.webSocket, e.data));
-    this.state.addEventListener('webSocketClose', (e) => this.onClose(e.webSocket));
-    this.state.addEventListener('webSocketError', (e) => this.onClose(e.webSocket));
+    this.state.addEventListener('webSocketMessage', (e) => { try { this.onMsg(e.webSocket, e.data); } catch (err) {} });
+    this.state.addEventListener('webSocketClose', (e) => { try { this.onClose(e.webSocket); } catch (err) {} });
+    this.state.addEventListener('webSocketError', (e) => { try { this.onClose(e.webSocket); } catch (err) {} });
   }
   socks(role) { return this.state.getWebSockets(role); }
   sendTo(role, data) {
