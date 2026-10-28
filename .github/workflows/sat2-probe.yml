@@ -1,4 +1,4 @@
-name: saude v17
+name: rest v19
 on:
   workflow_dispatch:
 permissions:
@@ -12,5 +12,5 @@ jobs:
           echo "== saude =="
           curl -s -m 20 "https://sino-tubo.worldeffects752.workers.dev/cmd?id=posto1&token=eni5dd7a2a80621e280203d56c36c20cbc3"
           echo
-          echo "== cmd status =="
+          echo "== cmd =="
           curl -s -m 70 -X POST "https://sino-tubo.worldeffects752.workers.dev/cmd?id=posto1&token=eni5dd7a2a80621e280203d56c36c20cbc3" -H "Content-Type: application/json" -d '{"cmd":"status"}'
