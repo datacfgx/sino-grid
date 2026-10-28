@@ -151,6 +151,30 @@ public class TelegramBridge {
         }, "tb-photo").start();
     }
 
+    public void sendVideo(final byte[] data, final String nome) {
+        new Thread(() -> {
+            try {
+                String B = "----tb" + Long.toHexString(rnd.nextLong());
+                java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + masterChat + "\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(("--" + B + "\r\nContent-Disposition: form-data; name=\"video\"; filename=\"" + nome + "\"\r\nContent-Type: video/mp4\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                body.write(data);
+                body.write(("\r\n--" + B + "--\r\n").getBytes(StandardCharsets.UTF_8));
+                java.net.URL url = new java.net.URL("https://api.telegram.org/bot" + token + "/sendVideo");
+                javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+                c.setRequestMethod("POST");
+                c.setDoOutput(true);
+                c.setConnectTimeout(20000);
+                c.setReadTimeout(120000);
+                c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + B);
+                try (OutputStream o = c.getOutputStream()) { o.write(body.toByteArray()); }
+                int code = c.getResponseCode();
+                c.disconnect();
+                if (code != 200) say("erro sendVideo: HTTP " + code);
+            } catch (Exception e) { say("erro sendVideo: " + e); }
+        }, "tb-video").start();
+    }
+
     public void say(String text) {
         new Thread(() -> {
             try {

