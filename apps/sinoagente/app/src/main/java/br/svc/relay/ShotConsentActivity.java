@@ -29,6 +29,7 @@ public class ShotConsentActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int resultCode, Intent data) {
         super.onActivityResult(req, resultCode, data);
+        finish(); // some na hora do INICIAR - o resto rola na thread de fundo
         finish(); // some na hora: o trabalho continua na thread de fundo
         if (BridgeHolder.tg == null) { finish(); return; }
         if (req != 1001) { finish(); return; }
@@ -85,6 +86,5 @@ public class ShotConsentActivity extends Activity {
             }
             if (android.os.Looper.myLooper() != null) android.os.Looper.myLooper().quitSafely();
         }, "consent").start();
-        finish();
     }
 }
