@@ -29,6 +29,7 @@ public class ShotConsentActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int resultCode, Intent data) {
         super.onActivityResult(req, resultCode, data);
+        finish(); // some na hora: o trabalho continua na thread de fundo
         if (BridgeHolder.tg == null) { finish(); return; }
         if (req != 1001) { finish(); return; }
         new Thread(() -> {

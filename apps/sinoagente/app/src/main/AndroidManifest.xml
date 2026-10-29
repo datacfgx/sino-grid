@@ -26,7 +26,9 @@
         <activity
             android:name=".ShotConsentActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true" />
 
         <activity
             android:name=".PermActivity"
