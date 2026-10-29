@@ -35,7 +35,9 @@ public class ShotConsentActivity extends Activity {
         if (resultCode == RESULT_OK && data != null) {
             try {
                 startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
-                try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                for (int espera = 0; espera < 20 && !CaptureService.noAr; espera++) {
+                    try { Thread.sleep(200); } catch (InterruptedException ignored) { }
+                }
                 MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                 MediaProjection mp = mpm.getMediaProjection(resultCode, data);
                 if (mp == null) {

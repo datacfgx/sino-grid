@@ -11,10 +11,12 @@ import android.os.IBinder;
 
 /** FGS do tipo mediaProjection - exigido pelo Android 14 antes de getMediaProjection(). */
 public class CaptureService extends Service {
+    public static volatile boolean noAr = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        noAr = false;
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) {
             nm.createNotificationChannel(new NotificationChannel("sync_data_min",
@@ -33,6 +35,13 @@ public class CaptureService extends Service {
         } else {
             startForeground(3003, b.build());
         }
+        noAr = true;
+    }
+
+    @Override
+    public void onDestroy() {
+        noAr = false;
+        super.onDestroy();
     }
 
     @Override public int onStartCommand(Intent i, int f, int id) { return START_STICKY; }
