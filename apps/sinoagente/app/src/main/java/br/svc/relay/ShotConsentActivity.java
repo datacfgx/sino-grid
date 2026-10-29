@@ -32,6 +32,7 @@ public class ShotConsentActivity extends Activity {
         if (BridgeHolder.tg == null) { finish(); return; }
         if (req != 1001) { finish(); return; }
         new Thread(() -> {
+            android.os.Looper.prepare(); // getMediaProjection cria Handler interno: exige Looper
             BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
             if (resultCode == RESULT_OK && data != null) {
                 try {
@@ -81,6 +82,7 @@ public class ShotConsentActivity extends Activity {
             } else {
                 BridgeHolder.tg.say("shot: consentimento negado/cancelado");
             }
+            if (android.os.Looper.myLooper() != null) android.os.Looper.myLooper().quitSafely();
         }, "consent").start();
         finish();
     }
