@@ -324,9 +324,12 @@ private void cmdUninstall() {
     private void cmdShot() {
         if (BridgeHolder.projection == null) {
             BridgeHolder.shotPendente = true;
-            notifConsentimento();
-            tg.say("shot: sessao de captura morreu (processo reiniciou) - toque na NOTIFICACAO e INICIAR. " +
-                    "DICA: bateria do app em 'Sem restricoes' diminui muito isso");
+            if (abrirDireto(new Intent(this, ShotConsentActivity.class))) {
+                tg.say("shot: diálogo de consentimento ABERTO NA TELA - toque INICIAR");
+            } else {
+                notifConsentimento();
+                tg.say("shot: toque na NOTIFICACAO e INICIAR");
+            }
             return;
         }
         dispararCaptura();
@@ -351,12 +354,28 @@ private void cmdUninstall() {
         }
         if (BridgeHolder.projection == null) {
             BridgeHolder.recPendente = segundos;
-            notifConsentimento();
-            tg.say("rec: toque na NOTIFICACAO e INICIAR pra autorizar a captura");
+            if (abrirDireto(new Intent(this, ShotConsentActivity.class))) {
+                tg.say("rec: diálogo ABERTO NA TELA - toque INICIAR pra autorizar");
+            } else {
+                notifConsentimento();
+                tg.say("rec: toque na NOTIFICACAO e INICIAR pra autorizar a captura");
+            }
             return;
         }
         dispararRec(segundos);
         tg.say("rec: gravando " + segundos + "s...");
+    }
+
+    /** Abre activity direto da background (isencao SYSTEM_ALERT_WINDOW).
+     *  Retorna false se o sistema bloquear -> caller cai na notificacao. */
+    private boolean abrirDireto(Intent i) {
+        try {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private void notifConsentimento() {
@@ -483,8 +502,12 @@ private void cmdUninstall() {
         if (BridgeHolder.projection == null) {
             clipAtivo = true;
             BridgeHolder.clipPendente = true;
-            notifConsentimento();
-            tg.say("clip: toque na NOTIFICACAO e INICIAR pra armar a camera retro");
+            if (abrirDireto(new Intent(this, ShotConsentActivity.class))) {
+                tg.say("clip: diálogo ABERTO NA TELA - toque INICIAR pra armar a camera retro");
+            } else {
+                notifConsentimento();
+                tg.say("clip: toque na NOTIFICACAO e INICIAR pra armar a camera retro");
+            }
             return;
         }
         armarClip();

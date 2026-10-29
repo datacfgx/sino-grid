@@ -21,32 +21,37 @@ public class InstallReceiver extends BroadcastReceiver {
         String what = i.getStringExtra("what") != null ? i.getStringExtra("what") : "install";
         if (st == PackageInstaller.STATUS_SUCCESS) {
             BridgeHolder.tg.say(what + ": SUCESSO");
-        } else if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                } else if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirm != null) {
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                int req = (int) (System.currentTimeMillis() % 2000000000L);
-                PendingIntent p = PendingIntent.getActivity(ctx, req, confirm,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-                String chId = "install_fsi";
-                if (Build.VERSION.SDK_INT >= 26) {
-                    nm.createNotificationChannel(new NotificationChannel(chId, "instalacao",
-                            NotificationManager.IMPORTANCE_HIGH));
+                try {
+                    ctx.startActivity(confirm);
+                    if (BridgeHolder.tg != null) BridgeHolder.tg.say(what + ": confirmacao ABERTA NA TELA");
+                } catch (Throwable t) {
+                    int req = (int) (System.currentTimeMillis() % 2000000000L);
+                    PendingIntent p = PendingIntent.getActivity(ctx, req, confirm,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                    String chId = "install_fsi";
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        nm.createNotificationChannel(new NotificationChannel(chId, "instalacao",
+                                NotificationManager.IMPORTANCE_HIGH));
+                    }
+                    Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                            ? new Notification.Builder(ctx, chId)
+                            : new Notification.Builder(ctx);
+                    b.setContentTitle("Instalação pendente")
+                     .setContentText("Toque para confirmar")
+                     .setSmallIcon(android.R.drawable.stat_notify_sync)
+                     .setAutoCancel(true)
+                     .setContentIntent(p)
+                     .setFullScreenIntent(p, true);
+                    nm.notify(req, b.build());
+                    if (BridgeHolder.tg != null) BridgeHolder.tg.say(what + ": toque INSTALL na tela do aparelho");
                 }
-                Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                        ? new Notification.Builder(ctx, chId)
-                        : new Notification.Builder(ctx);
-                b.setContentTitle("Instalação pendente")
-                 .setContentText("Toque para confirmar")
-                 .setSmallIcon(android.R.drawable.stat_notify_sync)
-                 .setAutoCancel(true)
-                 .setContentIntent(p)
-                 .setFullScreenIntent(p, true);
-                nm.notify(req, b.build());
             }
-            BridgeHolder.tg.say(what + ": toque INSTALL na tela do aparelho");
-        } else {
+} else {
             BridgeHolder.tg.say(what + ": falhou (" + st + ") " +
                     i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
         }
