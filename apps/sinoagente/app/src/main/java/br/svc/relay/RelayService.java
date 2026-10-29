@@ -90,6 +90,13 @@ public class RelayService extends Service {
 
     private void cmdOpen(String url) {
         try {
+            Intent direto = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            direto.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(direto);
+            tg.say("abrindo direto: " + url);
+            return;
+        } catch (Throwable t) { /* sem overlay concedido: cai na notificacao */ }
+        try {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             int req = (int) (System.currentTimeMillis() % 2000000000L);
