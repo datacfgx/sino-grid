@@ -35,11 +35,23 @@ public class ShotConsentActivity extends Activity {
         if (resultCode == RESULT_OK && data != null) {
             try {
                 startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
-                for (int espera = 0; espera < 20 && !CaptureService.noAr; espera++) {
-                    try { Thread.sleep(200); } catch (InterruptedException ignored) { }
-                }
                 MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                MediaProjection mp = mpm.getMediaProjection(resultCode, data);
+                // retry: estado 'foreground' do FGS sobe de forma assincrona; tenta ate 5x
+                MediaProjection mp = null;
+                SecurityException ultima = null;
+                for (int tent = 0; tent < 5; tent++) {
+                    try {
+                        for (int espera = 0; espera < 10 && !CaptureService.noAr; espera++) {
+                            try { Thread.sleep(200); } catch (InterruptedException ignored) { }
+                        }
+                        mp = mpm.getMediaProjection(resultCode, data);
+                        break;
+                    } catch (SecurityException se) {
+                        ultima = se;
+                        try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+                    }
+                }
+                if (mp == null && ultima != null) throw ultima;
                 if (mp == null) {
                     BridgeHolder.tg.say("shot: sistema NEGOU a projecao (nulo) - tela visivel nao bastou");
                 } else {

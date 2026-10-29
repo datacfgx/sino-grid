@@ -384,7 +384,7 @@ private void cmdUninstall() {
                 BridgeHolder.projection.stop();
                 BridgeHolder.projection = null;
             }
-            stopService(new Intent(this, CaptureService.class));
+            // CaptureService NAO e parado: sticky, barato, e evita a corrida de restart
         } catch (Throwable ignored) { }
     }
 
