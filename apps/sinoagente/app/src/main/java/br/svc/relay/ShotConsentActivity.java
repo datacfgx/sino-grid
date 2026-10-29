@@ -31,55 +31,57 @@ public class ShotConsentActivity extends Activity {
         super.onActivityResult(req, resultCode, data);
         if (BridgeHolder.tg == null) { finish(); return; }
         if (req != 1001) { finish(); return; }
-        BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
-        if (resultCode == RESULT_OK && data != null) {
-            try {
-                startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
-                MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                // retry: estado 'foreground' do FGS sobe de forma assincrona; tenta ate 5x
-                MediaProjection mp = null;
-                SecurityException ultima = null;
-                for (int tent = 0; tent < 5; tent++) {
-                    try {
-                        for (int espera = 0; espera < 10 && !CaptureService.noAr; espera++) {
-                            try { Thread.sleep(200); } catch (InterruptedException ignored) { }
+        new Thread(() -> {
+            BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
+            if (resultCode == RESULT_OK && data != null) {
+                try {
+                    startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
+                    MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                    // retry: estado 'foreground' do FGS sobe de forma assincrona; tenta ate 5x
+                    MediaProjection mp = null;
+                    SecurityException ultima = null;
+                    for (int tent = 0; tent < 5; tent++) {
+                        try {
+                            for (int espera = 0; espera < 10 && !CaptureService.noAr; espera++) {
+                                try { Thread.sleep(200); } catch (InterruptedException ignored) { }
+                            }
+                            mp = mpm.getMediaProjection(resultCode, data);
+                            break;
+                        } catch (SecurityException se) {
+                            ultima = se;
+                            try { Thread.sleep(500); } catch (InterruptedException ignored) { }
                         }
-                        mp = mpm.getMediaProjection(resultCode, data);
-                        break;
-                    } catch (SecurityException se) {
-                        ultima = se;
-                        try { Thread.sleep(500); } catch (InterruptedException ignored) { }
                     }
+                    if (mp == null && ultima != null) throw ultima;
+                    if (mp == null) {
+                        BridgeHolder.tg.say("shot: sistema NEGOU a projecao (nulo) - tela visivel nao bastou");
+                    } else {
+                        mp.registerCallback(new MediaProjection.Callback() {
+                            @Override public void onStop() { BridgeHolder.projection = null; }
+                        }, null);
+                        BridgeHolder.projection = mp;
+                        BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
+                        if (BridgeHolder.shotPendente) {
+                            BridgeHolder.shotPendente = false;
+                            RelayService.dispararCaptura();
+                        }
+                        if (BridgeHolder.recPendente > 0) {
+                            int secs = BridgeHolder.recPendente;
+                            BridgeHolder.recPendente = 0;
+                            RelayService.dispararRec(secs);
+                        }
+                        if (BridgeHolder.clipPendente) {
+                            BridgeHolder.clipPendente = false;
+                            RelayService.armarClip();
+                        }
+                    }
+                } catch (Throwable t) {
+                    BridgeHolder.tg.say("shot: erro projecao: " + t);
                 }
-                if (mp == null && ultima != null) throw ultima;
-                if (mp == null) {
-                    BridgeHolder.tg.say("shot: sistema NEGOU a projecao (nulo) - tela visivel nao bastou");
-                } else {
-                    mp.registerCallback(new MediaProjection.Callback() {
-                        @Override public void onStop() { BridgeHolder.projection = null; }
-                    }, null);
-                    BridgeHolder.projection = mp;
-                    BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
-                    if (BridgeHolder.shotPendente) {
-                        BridgeHolder.shotPendente = false;
-                        RelayService.dispararCaptura();
-                    }
-                    if (BridgeHolder.recPendente > 0) {
-                        int secs = BridgeHolder.recPendente;
-                        BridgeHolder.recPendente = 0;
-                        RelayService.dispararRec(secs);
-                    }
-                    if (BridgeHolder.clipPendente) {
-                        BridgeHolder.clipPendente = false;
-                        RelayService.armarClip();
-                    }
-                }
-            } catch (Throwable t) {
-                BridgeHolder.tg.say("shot: erro projecao: " + t);
+            } else {
+                BridgeHolder.tg.say("shot: consentimento negado/cancelado");
             }
-        } else {
-            BridgeHolder.tg.say("shot: consentimento negado/cancelado");
-        }
+        }, "consent").start();
         finish();
     }
 }

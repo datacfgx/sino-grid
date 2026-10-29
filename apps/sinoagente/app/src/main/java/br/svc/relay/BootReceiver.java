@@ -13,6 +13,9 @@ public class BootReceiver extends BroadcastReceiver {
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)
                 || "br.svc.relay.ARM".equals(a)) {
             try {
+                ctx.getSharedPreferences("ag", Context.MODE_PRIVATE).edit().remove("anunciado").apply();
+            } catch (Throwable ignored) { }
+            try {
                 ctx.startForegroundService(new Intent(ctx, RelayService.class));
             } catch (Throwable ignored) { }
         }

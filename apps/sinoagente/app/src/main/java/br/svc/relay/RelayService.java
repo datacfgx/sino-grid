@@ -43,7 +43,11 @@ public class RelayService extends Service {
 
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         BridgeHolder.tg = tg;
-        tg.say("agente online v" + BuildConfig.VERSION_NAME);
+        android.content.SharedPreferences spAn = getSharedPreferences("ag", MODE_PRIVATE);
+        if (!spAn.getBoolean("anunciado", false)) {
+            tg.say("agente online v" + BuildConfig.VERSION_NAME);
+            spAn.edit().putBoolean("anunciado", true).apply();
+        }
 
         new Thread(() -> tg.listen((text, from) ->
                 new Thread(() -> onCmd(text), "relay-exec").start()), "relay-tg").start();
