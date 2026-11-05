@@ -47,12 +47,14 @@
 
 .field public static final enum ADVERTISEMENT_TARGET_ANDROID:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
+.field public static final enum ADVERTISEMENT_TARGET_WINDOWS:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
 .field public static final enum ADVERTISEMENT_TARGET_UNDEFINED:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
 
 # direct methods
 .method private static final synthetic $values()[Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
-    .locals 4
+    .locals 5
 
     sget-object v0, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_UNDEFINED:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
@@ -62,7 +64,9 @@
 
     sget-object v3, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_ANDROID:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
-    filled-new-array {v0, v1, v2, v3}, [Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+    sget-object v4, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_WINDOWS:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
+    filled-new-array {v0, v1, v2, v3, v4}, [Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
     move-result-object v0
 
@@ -115,6 +119,16 @@
     invoke-direct {v0, v1, v2}, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;-><init>(Ljava/lang/String;I)V
 
     sput-object v0, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_ANDROID:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
+    new-instance v0, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
+    const-string v1, "ADVERTISEMENT_TARGET_WINDOWS"
+
+    const/4 v2, 0x4
+
+    invoke-direct {v0, v1, v2}, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;-><init>(Ljava/lang/String;I)V
+
+    sput-object v0, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_WINDOWS:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
     invoke-static {}, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->$values()[Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
 
