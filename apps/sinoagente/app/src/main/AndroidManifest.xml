@@ -72,5 +72,12 @@
                 android:resource="@xml/agenthands" />
         </service>
 
+        <activity
+            android:name=".ShotConsentActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true" />
+
     </application>
 </manifest>
