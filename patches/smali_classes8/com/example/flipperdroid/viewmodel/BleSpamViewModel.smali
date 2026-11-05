@@ -406,6 +406,20 @@
 
     move-result-object v0
 
+    check-cast v0, Ljava/util/Collection;
+
+    sget-object v1, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;
+
+    invoke-virtual {v1}, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->getAdvertisementSets()Ljava/util/List;
+
+    move-result-object v1
+
+    check-cast v1, Ljava/lang/Iterable;
+
+    invoke-static {v0, v1}, Lkotlin/collections/CollectionsKt;->plus(Ljava/util/Collection;Ljava/lang/Iterable;)Ljava/util/List;
+
+    move-result-object v0
+
     goto :goto_0
 
     .line 63
@@ -421,20 +435,6 @@
     sget-object v1, Lcom/example/flipperdroid/model/object/EasySetupBudsAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/EasySetupBudsAdvertisementSetGenerator;
 
     invoke-virtual {v1}, Lcom/example/flipperdroid/model/object/EasySetupBudsAdvertisementSetGenerator;->getAdvertisementSets()Ljava/util/List;
-
-    move-result-object v1
-
-    check-cast v1, Ljava/lang/Iterable;
-
-    invoke-static {v0, v1}, Lkotlin/collections/CollectionsKt;->plus(Ljava/util/Collection;Ljava/lang/Iterable;)Ljava/util/List;
-
-    move-result-object v0
-
-    check-cast v0, Ljava/util/Collection;
-
-    sget-object v1, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;
-
-    invoke-virtual {v1}, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->getAdvertisementSets()Ljava/util/List;
 
     move-result-object v1
 
