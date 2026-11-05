@@ -41,7 +41,7 @@ jobs:
             java -cp $CP org.jf.smali.Main a src$N -o classes$N.dex || { echo "SMALI FALHOU em classes$N"; exit 1; }
           done
           zip -X -q ../original.apk classes3.dex classes6.dex classes7.dex classes8.dex
-          unzip -p ../original.apk classes7.dex | strings | grep -q "Andr." || { echo "PATCH NAO EMBARCOU em classes7"; exit 1; }
+          unzip -p ../original.apk classes7.dex | strings | grep -q "ANDROID" || { echo "PATCH NAO EMBARCOU em classes7"; exit 1; }
           unzip -p ../original.apk classes6.dex | strings | grep -q "Fast Pair" || { echo "PATCH NAO EMBARCOU em classes6"; exit 1; }
           cd ..
 
