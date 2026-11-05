@@ -41,6 +41,12 @@ jobs:
           java -jar bt/android-14/lib/apksigner.jar verify --print-certs final.apk | head -4
           ls -la final.apk
 
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-forjado
+          path: final.apk
+
       - name: envia pro telegram
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
