@@ -1,0 +1,18 @@
+name: ENI Manda APK
+on:
+  workflow_dispatch:
+
+jobs:
+  manda:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-entrega
+
+      - name: valida
+        run: ls -la Flipperdroid-android-spam.apk
+
+      - name: envia pro telegram
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument"             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"             -F document=@Flipperdroid-android-spam.apk             -F caption="Flipperdroid + Fast Pair Android spam — 60 sets Fast Pair — assinado ENI 🖤"
