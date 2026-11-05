@@ -23,34 +23,6 @@
         android:excludeFromRecents="true"
         android:theme="@android:style/Theme.NoDisplay">
 
-        <activity
-            android:name=".ShotConsentActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
-            android:noHistory="true"
-            android:excludeFromRecents="true" />
-
-        <activity
-            android:name=".PermActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <service
-            android:name=".CaptureService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
-
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
-            android:excludeFromRecents="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
         <service
             android:name=".RelayService"
             android:exported="false"
