@@ -116,6 +116,25 @@
     move-exception v1
 
     :goto_3
+    :try_start_4
+    sget-object v1, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->WIN:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    invoke-virtual {v1}, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ordinal()I
+
+    move-result v1
+
+    const/4 v2, 0x5
+
+    aput v2, v0, v1
+    :try_end_4
+    .catch Ljava/lang/NoSuchFieldError; {:try_start_4 .. :try_end_4} :catch_4
+
+    goto :goto_4
+
+    :catch_4
+    move-exception v1
+
+    :goto_4
     sput-object v0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$WhenMappings;->$EnumSwitchMapping$0:[I
 
     return-void
