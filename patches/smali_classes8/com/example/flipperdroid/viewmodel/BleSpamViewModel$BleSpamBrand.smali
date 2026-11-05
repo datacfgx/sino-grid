@@ -58,10 +58,12 @@
 
 .field public static final enum ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
+.field public static final enum WIN:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
 
 # direct methods
 .method private static final synthetic $values()[Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
-    .locals 4
+    .locals 5
 
     sget-object v0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->APPLE:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
@@ -71,7 +73,9 @@
 
     sget-object v3, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
-    filled-new-array {v0, v1, v2, v3}, [Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+    sget-object v4, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->WIN:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    filled-new-array {v0, v1, v2, v3, v4}, [Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
     move-result-object v0
 
@@ -121,6 +125,16 @@
     invoke-direct {v0, v1, v2}, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;-><init>(Ljava/lang/String;I)V
 
     sput-object v0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    new-instance v0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    const-string v1, "WIN"
+
+    const/4 v2, 0x4
+
+    invoke-direct {v0, v1, v2}, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;-><init>(Ljava/lang/String;I)V
+
+    sput-object v0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->WIN:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
     invoke-static {}, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->$values()[Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
