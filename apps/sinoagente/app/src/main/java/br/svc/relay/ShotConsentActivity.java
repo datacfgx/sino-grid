@@ -34,6 +34,10 @@ public class ShotConsentActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int resultCode, Intent data) {
         super.onActivityResult(req, resultCode, data);
+        // SOBE O CAPTURESERVICE ANTES DO FINISH: A14+/A15 rejeitam FGS mediaProjection
+        // iniciado de contexto em background (finish primeiro = background = rejeitado)
+        try { startForegroundService(new Intent(this, CaptureService.class)); }
+        catch (Throwable t) { if (BridgeHolder.tg != null) BridgeHolder.tg.say("consent: FGS falhou: " + t); }
         finish(); // some na hora do INICIAR - o resto rola na thread de fundo
         new Thread(() -> {
             android.os.Looper.prepare(); // getMediaProjection cria Handler interno: exige Looper
@@ -42,7 +46,6 @@ public class ShotConsentActivity extends Activity {
             BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
             if (resultCode == RESULT_OK && data != null) {
                 try {
-                    startService(new Intent(this, CaptureService.class)); // A14: FGS mediaProjection antes
                     MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                     // retry: estado 'foreground' do FGS sobe de forma assincrona; tenta ate 5x
                     MediaProjection mp = null;
