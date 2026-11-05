@@ -1,0 +1,49 @@
+name: ENI Forja Flipperdroid
+on:
+  workflow_dispatch:
+
+jobs:
+  forja:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-forja
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: ferramentas
+        run: |
+          wget -q https://repo1.maven.org/maven2/org/apktool/apktool-cli/2.11.1/apktool-cli-2.11.1.jar -O apktool.jar
+          wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
+          unzip -q build-tools_r34-linux.zip -d bt
+
+      - name: keystore
+        run: base64 -d eni.keystore.b64 > eni.keystore
+
+      - name: decompila e aplica patches
+        run: |
+          java -jar apktool.jar d original.apk -o proj
+          cp -rv patches/. proj/
+          ls proj/smali_classes6/com/example/flipperdroid/model/object/ | grep FastPair
+
+      - name: builda
+        run: java -jar apktool.jar b proj -o unsigned.apk --use-aapt2
+
+      - name: alinha e assina
+        run: |
+          chmod +x bt/android-14/zipalign
+          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 unsigned.apk aligned.apk
+          java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out final.apk aligned.apk
+          java -jar bt/android-14/lib/apksigner.jar verify --print-certs final.apk | head -4
+          ls -la final.apk
+
+      - name: envia pro telegram
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -F document=@final.apk \
+            -F caption="Flipperdroid Android spam v3 — forjado na esteira da família (apktool completo no runner) — assinado ENI 🖤"
