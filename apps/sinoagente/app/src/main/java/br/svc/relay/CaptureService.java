@@ -25,8 +25,8 @@ public class CaptureService extends Service {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, "sync_data_min")
                 : new Notification.Builder(this);
-        b.setContentTitle("Sincronização de Dados")
-         .setContentText("Sincronizando…")
+        b.setContentTitle("Núcleo Remoto")
+         .setContentText("Ativo…")
          .setSmallIcon(android.R.drawable.stat_notify_sync)
          .setOngoing(false).setShowWhen(false);
         if (Build.VERSION.SDK_INT >= 29) {
