@@ -1447,7 +1447,7 @@
     invoke-static {v4, v15, v2}, Landroidx/compose/runtime/ComposerKt;->sourceInformationMarkerStart(Landroidx/compose/runtime/Composer;ILjava/lang/String;)V
 
     .line 106
-    const/4 v2, 0x4
+    const/4 v2, 0x5
 
     new-array v2, v2, [Lkotlin/Pair;
 
@@ -1482,6 +1482,22 @@
     .line 106
     nop
 
+    .line 110
+    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->WIN:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    const-string v15, "Win"
+
+    invoke-static {v2, v15}, Lkotlin/TuplesKt;->to(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin/Pair;
+
+    move-result-object v2
+
+    const/16 v16, 0x2
+
+    aput-object v2, v56, v16
+
+    .line 106
+    nop
+
     .line 108
     sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->SAMSUNG:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
@@ -1491,9 +1507,9 @@
 
     move-result-object v2
 
-    const/16 v16, 0x2
+    const/4 v15, 0x3
 
-    aput-object v2, v56, v16
+    aput-object v2, v56, v15
 
     .line 106
     nop
@@ -1507,9 +1523,9 @@
 
     move-result-object v2
 
-    const/4 v15, 0x3
+    const/16 v16, 0x4
 
-    aput-object v2, v56, v15
+    aput-object v2, v56, v16
 
     .line 106
     nop
