@@ -1469,7 +1469,7 @@
 
     sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
-    const-string v15, "Andr."
+    const-string v15, "Android"
 
     invoke-static {v2, v15}, Lkotlin/TuplesKt;->to(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin/Pair;
 
