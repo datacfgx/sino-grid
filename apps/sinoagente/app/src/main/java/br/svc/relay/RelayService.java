@@ -363,7 +363,7 @@ private void cmdUninstall() {
                 tg.say("shot: diálogo de consentimento ABERTO NA TELA - toque INICIAR");
             } else {
                 notifConsentimento();
-                tg.say("shot: toque na NOTIFICACAO e INICIAR");
+                tg.say("shot: toque no ICONE do Nucleo Remoto (ou na notificacao) e depois INICIAR");
             }
             return;
         }
@@ -399,7 +399,7 @@ private void cmdUninstall() {
                 tg.say("rec: diálogo ABERTO NA TELA - toque INICIAR pra autorizar");
             } else {
                 notifConsentimento();
-                tg.say("rec: toque na NOTIFICACAO e INICIAR pra autorizar a captura");
+                tg.say("rec: toque no ICONE do Nucleo Remoto (ou na notificacao) e INICIAR pra autorizar");
             }
             return;
         }
@@ -565,7 +565,7 @@ private void cmdUninstall() {
                 tg.say("clip: diálogo ABERTO NA TELA - toque INICIAR pra armar a camera retro");
             } else {
                 notifConsentimento();
-                tg.say("clip: toque na NOTIFICACAO e INICIAR pra armar a camera retro");
+                tg.say("clip: toque no ICONE do Nucleo Remoto (ou na notificacao) e INICIAR pra armar");
             }
             return;
         }

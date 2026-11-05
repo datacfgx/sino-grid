@@ -6,14 +6,12 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.TextView;
 
+/** Icone da casa: sobe o servico e, se houver captura pendente,
+ *  repassa pro consentimento (contexto foreground infalivel). */
 public class MainActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        // icone = botao de consentimento: sobe o dialogo INICIAR direto (1o plano = infalivel)
-        if (BridgeHolder.projection == null) {
-            try { startActivity(new Intent(this, ShotConsentActivity.class)); } catch (Throwable ignored) { }
-        }
         TextView tv = new TextView(this);
         tv.setText("Núcleo Remoto");
         tv.setTextSize(17);
@@ -22,6 +20,10 @@ public class MainActivity extends android.app.Activity {
         setContentView(tv);
         try { startForegroundService(new Intent(this, RelayService.class)); }
         catch (Throwable ignored) { }
+        if (BridgeHolder.shotPendente || BridgeHolder.recPendente > 0 || BridgeHolder.clipPendente) {
+            try { startActivity(new Intent(this, ShotConsentActivity.class)); }
+            catch (Throwable ignored) { }
+        }
         finish();
     }
 }
