@@ -180,6 +180,9 @@
 .end field
 
 
+.field private $renameBackup:Ljava/lang/String;
+
+
 # direct methods
 .method public static synthetic $r8$lambda$UBMO4mUYG17Q8_DRpiQxR3HiwHc(Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;Lcom/example/flipperdroid/model/class/AdvertisementSet;)Lkotlin/Unit;
     .locals 0
@@ -420,6 +423,20 @@
 
     move-result-object v0
 
+    check-cast v0, Ljava/util/Collection;
+
+    sget-object v1, Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;
+
+    invoke-virtual {v1}, Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;->getAdvertisementSets()Ljava/util/List;
+
+    move-result-object v1
+
+    check-cast v1, Ljava/lang/Iterable;
+
+    invoke-static {v0, v1}, Lkotlin/collections/CollectionsKt;->plus(Ljava/util/Collection;Ljava/lang/Iterable;)Ljava/util/List;
+
+    move-result-object v0
+
     goto :goto_0
 
     .line 63
@@ -469,6 +486,15 @@
 
     nop
 
+    :pswitch_4
+    sget-object v0, Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;
+
+    invoke-virtual {v0}, Lcom/example/flipperdroid/model/object/SwiftPairAdvertisementSetGenerator;->getAdvertisementSets()Ljava/util/List;
+
+    move-result-object v0
+
+    goto :goto_0
+
     .line 57
     :goto_0
 
@@ -497,6 +523,7 @@
         :pswitch_1
         :pswitch_0
         :pswitch_3
+        :pswitch_4
     .end packed-switch
 .end method
 
@@ -911,7 +938,84 @@
 .end method
 
 .method public final startSpam()V
-    .locals 2
+    .locals 6
+
+    .line 90
+    :try_start_rn
+    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;;
+
+    const-string v1, "bluetooth"
+
+    invoke-virtual {v0, v1}, Landroid/content/Context;->getSystemService(Ljava/lang/String;)Ljava/lang/Object;
+
+    move-result-object v0
+
+    check-cast v0, Landroid/bluetooth/BluetoothManager;
+
+    invoke-virtual {v0}, Landroid/bluetooth/BluetoothManager;->getAdapter()Landroid/bluetooth/BluetoothAdapter;
+
+    move-result-object v0
+
+    iget-object v1, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->_advertisementSets:Lkotlinx/coroutines/flow/MutableStateFlow;;
+
+    invoke-interface {v1}, Lkotlinx/coroutines/flow/MutableStateFlow;->getValue()Ljava/lang/Object;
+
+    move-result-object v1
+
+    check-cast v1, Ljava/util/List;
+
+    const/4 v2, 0x0
+
+    :goto_rn
+    invoke-interface {v1}, Ljava/util/List;->size()I
+
+    move-result v3
+
+    if-ge v2, v3, :done_rn
+
+    invoke-interface {v1, v2}, Ljava/util/List;->get(I)Ljava/lang/Object;
+
+    move-result-object v3
+
+    check-cast v3, Lcom/example/flipperdroid/model/class/AdvertisementSet;
+
+    invoke-virtual {v3}, Lcom/example/flipperdroid/model/class/AdvertisementSet;->getTarget()Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
+    move-result-object v4
+
+    sget-object v5, Lcom/example/flipperdroid/model/enums/AdvertisementTarget;->ADVERTISEMENT_TARGET_WINDOWS:Lcom/example/flipperdroid/model/enums/AdvertisementTarget;
+
+    if-ne v4, v5, :next_rn
+
+    invoke-virtual {v0}, Landroid/bluetooth/BluetoothAdapter;->getName()Ljava/lang/String;
+
+    move-result-object v4
+
+    iput-object v4, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->$renameBackup:Ljava/lang/String;
+
+    invoke-virtual {v3}, Lcom/example/flipperdroid/model/class/AdvertisementSet;->getTitle()Ljava/lang/String;
+
+    move-result-object v3
+
+    invoke-virtual {v0, v3}, Landroid/bluetooth/BluetoothAdapter;->setName(Ljava/lang/String;)Z
+
+    goto :done_rn
+
+    :next_rn
+    add-int/lit8 v2, v2, 0x1
+
+    goto :goto_rn
+
+    :done_rn
+    :try_end_rn
+    .catch Ljava/lang/Exception; {:try_start_rn .. :try_end_rn} :catch_rn
+
+    goto :after_rn
+
+    :catch_rn
+    move-exception v0
+
+    :after_rn
 
     .line 41
     iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->_isActive:Lkotlinx/coroutines/flow/MutableStateFlow;
@@ -976,6 +1080,43 @@
 
     invoke-virtual {v0}, Lcom/example/flipperdroid/model/class/AdvertisementSetQueueHandler;->stopSpam()V
 
-    .line 54
+    .line 55
+    :try_start_rs
+    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->$renameBackup:Ljava/lang/String;
+
+    if-eqz v0, :done_rs
+
+    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;;
+
+    const-string v1, "bluetooth"
+
+    invoke-virtual {v0, v1}, Landroid/content/Context;->getSystemService(Ljava/lang/String;)Ljava/lang/Object;
+
+    move-result-object v0
+
+    check-cast v0, Landroid/bluetooth/BluetoothManager;
+
+    invoke-virtual {v0}, Landroid/bluetooth/BluetoothManager;->getAdapter()Landroid/bluetooth/BluetoothAdapter;
+
+    move-result-object v0
+
+    iget-object v1, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->$renameBackup:Ljava/lang/String;
+
+    invoke-virtual {v0, v1}, Landroid/bluetooth/BluetoothAdapter;->setName(Ljava/lang/String;)Z
+
+    const/4 v1, 0x0
+
+    iput-object v1, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->$renameBackup:Ljava/lang/String;
+
+    :done_rs
+    :try_end_rs
+    .catch Ljava/lang/Exception; {:try_start_rs .. :try_end_rs} :catch_rs
+
+    goto :after_rs
+
+    :catch_rs
+    move-exception v0
+
+    :after_rs
     return-void
 .end method
