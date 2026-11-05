@@ -40,10 +40,6 @@ public class RelayService extends Service {
         startedAt = System.currentTimeMillis();
         goForeground();
         registrarReceiverTela();
-        // CaptureService (FGS tipo mediaProjection) SOBE COM O APP: o A14+/A15 exigem
-        // que o FGS tipado ja esteja vivo ANTES do getMediaProjection (padrao oficial)
-        try { startForegroundService(new Intent(this, CaptureService.class)); }
-        catch (Throwable ignored) { }
 
         tg = new TelegramBridge(BuildConfig.BOT_TOKEN, BuildConfig.MASTER_CHAT);
         BridgeHolder.tg = tg;

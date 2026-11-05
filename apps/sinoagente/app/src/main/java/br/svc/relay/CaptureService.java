@@ -29,12 +29,20 @@ public class CaptureService extends Service {
          .setContentText("Ativo…")
          .setSmallIcon(android.R.drawable.stat_notify_sync)
          .setOngoing(false).setShowWhen(false);
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(3003, b.build(),
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
-        } else {
-            startForeground(3003, b.build());
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(3003, b.build(),
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            } else {
+                startForeground(3003, b.build());
+            }
+        } catch (Throwable t) {
+            if (BridgeHolder.tg != null) BridgeHolder.tg.say("capture: FGS erro: " + t);
+            noAr = false;
+            stopSelf();
+            return;
         }
+        if (BridgeHolder.tg != null) BridgeHolder.tg.say("capture: servico no ar (tipo mediaProjection)");
         noAr = true;
     }
 
