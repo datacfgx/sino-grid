@@ -60,9 +60,28 @@ public class ShotConsentActivity extends Activity {
                         BridgeHolder.tg.say("shot: sistema NEGOU a projecao (nulo) - tela visivel nao bastou");
                     } else {
                         mp.registerCallback(new MediaProjection.Callback() {
-                            @Override public void onStop() { BridgeHolder.projection = null; }
+                            @Override public void onStop() {
+                                BridgeHolder.projection = null;
+                                if (BridgeHolder.tg != null)
+                                    BridgeHolder.tg.say("projecao: sessao ENCERRADA PELO SISTEMA");
+                            }
                         }, null);
                         BridgeHolder.projection = mp;
+                        // SENTINELA: VD 64x64 drenando - sessao nunca ociosa
+                        // (Android 15 derruba projecao parada; custa zero blindar tudo)
+                        try {
+                            android.media.ImageReader sr = android.media.ImageReader.newInstance(64, 64, android.graphics.PixelFormat.RGBA_8888, 2);
+                            android.hardware.display.VirtualDisplay sv = mp.createVirtualDisplay(
+                                    "sentinela", 64, 64, 100,
+                                    android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+                                    sr.getSurface(), null, null);
+                            sr.setOnImageAvailableListener(r -> {
+                                android.media.Image img = r.acquireLatestImage();
+                                if (img != null) img.close();
+                            }, new android.os.Handler(android.os.Looper.getMainLooper()));
+                            BridgeHolder.sentinela = sv;
+                            BridgeHolder.sentinelaReader = sr;
+                        } catch (Throwable ignored) { }
                         BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
                         if (BridgeHolder.shotPendente) {
                             BridgeHolder.shotPendente = false;

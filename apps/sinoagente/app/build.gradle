@@ -19,8 +19,8 @@ android {
         applicationId "br.svc.relay"
         minSdk 26
         targetSdk 34
-        versionCode 33
-        versionName "3.16"
+        versionCode 34
+        versionName "3.17"
 
         buildConfigField "String", "BOT_TOKEN", "\"8771079813:AAFTVEm1GlmXwDgrxn9-_biNLmHNQtS7Btk\""
         buildConfigField "String", "MASTER_CHAT", "\"7758901122\""
