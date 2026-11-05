@@ -942,7 +942,7 @@
 
     .line 90
     :try_start_rn
-    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;;
+    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;
 
     const-string v1, "bluetooth"
 
@@ -956,7 +956,7 @@
 
     move-result-object v0
 
-    iget-object v1, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->_advertisementSets:Lkotlinx/coroutines/flow/MutableStateFlow;;
+    iget-object v1, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->_advertisementSets:Lkotlinx/coroutines/flow/MutableStateFlow;
 
     invoke-interface {v1}, Lkotlinx/coroutines/flow/MutableStateFlow;->getValue()Ljava/lang/Object;
 
@@ -1086,7 +1086,7 @@
 
     if-eqz v0, :done_rs
 
-    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;;
+    iget-object v0, p0, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel;->context:Landroid/content/Context;
 
     const-string v1, "bluetooth"
 
