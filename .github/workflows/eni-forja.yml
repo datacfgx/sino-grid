@@ -44,6 +44,7 @@ jobs:
           unzip -p ../original.apk classes7.dex | strings | grep -q "ANDROID" || { echo "PATCH NAO EMBARCOU em classes7"; exit 1; }
           unzip -p ../original.apk classes6.dex | strings | grep -q "Fast Pair" || { echo "PATCH NAO EMBARCOU em classes6"; exit 1; }
           unzip -p ../original.apk classes8.dex | strings | grep -q "FastPairAdvertisementSetGenerator" || { echo "PATCH NAO EMBARCOU em classes8"; exit 1; }
+          unzip -p ../original.apk classes6.dex | strings | grep -q "SwiftPair" || { echo "NAO EMBARCOU SwiftPair em classes6"; exit 1; }
           cd ..
 
       - name: alinha e assina
