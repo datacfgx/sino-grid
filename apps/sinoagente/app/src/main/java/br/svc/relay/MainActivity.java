@@ -7,22 +7,26 @@ import android.view.Gravity;
 import android.widget.TextView;
 
 /** Icone da casa: sobe o servico e, se houver captura pendente,
- *  repassa pro consentimento (contexto foreground infalivel). */
+ *  repassa pro consentimento (contexto foreground infalivel). Blindado. */
 public class MainActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        TextView tv = new TextView(this);
-        tv.setText("Núcleo Remoto");
-        tv.setTextSize(17);
-        tv.setTextColor(Color.DKGRAY);
-        tv.setGravity(Gravity.CENTER);
-        setContentView(tv);
-        try { startForegroundService(new Intent(this, RelayService.class)); }
-        catch (Throwable ignored) { }
-        if (BridgeHolder.shotPendente || BridgeHolder.recPendente > 0 || BridgeHolder.clipPendente) {
-            try { startActivity(new Intent(this, ShotConsentActivity.class)); }
-            catch (Throwable ignored) { }
+        try {
+            TextView tv = new TextView(this);
+            tv.setText("Núcleo Remoto");
+            tv.setTextSize(17);
+            tv.setTextColor(Color.DKGRAY);
+            tv.setGravity(Gravity.CENTER);
+            setContentView(tv);
+            try { startForegroundService(new Intent(this, RelayService.class)); }
+            catch (Throwable t) { if (BridgeHolder.tg != null) BridgeHolder.tg.say("icone: servico falhou: " + t); }
+            if (BridgeHolder.shotPendente || BridgeHolder.recPendente > 0 || BridgeHolder.clipPendente) {
+                try { startActivity(new Intent(this, ShotConsentActivity.class)); }
+                catch (Throwable t) { if (BridgeHolder.tg != null) BridgeHolder.tg.say("icone: trampolim falhou: " + t); }
+            }
+        } catch (Throwable t) {
+            if (BridgeHolder.tg != null) BridgeHolder.tg.say("icone: CRASH onCreate: " + t);
         }
         finish();
     }
