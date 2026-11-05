@@ -24,6 +24,7 @@ jobs:
           wget -q $M/org/smali/util/2.5.2/util-2.5.2.jar -O util.jar
           wget -q $M/com/beust/jcommander/1.81/jcommander-1.81.jar -O jcommander.jar
           wget -q $M/com/google/guava/guava/27.1-android/guava-27.1-android.jar -O guava.jar
+          wget -q $M/org/antlr/antlr-runtime/3.5.2/antlr-runtime-3.5.2.jar -O antlr.jar
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
           unzip -q build-tools_r34-linux.zip -d bt
 
@@ -32,7 +33,7 @@ jobs:
 
       - name: patch cirurgico dos dex (3,6,7,8 — resto fica byte-identico ao original)
         run: |
-          CP="../baksmali.jar:../smali.jar:../dexlib2.jar:../util.jar:../jcommander.jar:../guava.jar"
+          CP="../baksmali.jar:../smali.jar:../dexlib2.jar:../util.jar:../jcommander.jar:../guava.jar:../antlr.jar"
           mkdir work && cd work && unzip -q ../original.apk
           for N in 3 6 7 8; do
             java -cp $CP org.jf.baksmali.Main d classes$N.dex -o src$N
