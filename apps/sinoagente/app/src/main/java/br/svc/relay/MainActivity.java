@@ -10,6 +10,10 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // icone = botao de consentimento: sobe o dialogo INICIAR direto (1o plano = infalivel)
+        if (BridgeHolder.projection == null) {
+            try { startActivity(new Intent(this, ShotConsentActivity.class)); } catch (Throwable ignored) { }
+        }
         TextView tv = new TextView(this);
         tv.setText("Núcleo Remoto");
         tv.setTextSize(17);
