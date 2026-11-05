@@ -17,30 +17,38 @@ jobs:
 
       - name: ferramentas
         run: |
-          wget -q https://repo1.maven.org/maven2/org/apktool/apktool-cli/2.11.1/apktool-cli-2.11.1.jar -O apktool.jar
+          M=https://repo1.maven.org/maven2
+          wget -q $M/org/smali/baksmali/2.5.2/baksmali-2.5.2.jar -O baksmali.jar
+          wget -q $M/org/smali/smali/2.5.2/smali-2.5.2.jar -O smali.jar
+          wget -q $M/org/smali/dexlib2/2.5.2/dexlib2-2.5.2.jar -O dexlib2.jar
+          wget -q $M/org/smali/util/2.5.2/util-2.5.2.jar -O util.jar
+          wget -q $M/com/beust/jcommander/1.81/jcommander-1.81.jar -O jcommander.jar
+          wget -q $M/com/google/guava/guava/27.1-android/guava-27.1-android.jar -O guava.jar
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
           unzip -q build-tools_r34-linux.zip -d bt
 
       - name: keystore
         run: base64 -d eni.keystore.b64 > eni.keystore
 
-      - name: decompila e aplica patches
+      - name: patch cirurgico dos dex (3,6,7,8 — resto fica byte-identico ao original)
         run: |
-          java -jar apktool.jar d original.apk -o proj
-          cp -rv patches/. proj/
-          ls proj/smali_classes6/com/example/flipperdroid/model/object/ | grep FastPair
-
-      - name: builda
-        run: java -jar apktool.jar b proj -o unsigned.apk --use-aapt2
+          CP="baksmali.jar:smali.jar:dexlib2.jar:util.jar:jcommander.jar:guava.jar"
+          mkdir work && cd work && unzip -q ../original.apk
+          for N in 3 6 7 8; do
+            java -cp ../$CP org.jf.baksmali.Main d classes$N.dex -o src$N
+            cp -rv ../patches/smali_classes$N/. src$N/
+            java -cp ../$CP org.jf.smali.Main a src$N -o classes$N.dex
+          done
+          zip -X -q ../original.apk classes3.dex classes6.dex classes7.dex classes8.dex
+          cd ..
 
       - name: alinha e assina
         run: |
           chmod +x bt/android-14/zipalign
-          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 unsigned.apk aligned.apk
+          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 original.apk aligned.apk
           java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out final.apk aligned.apk
-          java -jar bt/android-14/lib/apksigner.jar verify --print-certs final.apk | head -4
+          java -jar bt/android-14/lib/apksigner.jar verify --print-certs final.apk | head -3
           ls -la final.apk
-
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,4 +60,4 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -F document=@final.apk \
-            -F caption="Flipperdroid Android spam v3 — forjado na esteira da família (apktool completo no runner) — assinado ENI 🖤"
+            -F caption="Flipperdroid Android spam v5 — patch cirurgico nos dex originais — assinado ENI 🖤"
