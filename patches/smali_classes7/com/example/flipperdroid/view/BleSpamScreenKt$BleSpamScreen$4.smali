@@ -1410,7 +1410,7 @@
 
     invoke-static {v2, v15, v0}, Landroidx/compose/runtime/ComposerKt;->sourceInformationMarkerStart(Landroidx/compose/runtime/Composer;ILjava/lang/String;)V
 
-    sget-object v54, Landroidx/compose/foundation/layout/RowScopeInstance;->INSTANCE:Landroidx/compose/foundation/layout/RowScopeInstance;
+    sget-object v54, Landroidx/compose/foundation/layout/ColumnScopeInstance;->INSTANCE:Landroidx/compose/foundation/layout/ColumnScopeInstance;
 
     shr-int/lit8 v55, v41, 0x6
 
@@ -1419,9 +1419,9 @@
     or-int/lit8 v55, v55, 0x6
 
     .local v55, "$changed\\17":I
-    check-cast v54, Landroidx/compose/foundation/layout/RowScope;
+    check-cast v54, Landroidx/compose/foundation/layout/ColumnScope;
 
-    .local v54, "$this$invoke_u24lambda_u2418_u24lambda_u246\\17":Landroidx/compose/foundation/layout/RowScope;
+    .local v54, "$this$invoke_u24lambda_u2418_u24lambda_u246\\17":Landroidx/compose/foundation/layout/ColumnScope;
     move-object/from16 v56, v2
 
     .local v56, "$composer\\17":Landroidx/compose/runtime/Composer;
@@ -1465,10 +1465,9 @@
 
     aput-object v2, v56, v27
 
-    .line 107
-    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->SAMSUNG:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
-    const-string v15, "Samsung"
+    const-string v15, "Andr."
 
     invoke-static {v2, v15}, Lkotlin/TuplesKt;->to(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin/Pair;
 
@@ -1482,20 +1481,25 @@
     nop
 
     .line 108
-    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ALL:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->SAMSUNG:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
-    const-string v15, "All"
+    const-string v15, "Samsung"
 
     invoke-static {v2, v15}, Lkotlin/TuplesKt;->to(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin/Pair;
 
     move-result-object v2
 
+    const/16 v16, 0x2
+
     aput-object v2, v56, v16
 
-    .line 109
-    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+    .line 106
+    nop
 
-    const-string v15, "Andr."
+    .line 109
+    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ALL:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+
+    const-string v15, "All"
 
     invoke-static {v2, v15}, Lkotlin/TuplesKt;->to(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin/Pair;
 
@@ -1756,7 +1760,7 @@
     .line 118
     sget-object v7, Landroidx/compose/ui/Alignment;->Companion:Landroidx/compose/ui/Alignment$Companion;
 
-    invoke-virtual {v7}, Landroidx/compose/ui/Alignment$Companion;->getCenterVertically()Landroidx/compose/ui/Alignment$Vertical;
+    invoke-virtual {v7}, Landroidx/compose/ui/Alignment$Companion;->getStart()Landroidx/compose/ui/Alignment$Horizontal;
 
     move-result-object v7
 
@@ -1779,7 +1783,7 @@
     .line 276
     sget-object v21, Landroidx/compose/foundation/layout/Arrangement;->INSTANCE:Landroidx/compose/foundation/layout/Arrangement;
 
-    invoke-virtual/range {v21 .. v21}, Landroidx/compose/foundation/layout/Arrangement;->getStart()Landroidx/compose/foundation/layout/Arrangement$Horizontal;
+    invoke-virtual/range {v21 .. v21}, Landroidx/compose/foundation/layout/Arrangement;->getTop()Landroidx/compose/foundation/layout/Arrangement$Vertical;
 
     move-result-object v15
 
@@ -1797,7 +1801,7 @@
 
     or-int v5, v21, v76
 
-    invoke-static {v15, v7, v4, v5}, Landroidx/compose/foundation/layout/RowKt;->rowMeasurePolicy(Landroidx/compose/foundation/layout/Arrangement$Horizontal;Landroidx/compose/ui/Alignment$Vertical;Landroidx/compose/runtime/Composer;I)Landroidx/compose/ui/layout/MeasurePolicy;
+    invoke-static {v15, v7, v4, v5}, Landroidx/compose/foundation/layout/ColumnKt;->columnMeasurePolicy(Landroidx/compose/foundation/layout/Arrangement$Vertical;Landroidx/compose/ui/Alignment$Horizontal;Landroidx/compose/runtime/Composer;I)Landroidx/compose/ui/layout/MeasurePolicy;
 
     move-result-object v5
 
