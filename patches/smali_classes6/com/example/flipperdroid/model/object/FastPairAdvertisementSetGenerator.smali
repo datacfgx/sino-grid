@@ -87,7 +87,7 @@
 
     sput-object v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->modelIds:[I
 
-    const/4 v0, 0x6
+    const/4 v0, 0x1
 
     sput v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->setsPerModel:I
 
@@ -146,6 +146,28 @@
     sget-object v8, Lcom/example/flipperdroid/model/enums/AdvertisementSetRange;->ADVERTISEMENTSET_RANGE_CLOSE:Lcom/example/flipperdroid/model/enums/AdvertisementSetRange;
 
     invoke-virtual {v7, v8}, Lcom/example/flipperdroid/model/class/AdvertisementSet;->setRange(Lcom/example/flipperdroid/model/enums/AdvertisementSetRange;)V
+
+    new-instance v8, Ljava/lang/StringBuilder;
+
+    invoke-direct {v8}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v11, "Fast Pair "
+
+    invoke-virtual {v8, v11}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    add-int/lit8 v11, v3, 0x1
+
+    invoke-static {v11}, Ljava/lang/Integer;->toString(I)Ljava/lang/String;
+
+    move-result-object v11
+
+    invoke-virtual {v8, v11}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v8}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    move-result-object v8
+
+    invoke-virtual {v7, v8}, Lcom/example/flipperdroid/model/class/AdvertisementSet;->setTitle(Ljava/lang/String;)V
 
     invoke-virtual {v7}, Lcom/example/flipperdroid/model/class/AdvertisementSet;->getAdvertiseSettings()Lcom/example/flipperdroid/model/class/AdvertiseSettings;
 
