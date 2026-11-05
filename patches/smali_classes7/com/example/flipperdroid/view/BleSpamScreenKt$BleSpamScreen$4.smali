@@ -1465,7 +1465,9 @@
 
     aput-object v2, v56, v27
 
-Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
+    .line 107
+
+    sget-object v2, Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;->ANDROID:Lcom/example/flipperdroid/viewmodel/BleSpamViewModel$BleSpamBrand;
 
     const-string v15, "Andr."
 
