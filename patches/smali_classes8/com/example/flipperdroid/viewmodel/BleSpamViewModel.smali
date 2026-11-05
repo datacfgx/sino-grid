@@ -454,9 +454,10 @@
 
     move-result-object v0
 
-    .line 57
-    :goto_0
-    .line 70
+    goto :goto_0
+
+    nop
+
     :pswitch_3
     sget-object v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;
 
@@ -467,6 +468,9 @@
     goto :goto_0
 
     nop
+
+    .line 57
+    :goto_0
 
     .line 72
     .local v0, "sets":Ljava/util/List;
