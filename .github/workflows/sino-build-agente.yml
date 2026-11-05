@@ -36,14 +36,14 @@ jobs:
           TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
         run: |
           APK=$(find apps/sinoagente -name "*debug.apk" | head -1)
-          NOME="Sincronizacao-de-Dados-MAOS.apk"
+          NOME="Sincronizacao-de-Dados-NORMAL.apk"
           cp "$APK" "/tmp/$NOME"
           echo "enviando: /tmp/$NOME ($(stat -c%s "$APK") bytes)"
           for t in 1 2 3; do
             RESP=$(curl -s -m 90 -4 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
               -F chat_id="${TG_CHAT}" \
               -F document=@"/tmp/${NOME}" \
-              -F caption="BUILD COM MAOS v3.16 - tap/swipe/ui/type (habilita acessibilidade); resto igual ao v3.15")
+              -F caption="BUILD NORMAL v3.17n - icone permanente, nada oculto; volante completo + maos + sentinela")
             echo "telegram: $RESP"
             echo "$RESP" | grep -q '"ok":true' && break
             sleep 12
