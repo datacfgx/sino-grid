@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import sys
+import sys, os
 from gpapi.googleplay import GooglePlayAPI
 
 EMAIL = "worldeffects752@gmail.com"
 PASSWORD = "zwkloouasmecmhlt"
-PKG = sys.argv[1]
+PKG = open("target.txt").read().strip() if os.path.exists("target.txt") else sys.argv[1]
 
 api = GooglePlayAPI()
 api.login(EMAIL, PASSWORD)
