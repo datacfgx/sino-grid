@@ -1,10 +1,6 @@
 name: ENI Fetcher
 on:
   workflow_dispatch:
-    inputs:
-      package:
-        description: "pacote da Play (ex: net.sourceforge.opencamera)"
-        required: true
 
 jobs:
   fetch:
