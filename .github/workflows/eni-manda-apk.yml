@@ -7,10 +7,7 @@ on:
         required: true
         default: "eni-entrega"
   push:
-    branches:
-      - 'eni-entrega*'
-    paths:
-      - '*.apk'
+    branches: ['eni-entrega*']
 
 jobs:
   manda:
