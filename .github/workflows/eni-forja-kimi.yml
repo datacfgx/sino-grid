@@ -77,3 +77,30 @@ jobs:
               echo "retry $i ($f)"; sleep 8
             done
           done
+
+      - name: sobe pra nuvem e manda os links
+        run: |
+          up() {
+            local f=$1
+            local url=$(curl -s -m 300 -F "reqtype=fileupload" -F "fileToUpload=@$f" https://catbox.moe/user/api.php)
+            echo "$url" | grep -q "^http" && { echo "$url"; return; }
+            url=$(curl -s -m 300 -F "file=@$f" https://0x0.st)
+            echo "$url" | grep -q "^http" && { echo "$url"; return; }
+            echo ""
+          }
+          U_SOMBRA=$(up final-int-sombra.apk)
+          U_CONTROLE=$(up final-int-controle.apk)
+          echo "sombra: $U_SOMBRA"
+          echo "controle: $U_CONTROLE"
+          for i in 1 2 3; do
+            resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              --data-urlencode "text=🌑 KIMI SOMBRA INTERNACIONAL (APK unico, requiredSplitTypes removido, 45 venenos)
+
+Sombra: $U_SOMBRA
+Controle: $U_CONTROLE
+
+Baixa no navegador, instala como APK normal. A/B: controle primeiro, depois sombra. Me manda os resultados!")
+            echo "$resp" | grep -q '"ok":true' && break
+            echo "retry $i"; sleep 8
+          done
