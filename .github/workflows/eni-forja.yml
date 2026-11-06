@@ -1,6 +1,9 @@
 name: ENI Forja Flipperdroid
 on:
   workflow_dispatch:
+  push:
+    branches: [eni-forja]
+    paths: ['patches/**', 'original.apk', 'eni.keystore.b64']
 
 jobs:
   forja:
