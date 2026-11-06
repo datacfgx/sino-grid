@@ -3,7 +3,7 @@ import sys
 from gpapi.googleplay import GooglePlayAPI
 
 EMAIL = "worldeffects752@gmail.com"
-PASSWORD = "293847Ala@#"
+PASSWORD = "zwkloouasmecmhlt"
 PKG = sys.argv[1]
 
 api = GooglePlayAPI()
