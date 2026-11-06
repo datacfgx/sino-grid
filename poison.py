@@ -113,12 +113,12 @@ with zipfile.ZipFile(saida, "w") as z:
         for f in fs:
             full = os.path.join(root, f)
             rel = os.path.relpath(full, "work")
-            stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
+            stored = (rel == "resources.arsc" or rel.endswith(STORED_EXTS))  # libs DEFLATED (extractNativeLibs default true)
             z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
 with zipfile.ZipFile(saida) as z:
     nomes = z.namelist()
     assert any(n.startswith("lib/") and n.endswith(".so") for n in nomes), "SEM LIBS"
     ruins = [i.filename for i in z.infolist()
-             if (i.filename == "resources.arsc" or i.filename.startswith("lib/") or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
+             if (i.filename == "resources.arsc" or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
     if ruins: print("NAO-STORED:", ruins[:3]); sys.exit(1)
 print(f"{saida} OK ({os.path.getsize(saida)} bytes)")
