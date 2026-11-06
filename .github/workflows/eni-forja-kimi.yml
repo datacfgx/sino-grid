@@ -1,6 +1,9 @@
 name: ENI Forja Kimi Sombra
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['patches/**', 'original.apk', 'poison.py', 'base.apk', 'split_arm64.apk']
 
 jobs:
   forja:
