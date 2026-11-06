@@ -1,0 +1,31 @@
+name: ENI Citta653
+on:
+  push:
+    branches: [eni-citta653]
+
+jobs:
+  pega:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-citta653
+      - name: fetch
+        run: |
+          UA="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+          curl -sL -A "$UA" --max-time 240 -o app.bin "https://d.apkpure.com/b/XAPK/br.com.cittabus?versionCode=653"
+          ls -la app.bin
+          head -c 2 app.bin | grep -q PK && { mv app.bin cittamobi-velho.xapk; echo "XAPK OK: $(stat -c%s cittamobi-velho.xapk) bytes"; } || { echo "NAO E XAPK:"; head -c 300 app.bin; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citta653
+          path: "*.xapk"
+      - name: telegram
+        run: |
+          for i in 1 2 3; do
+            resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              --data-urlencode "text=Cittamobi velho (vc653) baixado — artifact na run")
+            echo "$resp" | grep -q '"ok":true' && break
+            sleep 8
+          done
