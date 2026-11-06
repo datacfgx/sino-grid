@@ -9,47 +9,55 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: eni-forja-kimi
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-
       - name: ferramentas
         run: |
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
           unzip -q build-tools_r34-linux.zip -d bt
-
       - name: keystore
         run: base64 -d eni.keystore.b64 > eni.keystore
-
-      - name: envenenamento binario
-        run: python3 poison.py
-
+      - name: builds (sombra + controle)
+        run: |
+          python3 poison.py sombra
+          python3 poison.py controle
       - name: verificacao
         run: |
-          unzip -p original.apk classes.dex | strings | grep -c "127.0.0.1" || { echo "VENENO NAO ENCONTADO"; exit 1; }
-          for h in volctrack volceapplog "crash.163.com"; do
-            unzip -p original.apk classes.dex classes2.dex classes3.dex | strings | grep -q "$h" && { echo "HOST VIVO: $h"; exit 1; } || true
+          unzip -p patched.apk classes.dex | strings | grep -q "127.0.0.1" || { echo "VENENO AUSENTE"; exit 1; }
+          for h in volceapplog volctrack "crash.163.com"; do
+            unzip -p patched.apk classes.dex classes2.dex classes3.dex | strings | grep -q "$h" && { echo "HOST VIVO: $h"; exit 1; } || true
           done
-          echo "todos os hosts mortos ✔"
-
+          unzip -p controle.apk classes.dex | strings | grep -q "volceapplog" || { echo "CONTROLE DIFERENTE DO ORIGINAL?"; exit 1; }
+          echo "sombra envenenada + controle integro ✔"
       - name: alinha e assina
         run: |
           chmod +x bt/android-14/zipalign
           LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 patched.apk aligned.apk
           java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out kimi-sombra.apk aligned.apk
-          java -jar bt/android-14/lib/apksigner.jar verify --print-certs kimi-sombra.apk | head -3
-          ls -la kimi-sombra.apk
-
+          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 controle.apk aligned-c.apk
+          java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out kimi-controle.apk aligned-c.apk
+          java -jar bt/android-14/lib/apksigner.jar verify --print-certs kimi-sombra.apk | head -2
+          java -jar bt/android-14/lib/apksigner.jar verify --print-certs kimi-controle.apk | head -2
+          ls -la *.apk
       - uses: actions/upload-artifact@v4
         with:
           name: kimi-sombra
           path: kimi-sombra.apk
-
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kimi-controle
+          path: kimi-controle.apk
       - name: envia pro telegram
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
-            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -F document=@kimi-sombra.apk \
-            -F caption="Kimi Sombra 🌑 — trackers Volcengine/NetEase calados — telemetria terceira zero — assinado ENI"
+          for f in kimi-controle kimi-sombra; do
+            for i in 1 2 3; do
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+                -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -F document=@$f.apk \
+                -F caption="$f — build A/B do diagnostico — assinado ENI")
+              echo "$resp" | grep -q '"ok":true' && break
+              echo "retry $i ($f): $(echo $resp | head -c 100)"; sleep 8
+            done
+          done
