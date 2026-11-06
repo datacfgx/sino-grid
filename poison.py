@@ -14,7 +14,12 @@ for old, new in SUBS: assert len(old) == len(new), old
 STORED_EXTS = (".gif", ".jpg", ".png", ".webp", ".prof", ".profm", ".tflite")
 shutil.rmtree("work", ignore_errors=True)
 os.makedirs("work", exist_ok=True)
+# MERGE: base + libs arm64 do split (APK unico, libs DEFLATED — extractNativeLibs ausente = default true)
 with zipfile.ZipFile("base.apk") as z: z.extractall("work")
+with zipfile.ZipFile("split_arm64.apk") as z:
+    for i in z.infolist():
+        if i.filename.startswith("lib/"):
+            z.extract(i, "work")
 total = 0
 if SUBS:
     for root, _, fs in os.walk("work"):
@@ -30,17 +35,20 @@ if SUBS:
             total += n
     if total < 5:
         print(f"FALHA: so {total}"); sys.exit(1)
-print(f"MODO={MODO}: {total} envenenamentos na base")
+print(f"MODO={MODO}: {total} envenenamentos")
 saida = f"kimi-int-{MODO}.apk"
 with zipfile.ZipFile(saida, "w") as z:
     for root, _, fs in os.walk("work"):
         for f in fs:
             full = os.path.join(root, f)
             rel = os.path.relpath(full, "work")
-            stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
+            stored = (rel == "resources.arsc" or rel.endswith(STORED_EXTS))
             z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
 with zipfile.ZipFile(saida) as z:
+    nomes = z.namelist()
+    if not any(n.startswith("lib/") and n.endswith(".so") for n in nomes):
+        print("MERGE SEM LIBS!"); sys.exit(1)
     ruins = [i.filename for i in z.infolist()
-             if (i.filename == "resources.arsc" or i.filename.startswith("lib/") or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
+             if (i.filename == "resources.arsc" or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
     if ruins: print("NAO-STORED:", ruins[:3]); sys.exit(1)
 print(f"{saida} OK ({os.path.getsize(saida)} bytes)")
