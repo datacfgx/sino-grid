@@ -1,0 +1,41 @@
+name: ENI Fetcher
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "pacote da Play (ex: net.sourceforge.opencamera)"
+        required: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-fetcher
+      - name: fetch
+        run: |
+          pip install -q gplayapi requests protobuf==3.20.3
+          python3 fetch.py "${{ inputs.package }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-fetch
+          path: "*.apk"
+      - name: envia pro telegram
+        run: |
+          f=$(ls *.apk | head -1)
+          sz=$(stat -c%s "$f")
+          for i in 1 2 3; do
+            if [ $sz -lt 48000000 ]; then
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+                -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -F document=@"$f" \
+                -F caption="fetcher: $f ($sz bytes) — da Play, na unha")
+            else
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                --data-urlencode "text=fetcher: $f maior que 48MB ($sz) — pega no artifact da run")
+            fi
+            echo "$resp" | grep -q '"ok":true' && break
+            echo "retry $i"; sleep 8
+          done
