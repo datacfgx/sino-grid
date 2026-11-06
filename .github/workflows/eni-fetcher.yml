@@ -18,7 +18,8 @@ jobs:
           python-version: "3.10"
       - name: fetch
         run: |
-          pip install -q gplayapi requests protobuf==3.20.3
+          pip install -q --no-deps gplayapi
+          pip install -q requests protobuf==3.20.3 clint args pycryptodome
           python3 fetch.py "${{ inputs.package }}"
       - uses: actions/upload-artifact@v4
         with:
