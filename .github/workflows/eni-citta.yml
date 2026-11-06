@@ -1,0 +1,22 @@
+name: ENI Cittamobi
+on:
+  workflow_dispatch:
+  push:
+    branches: [eni-citta]
+
+jobs:
+  pega:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-citta
+      - name: baixa APK
+        run: |
+          chmod +x download.sh
+          ./download.sh
+          ls -la *.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cittamobi-apk
+          path: "*.apk"
