@@ -46,3 +46,5 @@ fi
 
 echo "FALHOU em todos os espelhos"
 exit 1
+
+# gatilho
