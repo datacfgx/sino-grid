@@ -37,7 +37,7 @@ jobs:
       - name: alinha e assina
         run: |
           chmod +x bt/android-14/zipalign
-          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 original.apk aligned.apk
+          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 patched.apk aligned.apk
           java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out kimi-sombra.apk aligned.apk
           java -jar bt/android-14/lib/apksigner.jar verify --print-certs kimi-sombra.apk | head -3
           ls -la kimi-sombra.apk
