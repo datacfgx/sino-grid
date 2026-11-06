@@ -6,6 +6,8 @@ SUBS = [
     (b"crash.163.com",   b"127.0.0.1.cra"),
 ]
 for old, new in SUBS: assert len(old) == len(new)
+# original tem extractNativeLibs=true -> .so COMPRIMIDAS igual ao original;
+# STORED apenas para o que o doNotCompress manda (arsc + midias + prof + tflite)
 STORED_EXTS = (".gif", ".jpg", ".png", ".webp", ".prof", ".profm", ".tflite")
 os.makedirs("work", exist_ok=True)
 with zipfile.ZipFile("original.apk") as z: z.extractall("work")
@@ -31,14 +33,16 @@ with zipfile.ZipFile("patched.apk", "w") as z:
         for f in fs:
             full = os.path.join(root, f)
             rel = os.path.relpath(full, "work")
-            stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
+            stored = (rel == "resources.arsc" or rel.endswith(STORED_EXTS))
             z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
 with zipfile.ZipFile("patched.apk") as z:
     ruins = [i.filename for i in z.infolist()
-             if (i.filename.endswith(".so") or i.filename == "resources.arsc" or i.filename.endswith(STORED_EXTS))
-             and i.compress_type != 0]
+             if (i.filename == "resources.arsc" or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
     if ruins:
         print("NAO-STORED:", ruins[:5]); sys.exit(1)
-print("STORED validado (lib + arsc + doNotCompress) ✔")
+    tam = os.path.getsize("patched.apk")
+    if tam > 48_000_000:
+        print(f"MAIOR QUE 48MB: {tam}"); sys.exit(1)
+print(f"patched.apk OK ({tam} bytes) — STORES corretos, cabe no Telegram ✔")
 shutil.copyfile("patched.apk", "original.apk")
 print("original.apk envenenado e alinhavel")
