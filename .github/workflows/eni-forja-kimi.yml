@@ -61,7 +61,7 @@ jobs:
           cp final-int-controle.apk kimi-int-controle.apk
           git add kimi-int-*.apk
           git commit -m "Kimi Sombra Internacional — APK unico fundido (A/B sombra/controle) — assinado ENI"
-          git push -f origin builds-intl
+          git push -f origin builds-intl || echo 'push bloqueado (403), seguindo pro telegram'
           echo "PUBLICADO: github.com/datacfgx/sino-grid/tree/builds-intl"
       - name: telegram (se couber)
         run: |
