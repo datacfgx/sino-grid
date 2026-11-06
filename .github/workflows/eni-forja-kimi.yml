@@ -9,6 +9,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: eni-forja-kimi
+          persist-credentials: true
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -60,7 +61,7 @@ jobs:
           cp final-int-controle.apk kimi-int-controle.apk
           git add kimi-int-*.apk
           git commit -m "Kimi Sombra Internacional — APK unico fundido (A/B sombra/controle) — assinado ENI"
-          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/datacfgx/sino-grid.git builds-intl
+          git push -f origin builds-intl
           echo "PUBLICADO: github.com/datacfgx/sino-grid/tree/builds-intl"
       - name: telegram (se couber)
         run: |
