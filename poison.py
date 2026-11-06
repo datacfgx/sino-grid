@@ -2,21 +2,19 @@
 import sys, os, zipfile, shutil
 MODO = sys.argv[1] if len(sys.argv) > 1 else "sombra"
 SUBS_TODOS = [
-    (b"volceapplog.com",    b"127.0.0.1.xxxxx"),
-    (b"volctrack.com",      b"127.0.0.1.xxx"),
-    (b"crash.163.com",      b"127.0.0.1.cra"),
+    (b"volceapplog.com",     b"127.0.0.1.xxxxx"),
+    (b"volctrack.com",       b"127.0.0.1.xxx"),
+    (b"crash.163.com",       b"127.0.0.1.cra"),
     (b"app-measurement.com", b"127.0.0.1.xxxxxxxxx"),
     (b"google-analytics.com", b"127.0.0.1.xxxxxxxxxx"),
-    (b"volces.com",         b"127.0.0.1."),
+    (b"volces.com",          b"127.0.0.1."),
 ]
-SUBS = {"sombra": SUBS_TODOS, "controle": []}.get(MODO, SUBS_TODOS)
+SUBS = {"sombra": SUBS_TODOS, "controle": []}[MODO]
 for old, new in SUBS: assert len(old) == len(new), old
 STORED_EXTS = (".gif", ".jpg", ".png", ".webp", ".prof", ".profm", ".tflite")
 shutil.rmtree("work", ignore_errors=True)
 os.makedirs("work", exist_ok=True)
 with zipfile.ZipFile("base.apk") as z: z.extractall("work")
-# merge: lib do split arm64
-with zipfile.ZipFile("split_arm64.apk") as z: z.extractall("work")
 total = 0
 if SUBS:
     for root, _, fs in os.walk("work"):
@@ -32,7 +30,7 @@ if SUBS:
             total += n
     if total < 5:
         print(f"FALHA: so {total}"); sys.exit(1)
-print(f"MODO={MODO}: {total} envenenamentos")
+print(f"MODO={MODO}: {total} envenenamentos na base")
 saida = f"kimi-int-{MODO}.apk"
 with zipfile.ZipFile(saida, "w") as z:
     for root, _, fs in os.walk("work"):
@@ -45,6 +43,4 @@ with zipfile.ZipFile(saida) as z:
     ruins = [i.filename for i in z.infolist()
              if (i.filename == "resources.arsc" or i.filename.startswith("lib/") or i.filename.endswith(STORED_EXTS)) and i.compress_type != 0]
     if ruins: print("NAO-STORED:", ruins[:3]); sys.exit(1)
-    if not any(i.filename.startswith("lib/") and i.filename.endswith(".so") for i in z.infolist()):
-        print("SEM LIBS NO MERGE!"); sys.exit(1)
 print(f"{saida} OK ({os.path.getsize(saida)} bytes)")
