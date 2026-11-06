@@ -1,0 +1,4 @@
+# Cittamobi v6
+https://core.cittamobi.com.br/v1/availableAgencies || apiKey:QzpV30dT6G7tU8E325xnGrWnibhu0AXXugXqhnVZa7NeNdpvvyh-FG7ySFmJXX1MFIHzSFiBOnQkaW95Rca-os || availableAgencies
+https://core.cittamobi.com.br/user/v6/login || apiKey:QzpV30dT6G7tU8E325xnGrWnibhu0AXXugXqhnVZa7NeNdpvvyh-FG7ySFmJXX1MFIHzSFiBOnQkaW95Rca-os || 
+https://api.cittamobi.com.br/v1/availableAgencies || apiKey:QzpV30dT6G7tU8E325xnGrWnibhu0AXXugXqhnVZa7NeNdpvvyh-FG7ySFmJXX1MFIHzSFiBOnQkaW95Rca-os || availableAgencies
