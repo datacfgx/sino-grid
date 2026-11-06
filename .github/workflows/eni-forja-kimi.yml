@@ -19,33 +19,42 @@ jobs:
           unzip -q build-tools_r34-linux.zip -d bt
       - name: keystore
         run: base64 -d eni.keystore.b64 > eni.keystore
-      - name: builds das 3 variantes de bissecao
+      - name: junta os pedacos
         run: |
-          python3 poison.py sem-applog
-          python3 poison.py sem-track
-          python3 poison.py sem-crash
-      - name: alinha e assina as 3
+          cat base.part1 base.part2 > base.apk
+          cat split.part1 split.part2 > split_arm64.apk
+          ls -la base.apk split_arm64.apk
+      - name: builds (merge + sombra + controle)
+        run: |
+          python3 poison.py sombra
+          python3 poison.py controle
+      - name: verificacao
+        run: |
+          unzip -p kimi-int-sombra.apk classes.dex | strings | grep -q "127.0.0.1" || { echo "VENENO AUSENTE"; exit 1; }
+          for h in volceapplog volctrack "crash.163.com" app-measurement google-analytics "volces.com"; do
+            unzip -p kimi-int-sombra.apk classes.dex classes2.dex classes3.dex classes4.dex | strings | grep -q "$h" && { echo "HOST VIVO: $h"; exit 1; } || true
+          done
+          unzip -p kimi-int-sombra.apk classes.dex | strings | grep -q "volces" && { echo "volces sobrou"; exit 1; } || true
+          echo "sombra int envenenada ✔"
+      - name: alinha e assina
         run: |
           chmod +x bt/android-14/zipalign
-          for v in sem-applog sem-track sem-crash; do
-            LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 kimi-$v.apk aligned-$v.apk
-            java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out final-$v.apk aligned-$v.apk
-            java -jar bt/android-14/lib/apksigner.jar verify --print-certs final-$v.apk | head -2
-            ls -la final-$v.apk
+          for v in sombra controle; do
+            LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 kimi-int-$v.apk aligned-$v.apk
+            java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out final-int-$v.apk aligned-$v.apk
+            java -jar bt/android-14/lib/apksigner.jar verify --print-certs final-int-$v.apk | head -2
+            ls -la final-int-$v.apk
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: kimi-bissecao
-          path: final-*.apk
-      - name: envia as 3 pro telegram
+          name: kimi-int
+          path: final-int-*.apk
+      - name: avisa no telegram
         run: |
-          for v in sem-applog sem-track sem-crash; do
-            for i in 1 2 3; do
-              resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
-                -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-                -F document=@final-$v.apk \
-                -F caption="kimi-$v [BISSECAO] — sem o host $v — assinado ENI")
-              echo "$resp" | grep -q '"ok":true' && break
-              echo "retry $i ($v): $(echo $resp | head -c 100)"; sleep 8
-            done
+          for i in 1 2 3; do
+            resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              --data-urlencode "text=🌑 Kimi Sombra INTERNACIONAL pronto! Baixa no Git: github.com/datacfgx/sino-build-2/tree/main/builds (arquivo final-int-sombra.apk)")
+            echo "$resp" | grep -q '"ok":true' && break
+            echo "retry $i"; sleep 8
           done
