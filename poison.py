@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-# Kimi Sombra — intoxicacao binaria de trackers (substituicao same-length nos dex/arsc)
-import sys, os, zipfile, shutil
+# Kimi Sombra v2 — intoxicacao binaria por SUFIXO de dominio (mata qualquer subdominio)
+import sys, os, zipfile
 
 SUBS = [
-    (b"kimi.volctrack.com",      b"127.0.0.1.volc.com"),
-    (b"abtest.volceapplog.com",  b"127.0.0.1.xxxxxxxxxxxx"),
-    (b"alink.volceapplog.com",   b"127.0.0.1.xxxxxxxxxxx"),
-    (b"klink.volceapplog.com",   b"127.0.0.1.xxxxxxxxxxx"),
-    (b"tobapplog.volceapplog.com", b"127.0.0.1.xxxxxxxxxxxxxxx"),
-    (b"toblog.volceapplog.com",  b"127.0.0.1.xxxxxxxxxxxx"),
-    (b"crash.163.com",           b"127.0.0.1.cra"),
+    (b"volceapplog.com", b"127.0.0.1.xxxxx"),   # 15 = 10+5
+    (b"volctrack.com",   b"127.0.0.1.xxx"),     # 13 = 10+3
+    (b"crash.163.com",   b"127.0.0.1.cra"),     # 13
 ]
 for old, new in SUBS:
     assert len(old) == len(new), f"tamanho diferente: {old}"
@@ -18,9 +14,11 @@ os.makedirs("work", exist_ok=True)
 with zipfile.ZipFile("original.apk") as z:
     z.extractall("work")
 
-alvos = [f"work/classes{i}.dex" for i in ["", "2", "3"]]
-if os.path.exists("work/resources.arsc"):
-    alvos.append("work/resources.arsc")
+alvos = []
+for root, _, fs in os.walk("work"):
+    for f in fs:
+        if f.endswith(".dex") or f == "resources.arsc":
+            alvos.append(os.path.join(root, f))
 
 total = 0
 for path in alvos:
@@ -31,17 +29,20 @@ for path in alvos:
         if c:
             data = data.replace(old, new)
             n += c
-    open(path, "wb").write(data)
+    if n:
+        open(path, "wb").write(data)
     print(f"{path}: {n} substituicoes")
     total += n
 
-if total < 7:
-    print(f"FALHA: so {total} substituicoes (esperado >=7)")
+if total < 3:
+    print(f"FALHA: so {total} substituicoes")
     sys.exit(1)
 print(f"TOTAL: {total} envenenamentos")
 
-# rezip no original.apk (substitui dex modificados)
-with zipfile.ZipFile("original.apk", "a", zipfile.ZIP_DEFLATED) as z:
-    for path in alvos:
-        z.write(path, path.replace("work/", ""))
-print("APK rezipado")
+# rezip LIMPO (sem duplicatas) em patched.apk
+with zipfile.ZipFile("patched.apk", "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, fs in os.walk("work"):
+        for f in fs:
+            full = os.path.join(root, f)
+            z.write(full, os.path.relpath(full, "work"))
+print("patched.apk montado")
