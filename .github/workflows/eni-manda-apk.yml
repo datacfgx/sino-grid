@@ -1,11 +1,6 @@
 name: ENI Manda APK
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "branch com o APK no root"
-        required: true
-        default: "eni-entrega"
   push:
     branches: [eni-entrega]
 
@@ -15,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.ref_name }}
+          ref: ${{ github.ref_name }}
       - name: envia pro telegram
         run: |
           f=$(ls *.apk | head -1)
