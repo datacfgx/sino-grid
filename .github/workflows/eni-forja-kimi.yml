@@ -95,12 +95,7 @@ jobs:
           for i in 1 2 3; do
             resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              --data-urlencode "text=🌑 KIMI SOMBRA INTERNACIONAL (APK unico, requiredSplitTypes removido, 45 venenos)
-
-Sombra: $U_SOMBRA
-Controle: $U_CONTROLE
-
-Baixa no navegador, instala como APK normal. A/B: controle primeiro, depois sombra. Me manda os resultados!")
+              --data-urlencode "text=🌑 KIMI SOMBRA INTL — Sombra: $U_SOMBRA | Controle: $U_CONTROLE — instala como APK normal, A/B controle primeiro")
             echo "$resp" | grep -q '"ok":true' && break
             echo "retry $i"; sleep 8
           done
