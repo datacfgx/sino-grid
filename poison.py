@@ -5,11 +5,10 @@ SUBS = [
     (b"volctrack.com",   b"127.0.0.1.xxx"),
     (b"crash.163.com",   b"127.0.0.1.cra"),
 ]
-for old, new in SUBS:
-    assert len(old) == len(new)
+for old, new in SUBS: assert len(old) == len(new)
+STORED_EXTS = (".gif", ".jpg", ".png", ".webp", ".prof", ".profm", ".tflite")
 os.makedirs("work", exist_ok=True)
-with zipfile.ZipFile("original.apk") as z:
-    z.extractall("work")
+with zipfile.ZipFile("original.apk") as z: z.extractall("work")
 alvos = []
 for root, _, fs in os.walk("work"):
     for f in fs:
@@ -27,19 +26,19 @@ for path in alvos:
 if total < 3:
     print(f"FALHA: {total}"); sys.exit(1)
 print(f"TOTAL: {total} envenenamentos")
-# rezip: lib/ STORED (extractNativeLibs), resto DEFLATED
 with zipfile.ZipFile("patched.apk", "w") as z:
     for root, _, fs in os.walk("work"):
         for f in fs:
             full = os.path.join(root, f)
             rel = os.path.relpath(full, "work")
-            ct = zipfile.ZIP_STORED if rel.startswith("lib/") else zipfile.ZIP_DEFLATED
-            z.write(full, rel, compress_type=ct)
-# valida: nenhuma .so comprimida
+            stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
+            z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
 with zipfile.ZipFile("patched.apk") as z:
-    ruins = [i.filename for i in z.infolist() if i.filename.endswith(".so") and i.compress_type != 0]
+    ruins = [i.filename for i in z.infolist()
+             if (i.filename.endswith(".so") or i.filename == "resources.arsc" or i.filename.endswith(STORED_EXTS))
+             and i.compress_type != 0]
     if ruins:
-        print("SO COMPRIMIDA:", ruins[:3]); sys.exit(1)
-print("lib/ STORED validado ✔")
+        print("NAO-STORED:", ruins[:5]); sys.exit(1)
+print("STORED validado (lib + arsc + doNotCompress) ✔")
 shutil.copyfile("patched.apk", "original.apk")
 print("original.apk envenenado e alinhavel")
