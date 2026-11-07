@@ -1,4 +1,4 @@
-name: ENI Inbox
+name: APK Tuning Mod
 on:
   workflow_dispatch:
   push:
@@ -7,16 +7,11 @@ on:
     - cron: '*/15 * * * *'
 
 jobs:
-  inbox:
+  fabrica:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: eni-inbox
-      - name: varre a caixa postal
-        run: python3 inbox.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: correio
-          path: correio.bin
-        if: always()
+      - name: a fábrica opera
+        run: python3 fabrica.py
