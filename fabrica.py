@@ -158,7 +158,12 @@ def normaliza(entrada, saida):
 def ferramentas():
     if not os.path.exists("bt/android-14/lib/apksigner.jar"):
         sh("wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip && unzip -q build-tools_r34-linux.zip -d bt")
-    sh("base64 -d eni.keystore.b64 > eni.keystore")
+    if not os.path.exists("bt/android-14/zipalign"):
+        raise RuntimeError("build-tools incompleto: bt/android-14/zipalign ausente")
+    if os.path.exists("eni.keystore.b64"):
+        sh("base64 -d eni.keystore.b64 > eni.keystore")
+    if not os.path.exists("eni.keystore"):
+        raise RuntimeError("keystore indisponivel: eni.keystore.b64 ausente na branch")
 
 def poison(path_apk):
     SUBS = [
@@ -189,8 +194,12 @@ def poison(path_apk):
 def assina_e_verifica(apk, saida="final.apk"):
     ferramentas()
     env = "LD_LIBRARY_PATH=$PWD/bt/android-14/lib64"
-    sh(f"{env} bt/android-14/zipalign -f -p 4 {apk} aligned.apk")
-    sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out {saida} aligned.apk")
+    rc, out = sh(f"{env} bt/android-14/zipalign -f -p 4 {apk} aligned.apk")
+    if rc != 0:
+        raise RuntimeError("zipalign falhou: " + out[-160:])
+    rc, out = sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out {saida} aligned.apk")
+    if rc != 0:
+        raise RuntimeError("apksigner falhou: " + out[-160:])
     checks = []
     rc, _ = sh(f"{env} bt/android-14/zipalign -c -p 4 {saida}")
     checks.append(("alinhamento", rc == 0))
@@ -356,7 +365,7 @@ def main():
             for p in partes: os.remove(p)
         except Exception as e:
             avisa(chat, f"❌ {base} quebrou na forja: {str(e)[:180]}")
-            print("erro:", str(e)[:300])
+            import traceback; traceback.print_exc()
 
     try:
         if max_id:
