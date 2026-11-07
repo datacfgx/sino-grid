@@ -18,6 +18,12 @@ def api(method, **params):
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.loads(r.read().decode())
 
+def apaga(chat, mid):
+    try:
+        api("deleteMessage", chat_id=chat, message_id=mid)
+    except Exception as e:
+        print("del falhou:", str(e)[:60])
+
 try:
     upd = api("getUpdates", timeout=60, limit=100)
 except Exception:
@@ -36,7 +42,7 @@ for u in upd.get("result", []):
             info = api("getFile", file_id=doc["file_id"]).get("result", {})
             url = f"https://api.telegram.org/file/bot{TOKEN}/{info.get('file_path','')}"
             urllib.request.urlretrieve(url, f"parts/{name}")
-            api("deleteMessage", chat_id=chat, message_id=msg["message_id"])
+            apaga(chat, msg["message_id"])
             baixou += 1
             print(f"parte {name}: {os.path.getsize(f'parts/{name}')} bytes")
         elif doc.get("file_size", 0) > 19000000:
@@ -45,7 +51,7 @@ for u in upd.get("result", []):
             print(f"aviso enviado pra: {name}")
     elif (msg.get("text") or "").strip().lower() == "cmfim":
         fim, chat_fim = True, chat
-        api("deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        apaga(chat, msg["message_id"])
 
 print(f"partes novas: {baixou} | fim: {fim}")
 partes = sorted(glob.glob("parts/cm_*"), key=lambda p: int(re.search(r"cm_(\d+)", p).group(1)))
