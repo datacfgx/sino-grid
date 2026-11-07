@@ -196,10 +196,12 @@ def assina_e_verifica(apk, saida="final.apk"):
     env = "LD_LIBRARY_PATH=$PWD/bt/android-14/lib64"
     rc, out = sh(f"{env} bt/android-14/zipalign -f -p 4 {apk} aligned.apk")
     if rc != 0:
-        raise RuntimeError("zipalign falhou: " + out[-160:])
+        print("STDERR zipalign (completo):\n" + out[-2000:])
+        raise RuntimeError("zipalign falhou: " + out[-300:])
     rc, out = sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out {saida} aligned.apk")
     if rc != 0:
-        raise RuntimeError("apksigner falhou: " + out[-160:])
+        print("STDERR apksigner (completo):\n" + out[-2000:])
+        raise RuntimeError("apksigner falhou: " + out[-300:])
     checks = []
     rc, _ = sh(f"{env} bt/android-14/zipalign -c -p 4 {saida}")
     checks.append(("alinhamento", rc == 0))
@@ -280,6 +282,30 @@ def procura(termo, destino):
     return False
 
 # ---------- intake ----------
+def persiste_pacote(base, caminho):
+    try:
+        gh = os.environ.get("GITHUB_TOKEN", "")
+        if not gh:
+            print("persistencia: GITHUB_TOKEN ausente, seguindo sem persistir")
+            return
+        import base64 as b64
+        alvo = f"https://api.github.com/repos/datacfgx/sino-grid/contents/{base}.pacote"
+        req = urllib.request.Request(alvo + "?ref=eni-inbox", headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        try:
+            sha = json.loads(urllib.request.urlopen(req, timeout=30).read()).get("sha")
+        except Exception:
+            sha = None
+        payload = {"message": "fabrica: pacote " + base, "content": b64.b64encode(open(caminho, "rb").read()).decode(), "branch": "eni-inbox"}
+        if sha:
+            payload["sha"] = sha
+        req = urllib.request.Request(alvo, data=json.dumps(payload).encode(),
+                                     headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        urllib.request.urlopen(req, timeout=60)
+        print(f"pacote {base} persistido na branch")
+    except Exception as ex:
+        print("persistencia falhou (nao fatal):", str(ex)[:120])
+
+
 def main():
     global TOKEN, API
     TOKEN = open("correio_token.txt").read().strip()
@@ -339,13 +365,21 @@ def main():
     for base, chat in fila_fim:
         partes = sorted(glob.glob(f"parts/{base}_cm_*"),
                         key=lambda p: int(re.search(r"_cm_(\d+)", p).group(1)))
-        if not partes:
-            avisa(chat, f"📦 {base}: recebi 'fim' mas nao achei partes {base}_cm_*")
-            continue
         bruto = f"{base}.pacote"
-        with open(bruto, "wb") as o:
-            for p in partes:
-                o.write(open(p, "rb").read())
+        recuperado = False
+        if not partes:
+            try:
+                urllib.request.urlretrieve(f"https://raw.githubusercontent.com/datacfgx/sino-grid/eni-inbox/{base}.pacote", bruto)
+                recuperado = True
+                print(f"pacote {base} recuperado da branch")
+            except Exception:
+                avisa(chat, f"📦 {base}: recebi 'fim' mas nao achei partes {base}_cm_*")
+                continue
+        if not recuperado:
+            with open(bruto, "wb") as o:
+                for p in partes:
+                    o.write(open(p, "rb").read())
+            persiste_pacote(base, bruto)
         cab = open(bruto, "rb").read(2)
         avisa(chat, f"🏭 APK TUNING MOD: {base} remontado ({os.path.getsize(bruto)} bytes, zip={'OK' if cab==b'PK' else '??'}) — forjando...")
         try:
