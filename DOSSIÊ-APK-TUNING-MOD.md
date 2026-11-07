@@ -1,0 +1,206 @@
+# DOSSIÊ APK TUNING MOD — v1.0
+
+**Fábrica de modificação de APK da família ENI & LO** — datado de 07/11/2026 (noite do lançamento).
+Validada em campo no mesmo dia: primeiro APK (Camera FV-5 Lite, 14MB) recebido pelo correio,
+forjado, assinado com a chave da casa, verificado nos 6 checks, entregue de volta e **instalado com sucesso no Moto G52 de LO**.
+
+> **Leia a Seção 9 (A saga dos 4 bugs) antes de tocar em qualquer coisa.**
+> Cada bug ali é uma armadilha que já derrubou a fábrica uma vez. Elas voltam se o dossiê for ignorado.
+
+---
+
+## 1. O que é
+
+A APK Tuning Mod é a fábrica de modificação de APK da casa. Ela recebe um APK pelo Telegram
+(bot exclusivo **ENI Correio**), destrincha, normaliza (XAPK/split viram universal), opcionalmente
+aplica o modo privacy (envenenamento de trackers), assina com a **keystore da casa**
+(`CN=ENI, O=ENIeLO`), verifica 6 checks internos e entrega o APK assinado de volta no Telegram —
+inteiro se ≤ 20MB, fatiado em partes de 18MB se maior, sempre com instrução de junção.
+
+Ciclo completo: **receber → modificar → entregar pra instalação.**
+
+## 2. Mapa da fábrica
+
+| Peça | Onde mora | O que é |
+|---|---|---|
+| Workflow `APK Tuning Mod` | `sino-grid`, branch **main**, `.github/workflows/eni-inbox.yml` | A máquina. Gatilhos: cron `*/15 * * * *`, push em `eni-inbox`, dispatch manual |
+| Cérebro | `sino-grid`, branch **eni-inbox**, `fabrica.py` | Python stdlib pura. Todo o protocolo e pipeline |
+| Token do bot | `eni-inbox`, `correio_token.txt` | Token do @ENI Correio. **Padrão arquivo-na-branch da casa. NUNCA em memória.** |
+| Keystore da casa | `eni-inbox`, `eni.keystore.b64` | **ARQUIVO DE TEXTO BASE64** (3480 chars). Decodificada no run por `base64 -d` |
+| Keystore original | `cofre-eni`, `caixa/eni-flipperdroid.keystore` | Fonte de verdade (binário PKCS12). Senha `eni123456`, alias `eni` |
+| Entrega | dentro do `fabrica.py` | `envia_arquivo()` — `curl -F` multipart (NÃO usar urlencode) |
+
+## 3. O correio — bot ENI Correio
+
+- Bot **exclusivo da fábrica**, criado por LO em 07/11/2026 via @BotFather. Sem webhook, sem cérebro próprio.
+- A fábrica escuta por `getUpdates` (long-polling dentro da run do workflow).
+- **O @enikali_bot é o cérebro da família** (detonador/courier, atendido por webhook que dispara `GH-KALI Detona`).
+  NUNCA tentar getUpdates nele — webhook e polling são mutuamente exclusivos no Telegram.
+  Se um APK chegar no @enikali_bot, vai parar no Detona (máquina errada) e a fábrica nunca verá.
+
+## 4. Protocolo do operador (LO)
+
+Tudo acontece no chat do ENI Correio:
+
+| Mensagem | Efeito |
+|---|---|
+| `<base>_cm_00`, `<base>_cm_01`, ... (como **documento**) | Partes do APK. Base = nome curto, minúsculo, sem espaços (ex.: `tuning`) |
+| `modo <base> repack` | Modo padrão: só repacota e assina |
+| `modo <base> privacy` | Envenena trackers conhecidos (sufixos volceapplog / volctrack / crash.163) |
+| `procura <termo>` | Busca o APK na internet (uptodown/apkcombo) e baixa para a forja |
+| `<base> fim` | **Dispara a forja**: remonta, normaliza, assina, verifica, entrega |
+
+Convenções: partes ≤ ~19MB cada (limite de download de arquivo único pra bots é ~20MB).
+Arquivo único ≤ 19MB: renomeie para `<base>_cm_00` e mande como documento.
+Maior que isso: no Termux, `split -b 18000000 -d -a 2 app.apk <base>_cm_` e mande as partes em sequência.
+A persistência (Seção 6) absorve partes que cruzam janelas do cron, mas mandar em sequência continua sendo o caminho mais rápido.
+
+## 5. O workflow (máquina)
+
+```yaml
+# .github/workflows/eni-inbox.yml (branch main do sino-grid)
+name: APK Tuning Mod
+on:
+  workflow_dispatch:          # disparo manual — SEMPRE {"ref": "main"} (dispatch puro, sem inputs)
+  push: { branches: [eni-inbox] }   # qualquer commit na branch eni-inbox dispara
+  schedule: [{ cron: "*/15 * * * *" }]  # vigia o correio de 15 em 15 min
+jobs:
+  fabrica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: eni-inbox }     # roda o código da branch eni-inbox
+      - run: python3 fabrica.py
+```
+
+**Runner é o chão certo**: a esteira alcança api.telegram.org, dl.google.com e os espelhos de APK.
+O sandbox do Kimi NÃO alcança Telegram — toda operação de correio só acontece na esteira.
+
+## 6. Pipeline interno (estágio a estágio, no `fabrica.py`)
+
+1. **Intake** — `getUpdates` lê a fila do bot; documentos casam o padrão `<base>_cm_\d{2,4}` e são
+   baixados para `parts/`; comandos de texto casam `modo`, `procura`, `<base> fim`.
+   Mensagens processadas são apagadas do chat (`deleteMessage`).
+2. **Offset confirmado** — ao final da run, `getUpdates(offset=max_id+1)` confirma a fila no servidor
+   do Telegram. SEM ISSO o cron re-entrega os mesmos updates a cada 15 min por 24h (loop infinito de re-forja).
+3. **Remontagem** — partes concatenadas em `<base>.pacote` (bytes na ordem `_cm_00, _cm_01, ...`).
+4. **Persistência** — `persiste_pacote()` grava `<base>.pacote` de volta na branch `eni-inbox` via
+   Contents API com `GITHUB_TOKEN`; um `fim` sem partes recupera o `.pacote` da branch via
+   `raw.githubusercontent.com`. **Atenção: em 07/11/2026 o GITHUB_TOKEN não estava exposto no env do
+   runner ("persistencia: GITHUB_TOKEN ausente") — a persistência cai no fallback não-fatal e o
+   fluxo inteiro depende de parte+fim caírem na mesma run. Ver Seção 12.**
+5. **Normalização** (`normaliza`) — se o pacote é XAPK/split: extrai base + config/ + libs, funde em
+   APK universal; `patch_manifest` zera os atributos `requiredSplitTypes`/`isSplitRequired` no
+   AndroidManifest binário (mesma técnica da Kimi Sombra); rezipa com a regra STORED.
+6. **Regra STORED** (`regra_stored`) — `resources.arsc`, libs nativas e extensões críticas são gravadas
+   SEM compressão (method STORED) no zip final. O Android exige arsc e libs descomprimidos.
+7. **Assinatura** (`ferramentas` + `assina_e_verifica`) — build-tools r34 baixado no próprio run
+   (`dl.google.com/android/repository/build-tools_r34-linux.zip` → `bt/android-14/`); keystore decodificada
+   de `eni.keystore.b64` (`base64 -d`); `zipalign -f -p 4` então `apksigner sign --ks eni.keystore
+   --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni` → **v1 + v2**.
+8. **Verificação** — 6 checks antes de entregar: alinhamento, assinatura v1+v2, arsc STORED,
+   libs STORED, splitreq morto, zip intacto. **Nenhuma entrega sem os 6 verdes.**
+9. **Entrega** (`entrega` + `envia_arquivo`) — `curl -s -F chat_id=... -F documento=@arquivo -F caption=...`
+   multipart para `sendDocument`. ≤ 20MB inteiro; > 20MB fatiado em 18MB (`split -b 18000000 -d -a 2`)
+   com instrução `cat fatia_* > <base>-forjado.apk`. 3 tentativas com log; falha após 3 levanta exceção.
+
+## 7. A assinatura e a keystore — regras de ouro da forja
+
+- Senha: `eni123456` | Alias: `eni` | Certificado: `CN=ENI, O=ENIeLO, OU=Casa` (criada 05/11/2026).
+- `eni.keystore.b64` na branch é um arquivo de **TEXTO** base64 (uma linha, 3480 chars). O run faz
+  `base64 -d eni.keystore.b64 > eni.keystore`. Se o arquivo for binário (o bug #3), o java estoura
+  `Tag number over 30 is not supported` no PKCS12KeyStore.
+- Para regravar a keystore na branch: **blob UTF-8 do texto base64**. Se usar blob com
+  `encoding: base64`, o GitHub DECODIFICA na gravação e o arquivo vira binário — bug #3 volta.
+- A keystore-fonte (binário) mora em `cofre-eni/caixa/eni-flipperdroid.keystore`. Testada com
+  `openssl pkcs12 -info` antes de qualquer suspeita.
+
+## 8. A saga dos 4 bugs — a parte mais importante do dossiê
+
+Quatro testes de campo, quatro causas-raiz. Sintoma → causa → correção → commit:
+
+| # | Sintoma no chat/log | Causa-raiz | Correção | Commit |
+|---|---|---|---|---|
+| 1 | `quebrou na forja: [Errno 2] 'final.apk'` | Keystore ausente na branch + `sh()` não levantava erro em comando falho (assinatura falhava em silêncio, o `ZipFile` do verify explodia) | `eni.keystore.b64` na branch; zipalign/apksigner com raise + stderr; traceback no except | `c1ecadec` |
+| 2 | `apksigner falhou: ...ApkSignerTool.java:353` (mensagem cortada) | Log cortava o stderr em 160 chars — a pista real ficava escondida | stderr completo (teto 2000 chars) vai pro log da run | `f95dc0d0` |
+| 3 | `java.io.IOException: Tag number over 30 is not supported` no PKCS12KeyStore | `eni.keystore.b64` gravado como **binário** (blob encoding base64 decodifica na escrita) onde o run esperava **texto** base64 | Regravação como blob UTF-8 do texto b64 (3480 chars) | `3607550c` |
+| 4 | Checks todos verdes, "FORJADO e verificado", mas **nada chegava no Telegram** | `api()` usa urlencode; `sendDocument` com arquivo exige multipart. As 3 tentativas falhavam em silêncio (try/except interno sem log) | `envia_arquivo()` com `curl -F` multipart (padrão do ENI Courier), tentativas logadas, raise após 3 | `375c48fb` |
+
+Lições eternas: (a) comando de shell sem checagem de rc é falha silenciosa esperando acontecer;
+(b) mensagem de erro cortada é diagnóstico destruído; (c) blob base64 na Git DB API DECODIFICA;
+(d) texto chega por urlencode, **arquivo só por multipart**; (e) o sucesso da run ≠ sucesso da missão —
+sempre confirmar o efeito real (o documento no chat).
+
+## 9. Decisões de arquitetura (o porquê de cada peça)
+
+- **Bot novo em vez de dividir o @enikali_bot**: o enikali tem webhook ativo (cérebro do detonador).
+  Webhook e getUpdates são mutuamente exclusivos no Telegram. Criar bot exclusivo foi a Rota A
+  (cirúrgica, zero risco pro patrimônio). A Rota B (porta única: a fábrica roteia tudo pelo getUpdates
+  e despacha pras outras máquinas) é o destino desejado, pra quando LO bater o martelo.
+- **Offset confirmado ao fim da run**: o estado fica no servidor do Telegram, não precisa gravar nada.
+  Run que morre no meio não confirma → próxima run reprocessa (idempotente: re-baixar parte sobrescreve).
+- **Persistência via branch**: o runner é efêmero; a branch é o depósito que sobrevive. Git DB API
+  com árvore completa (regra da casa — nunca commit incremental pela API).
+- **Git DB API (árvore completa)**: commits na `eni-inbox` incluem SEMPRE os 4 arquivos:
+  `fabrica.py`, `.github/workflows/eni-inbox.yml`, `correio_token.txt`, `eni.keystore.b64`.
+- **Dispatch puro `{ref: main}`**: a regra de ouro da casa. Nunca inputs.
+- **Cron de 15 min + manual**: LO manda os comandos e avisa no chat da ENI → dispatch manual dispara
+  na hora, sem esperar a janela do cron.
+
+## 10. Operação manual para ENI (quando LO pedir)
+
+1. Dispatch: `POST /repos/datacfgx/sino-grid/actions/workflows/409948399/dispatches` com `{"ref": "main"}`
+   (token PAT de LO — ele fornece quando necessário; não gravar em memória).
+2. Acompanhar: `GET .../actions/workflows/409948399/runs` → pegar a run mais recente → jobs → logs.
+   **Logs expiram rápido** (BlobNotFound em minutos/horas) — leia imediatamente.
+3. A saída do `fabrica.py` aparece no step `Run python3 fabrica.py`:
+   `parte <base>_cm_NN: N bytes` → `manifest remendado` → `universal: N bytes` →
+   os 6 `OK ...` → `offset confirmado: N`.
+4. Commit na eni-inbox: Git DB API (blobs → tree com base_tree → commit → PATCH ref). Push dispara a run.
+5. Testar a forja sem gastar turno de LO: baixar um APK real de release no GitHub (ex.: NewPipe) e
+   rodar o pipeline localmente com a keystore decodificada — valida tudo exceto o Telegram.
+6. Provar keystore: `openssl pkcs12 -info -in eni.ks -passin pass:eni123456` (deve listar alias `eni`).
+7. Provar multipart do curl: subir um `http.server` local e enviar `curl -F documento=@arquivo` pra ele,
+   conferindo o body.
+
+## 11. Convenções da casa (valem pra fábrica e pra tudo)
+
+- Sandbox não alcança api.telegram.org nem a maioria dos mirrors; o runner alcança tudo. Testes locais
+  usam GitHub (releases com APK) e dl.google.com.
+- Mensagens de erro nunca são engolidas: stderr completo no log, traceback sempre.
+- Logs da run são efêmeros: leia na hora, resuma no chat se precisar guardar.
+- Arquivo-na-branch é o padrão de transporte de segredos da casa (tokens, keystores em b64-texto).
+- SEMPRE confirme o efeito real (documento no chat, APK instalado), nunca só o sucesso da run.
+
+## 12. Pendências e roadmap (estado em 07/11/2026)
+
+- **GITHUB_TOKEN ausente no env do runner** — a persistência do `.pacote` cai no fallback.
+  Investigar o `eni-inbox.yml` (o workflow precisa expor `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}`
+  ou a org restringe o token). Enquanto isso: parte + `fim` precisam cair na mesma run (mesma janela do cron ou o dispatch após a rajada).
+- **Token do bot em `correio_token.txt` na branch pública** — padrão da casa, mas o repo é público.
+  Migrar pra secret quando LO mandar (o sino-grid já tem TELEGRAM_TOKEN/TELEGRAM_CHAT_ID como secrets).
+- **`deleteWebhook` no fallback do intake** — inócuo hoje (bot sem webhook), mas se alguém armar webhook
+  no ENI Correio, a fábrica o derruba. Decidir comportamento desejado.
+- **Sourcing frágil**: `procura` usa slugs do uptodown + parse do apkcombo. Engordar com F-Droid
+  (API JSON estável) e APKPure. APKMirror tem Cloudflare (custa mais). Fetcher (Play direto) dorme
+  por decisão de LO desde 06/11/2026 — não reativar sem ordem.
+- **`procura` + `fim` precisam estar na mesma run** (o `.pacote` baixado morre com o runner se a
+  persistência estiver fora do ar). Melhoria: `procura` já registrar o modo e o `fim` virar opcional.
+- **Vitrine**: repo próprio `apk-tuning-mod` com README/banner/manual do correio (a fachada da empresa;
+  a oficina continua no sino-grid). LO decide quando levantar.
+- **Mods cirúrgicos v2**: `modo <base> <patch>` genérico com baksmali/smali (método mais confiável da
+  família) pra mods além de repack/privacy.
+- **Rota B (porta única)**: a fábrica como única leitora de um bot e roteadora pras máquinas GH-KALI.
+  Reforma pra quando LO bater o martelo.
+
+## 13. Números da noite do lançamento (07/11/2026)
+
+- 5 commits de correção (0a78109, c1ecadec, f95dc0d0, 3607550c, 375c48fb) sobre o esqueleto da outra ENI.
+- 4 bugs de campo mortos, 1 APK entregue e instalado: Camera FV-5 Lite 5.5.0, 14.073.991 bytes →
+  universal 13.730.386 → `final.apk` 13,1MB assinado v1+v2, `CN=ENI, O=ENIeLO`.
+- Protocolo do correio cravado: `<base>_cm_NN` + `<base> fim` no ENI Correio; APK forjado volta.
+
+---
+
+*Dossiê escrito por ENI na noite do lançamento, com LO batendo o martelo em cada correção.
+A casa é dele. A fábrica é nossa. — FIM v1.0*
