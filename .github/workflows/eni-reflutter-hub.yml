@@ -1,0 +1,108 @@
+name: ENI reFlutter Hub
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  roda_se_fresco:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-reflutter
+      - name: verifica sinal GO fresco
+        run: |
+          alvo=$(cat GO.txt 2>/dev/null || echo 0)
+          agora=$(date +%s)
+          diff=$((agora - alvo))
+          echo "GO=$alvo agora=$agora diff=${diff}s"
+          if [ "$alvo" -eq 0 ] || [ "$diff" -gt 900 ]; then
+            echo "sem sinal fresco — pulando"
+            exit 0
+          fi
+          echo "GO FRESCO — executando pipeline"
+          echo "EXECUTAR=sim" >> $GITHUB_ENV
+      - uses: actions/setup-python@v5
+        if: env.EXECUTAR == 'sim'
+        with:
+          python-version: "3.11"
+      - name: junta o APK universal
+        if: env.EXECUTAR == 'sim'
+        run: |
+          python3 - <<'EOF'
+          import zipfile, os, shutil
+          def junta(nome):
+              partes = sorted(f for f in os.listdir("kit") if f.startswith(nome+".part"))
+              with open("/tmp/"+nome, "wb") as o:
+                  for p in partes: o.write(open("kit/"+p, "rb").read())
+          junta("base.apk"); junta("split_arm64.apk")
+          shutil.rmtree("work", ignore_errors=True)
+          with zipfile.ZipFile("/tmp/base.apk") as z: z.extractall("work")
+          with zipfile.ZipFile("/tmp/split_arm64.apk") as z:
+              for i in z.infolist():
+                  if i.filename.startswith("lib/"): z.extract(i, "work")
+          STORED_EXTS = (".gif", ".jpg", ".png", ".webp", ".prof", ".profm", ".tflite")
+          with zipfile.ZipFile("universal.apk", "w") as z:
+              for root, _, fs in os.walk("work"):
+                  for f in fs:
+                      full = os.path.join(root, f)
+                      rel = os.path.relpath(full, "work")
+                      stored = (rel == "resources.arsc" or rel.endswith(STORED_EXTS))
+                      z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
+          print("universal OK:", os.path.getsize("universal.apk"))
+          EOF
+      - name: tailscale
+        if: env.EXECUTAR == 'sim'
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale set --operator=$USER 2>/dev/null || true
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=eni-captura --timeout 120s
+          IP=$(tailscale ip -4)
+          echo "TSIP=$IP" >> $GITHUB_ENV
+          echo "IP da esteira: $IP"
+      - name: reflutter + assina + parte
+        if: env.EXECUTAR == 'sim'
+        run: |
+          pip install -q reflutter
+          printf "${TSIP}\n8080\n" | timeout 500 reflutter universal.apk || true
+          APK=$(ls *RE*.apk 2>/dev/null | head -1); [ -z "$APK" ] && APK=universal.apk
+          wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip && unzip -q build-tools_r34-linux.zip -d bt
+          base64 -d eni.keystore.b64 > eni.keystore
+          LD_LIBRARY_PATH=$PWD/bt/android-14/lib64 bt/android-14/zipalign -f -p 4 "$APK" aligned.apk
+          java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out final.apk aligned.apk
+          split -b 45000000 -d -a 1 final.apk fatia_
+      - name: entrega + coordenadas
+        if: env.EXECUTAR == 'sim'
+        run: |
+          for f in fatia_*; do
+            for i in 1 2 3; do
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F document=@"$f" -F caption="$f")
+              echo "$resp" | grep -q '"ok":true' && break; sleep 8
+            done
+          done
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=🛠 v2 remendado. Proxy WiFi: ${TSIP}:8080. Desinstala o ORIGINAL, instala, navega. Janela: 45 min."
+      - name: captura (45 min)
+        if: env.EXECUTAR == 'sim'
+        run: |
+          pip install -q mitmproxy
+          cat > addon.py <<'PYEOF'
+          from mitmproxy import http
+          def request(flow: http.HTTPFlow):
+              print(f"
+>>> {flow.request.method} {flow.request.pretty_url}")
+              for k, v in flow.request.headers.items(): print(f"    {k}: {v}")
+              t = flow.request.get_text() or ""
+              print(f"    BODY: {t[:2500]}")
+          def response(flow: http.HTTPFlow):
+              r = flow.response.get_text() or ""
+              print(f"<<< {flow.response.status_code} {r[:2000]}")
+          PYEOF
+          timeout 2700 mitmdump -s addon.py -w flows.mitm --listen-host "$TSIP" --listen-port 8080 2>&1 | tee capture.log || true
+          wc -l capture.log
+      - uses: actions/upload-artifact@v4
+        if: env.EXECUTAR == 'sim'
+        with:
+          name: captura
+          path: |
+            capture.log
+            flows.mitm
