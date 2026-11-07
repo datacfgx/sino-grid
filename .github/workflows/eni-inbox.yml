@@ -1,0 +1,22 @@
+name: ENI Inbox
+on:
+  workflow_dispatch:
+  push:
+    branches: [eni-inbox]
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-inbox
+      - name: varre a caixa postal
+        run: python3 inbox.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: correio
+          path: correio.bin
+        if: always()
