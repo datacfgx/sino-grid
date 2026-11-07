@@ -349,6 +349,22 @@ def persiste_parte(nome, caminho):
         print("persistencia de parte falhou (nao fatal):", str(ex)[:120])
 
 
+def limpa_arquivo(nome):
+    try:
+        gh = os.environ.get("GITHUB_TOKEN", "")
+        if not gh:
+            return
+        alvo = f"https://api.github.com/repos/datacfgx/sino-grid/contents/{nome}"
+        req = urllib.request.Request(alvo + "?ref=eni-inbox", headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        sha = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("sha")
+        if sha:
+            req = urllib.request.Request(alvo, data=json.dumps({"message": "fabrica: limpeza " + nome, "sha": sha, "branch": "eni-inbox"}).encode(),
+                                         headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"}, method="DELETE")
+            urllib.request.urlopen(req, timeout=30)
+    except Exception:
+        pass
+
+
 def limpa_branch(base):
     try:
         gh = os.environ.get("GITHUB_TOKEN", "")
@@ -442,6 +458,18 @@ def main():
             if partes:
                 partes = sorted(partes, key=lambda p: int(re.search(r"_cm_(\d+)", p).group(1)))
                 print(f"{len(partes)} parte(s) de {base} recuperadas do deposito")
+        forjado = f"{base}.forjado"
+        try:
+            urllib.request.urlretrieve(f"https://raw.githubusercontent.com/datacfgx/sino-inbox/eni-inbox/{forjado}".replace("sino-inbox", "sino-grid"), forjado)
+            print(f"{forjado} recuperado da branch (trabalho da bancada)")
+            if assina_e_verifica(forjado):
+                avisa(chat, f"✅ {base} FORJADO e verificado (bancada). Instala e me conta.")
+                entrega(chat, forjado, base)
+                limpa_branch(base)
+                limpa_arquivo(forjado)
+                continue
+        except Exception:
+            pass
         bruto = f"{base}.pacote"
         recuperado = False
         if not partes:
