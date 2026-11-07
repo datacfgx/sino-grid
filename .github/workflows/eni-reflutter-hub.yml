@@ -16,7 +16,7 @@ jobs:
           agora=$(date +%s)
           diff=$((agora - alvo))
           echo "GO=$alvo agora=$agora diff=${diff}s"
-          if [ "$alvo" -eq 0 ] || [ "$diff" -gt 900 ]; then
+          if [ "$alvo" -eq 0 ] || [ "$diff" -gt 3500 ]; then
             echo "sem sinal fresco — pulando"
             exit 0
           fi
