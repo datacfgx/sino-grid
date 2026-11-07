@@ -222,6 +222,18 @@ def assina_e_verifica(apk, saida="final.apk"):
         print(("OK " if ok else "FALHOU ") + nome)
     return all(ok for _, ok in checks), checks
 
+def envia_arquivo(chat, caminho, caption=""):
+    cmd = ["curl", "-s", "-F", f"chat_id={chat}", "-F", f"document=@{caminho}",
+           "-F", f"caption={caption}", f"{API}/sendDocument"]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError("curl rc=" + str(r.returncode) + ": " + r.stderr[-150:])
+    resp = json.loads(r.stdout or "{}")
+    if not resp.get("ok"):
+        raise RuntimeError("telegram recusou: " + r.stdout[:180])
+    return True
+
+
 def entrega(chat, caminho, base):
     tam = os.path.getsize(caminho)
     import math
@@ -229,17 +241,24 @@ def entrega(chat, caminho, base):
     if n == 1:
         for i in range(3):
             try:
-                api("sendDocument", chat_id=chat, document=open(caminho, "rb"), caption=f"{base} forjado — {tam} bytes")
+                envia_arquivo(chat, caminho, f"{base} forjado — {tam} bytes")
                 return True
-            except Exception: time.sleep(8)
+            except Exception as e:
+                print(f"envio tentativa {i+1}/3 falhou: {str(e)[:150]}")
+                time.sleep(8)
+        raise RuntimeError("entrega falhou apos 3 tentativas")
     else:
         subprocess.run(f"split -b 18000000 -d -a 2 {caminho} fatia_", shell=True)
         for f in sorted(glob.glob("fatia_*")):
             for i in range(3):
                 try:
-                    api("sendDocument", chat_id=chat, document=open(f, "rb"), caption=f)
+                    envia_arquivo(chat, f, f)
                     break
-                except Exception: time.sleep(8)
+                except Exception as e:
+                    print(f"fatia {f} tentativa {i+1}/3 falhou: {str(e)[:150]}")
+                    time.sleep(8)
+            else:
+                raise RuntimeError("fatia " + f + " falhou apos 3 tentativas")
         avisa(chat, f"{base} em {n} fatias — junta no termux: cat fatia_* > {base}-forjado.apk")
     return True
 
