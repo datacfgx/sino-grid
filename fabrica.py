@@ -325,6 +325,50 @@ def persiste_pacote(base, caminho):
         print("persistencia falhou (nao fatal):", str(ex)[:120])
 
 
+def persiste_parte(nome, caminho):
+    try:
+        gh = os.environ.get("GITHUB_TOKEN", "")
+        if not gh:
+            print("persistencia de parte: GITHUB_TOKEN ausente")
+            return
+        import base64 as b64
+        alvo = f"https://api.github.com/repos/datacfgx/sino-grid/contents/{nome}"
+        req = urllib.request.Request(alvo + "?ref=eni-inbox", headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        try:
+            sha = json.loads(urllib.request.urlopen(req, timeout=30).read()).get("sha")
+        except Exception:
+            sha = None
+        payload = {"message": "fabrica: parte " + nome, "content": b64.b64encode(open(caminho, "rb").read()).decode(), "branch": "eni-inbox"}
+        if sha:
+            payload["sha"] = sha
+        req = urllib.request.Request(alvo, data=json.dumps(payload).encode(),
+                                     headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        urllib.request.urlopen(req, timeout=60)
+        print(f"parte {nome} persistida na branch (segura na casa)")
+    except Exception as ex:
+        print("persistencia de parte falhou (nao fatal):", str(ex)[:120])
+
+
+def limpa_branch(base):
+    try:
+        gh = os.environ.get("GITHUB_TOKEN", "")
+        if not gh:
+            return
+        req = urllib.request.Request("https://api.github.com/repos/datacfgx/sino-grid/contents?ref=eni-inbox",
+                                     headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"})
+        itens = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        for it in itens:
+            n = it.get("name", "")
+            if n == f"{base}.pacote" or re.fullmatch(re.escape(base) + r"_cm_\d{2,4}", n):
+                alvo = f"https://api.github.com/repos/datacfgx/sino-grid/contents/{n}"
+                req = urllib.request.Request(alvo, data=json.dumps({"message": "fabrica: limpeza " + n, "sha": it["sha"], "branch": "eni-inbox"}).encode(),
+                                             headers={"Authorization": "Bearer " + gh, "Accept": "application/vnd.github+json"}, method="DELETE")
+                urllib.request.urlopen(req, timeout=30)
+        print(f"deposito de {base} limpo")
+    except Exception as ex:
+        print("limpeza nao fatal:", str(ex)[:100])
+
+
 def main():
     global TOKEN, API
     TOKEN = open("correio_token.txt").read().strip()
@@ -356,6 +400,7 @@ def main():
                 apaga(chat, msg["message_id"])
                 baixou += 1
                 print(f"parte {nome}: {os.path.getsize(f'parts/{nome}')} bytes")
+                persiste_parte(nome, f"parts/{nome}")
         elif texto.startswith("modo "):
             partes = texto.split(None, 2)
             if len(partes) >= 3:
@@ -384,6 +429,19 @@ def main():
     for base, chat in fila_fim:
         partes = sorted(glob.glob(f"parts/{base}_cm_*"),
                         key=lambda p: int(re.search(r"_cm_(\d+)", p).group(1)))
+        if not partes:
+            idx = 0
+            while idx < 200:
+                pnome = f"{base}_cm_{idx:02d}"
+                try:
+                    urllib.request.urlretrieve(f"https://raw.githubusercontent.com/datacfgx/sino-grid/eni-inbox/{pnome}", f"parts/{pnome}")
+                    partes.append(f"parts/{pnome}")
+                    idx += 1
+                except Exception:
+                    break
+            if partes:
+                partes = sorted(partes, key=lambda p: int(re.search(r"_cm_(\d+)", p).group(1)))
+                print(f"{len(partes)} parte(s) de {base} recuperadas do deposito")
         bruto = f"{base}.pacote"
         recuperado = False
         if not partes:
@@ -416,6 +474,7 @@ def main():
                 falhas = [n for n, ok2 in checks if not ok2]
                 avisa(chat, f"⚠️ {base}: falhou na verificacao: {', '.join(falhas)} — verificando logs da run")
             for p in partes: os.remove(p)
+            limpa_branch(base)
         except Exception as e:
             avisa(chat, f"❌ {base} quebrou na forja: {str(e)[:180]}")
             import traceback; traceback.print_exc()
