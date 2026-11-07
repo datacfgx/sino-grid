@@ -47,9 +47,89 @@ jobs:
                   for f in fs:
                       full = os.path.join(root, f)
                       rel = os.path.relpath(full, "work")
-                      stored = (rel == "resources.arsc" or rel.endswith(STORED_EXTS))
+                      stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
                       z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
           print("universal OK:", os.path.getsize("universal.apk"))
+          # remove a exigencia de splits (APK fundido de build fatiada)
+          import struct
+          def _pool(data):
+              off = 8
+              while off < len(data)-8:
+                  ct, hs, cs = struct.unpack_from("<HHI", data, off)
+                  if ct == 1 and cs > 0:
+                      cnt, stc, fl, ss, _ = struct.unpack_from("<IIIII", data, off+8)
+                      utf8 = bool(fl & 0x100)
+                      offs = struct.unpack_from(f"<{cnt}I", data, off+28)
+                      base = off + ss
+                      out = []
+                      for o in offs:
+                          p = base + o
+                          if utf8:
+                              ln = data[p]; p += 1
+                              if ln & 0x80: ln = ((ln & 0x7f) << 8) | data[p]; p += 1
+                              out.append(data[p:p+ln].decode(errors="replace"))
+                          else:
+                              ln = struct.unpack_from("<H", data, p)[0]; p += 2
+                              if ln & 0x8000:
+                                  ln = ((ln & 0x7fff) << 16) | struct.unpack_from("<H", data, p)[0]; p += 2
+                              out.append(data[p:p+ln*2].decode("utf-16-le", errors="replace"))
+                      return out
+                  off += cs if cs > 0 else 8
+              raise RuntimeError("pool")
+          def patch_splitreq(path):
+              data = bytearray(open(path, "rb").read())
+              pool = _pool(data)
+              vazio = next(i for i, t in enumerate(pool) if t == "")
+              patches = 0
+              off = 8
+              while off < len(data) - 8:
+                  ct, hs, cs = struct.unpack_from("<HHI", data, off)
+                  if cs <= 0: break
+                  if ct == 0x0102:
+                      ni = struct.unpack_from("<I", data, off+20)[0]
+                      ast = struct.unpack_from("<H", data, off+24)[0]
+                      asz = struct.unpack_from("<H", data, off+26)[0]
+                      acn = struct.unpack_from("<H", data, off+28)[0]
+                      if ni >= len(pool): break
+                      tag = pool[ni]
+                      attrs = []
+                      ba = off + 16 + ast
+                      for a in range(acn):
+                          ao = ba + a*asz
+                          an = struct.unpack_from("<I", data, ao+4)[0]
+                          av = struct.unpack_from("<I", data, ao+16)[0]
+                          if an < len(pool): attrs.append((ao, pool[an], av))
+                      if tag == "manifest":
+                          for ao, an, av in attrs:
+                              if an == "requiredSplitTypes":
+                                  struct.pack_into("<I", data, ao+8, vazio)
+                                  struct.pack_into("<I", data, ao+16, vazio)
+                                  patches += 1
+                      if tag == "meta-data":
+                          nm = next((av for ao, an, av in attrs if an == "name"), None)
+                          if nm is not None and nm < len(pool) and "splits.required" in pool[nm]:
+                              for ao, an, av in attrs:
+                                  if an in ("value", "resource"):
+                                      struct.pack_into("<I", data, ao+8, vazio)
+                                      struct.pack_into("<I", data, ao+16, vazio)
+                                      patches += 1
+                  off += cs
+              open(path, "wb").write(bytes(data))
+              return patches
+          n = patch_splitreq("work/AndroidManifest.xml")
+          assert n >= 1, "requiredSplitTypes nao achado"
+          print("manifest patchado:", n, "atributos")
+          # re-zip com o manifest remendado
+          with zipfile.ZipFile("universal2.apk", "w") as z:
+              for root, _, fs in os.walk("work"):
+                  for f in fs:
+                      full = os.path.join(root, f)
+                      rel = os.path.relpath(full, "work")
+                      stored = (rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(STORED_EXTS))
+                      z.write(full, rel, compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
+          import os as _os
+          _os.replace("universal2.apk", "universal.apk")
+          print("universal final:", _os.path.getsize("universal.apk"))
           EOF
       - name: tailscale
         if: env.EXECUTAR == 'sim'
