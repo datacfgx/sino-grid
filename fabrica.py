@@ -285,7 +285,9 @@ def main():
     modos = {}
     baixou = 0
     fila_fim = []
+    max_id = 0
     for u in upd.get("result", []):
+        max_id = max(max_id, u.get("update_id", 0))
         msg = u.get("message") or {}
         chat = msg.get("chat", {}).get("id")
         doc = msg.get("document")
@@ -355,6 +357,13 @@ def main():
         except Exception as e:
             avisa(chat, f"❌ {base} quebrou na forja: {str(e)[:180]}")
             print("erro:", str(e)[:300])
+
+    try:
+        if max_id:
+            api("getUpdates", offset=max_id + 1, timeout=0)
+            print(f"offset confirmado: {max_id + 1}")
+    except Exception as e:
+        print("offset nao confirmado:", str(e)[:80])
 
 if __name__ == "__main__":
     main()
