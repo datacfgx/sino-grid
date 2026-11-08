@@ -434,6 +434,9 @@ def main():
             avisa(chat, f"🔎 APK TUNING MOD procurando '{termo}' na internet...")
             try:
                 if procura(termo, f"{alvo}.pacote"):
+                    import shutil as _sh
+                    os.makedirs("parts", exist_ok=True)
+                    _sh.copy(f"{alvo}.pacote", f"parts/{alvo}.pacote")
                     tam = os.path.getsize(f"{alvo}.pacote")
                     avisa(chat, f"📥 achei: {alvo}.pacote ({tam} bytes). Manda '{alvo} fim' pra forjar (ou 'modo {alvo} privacy' antes).")
                 else:
