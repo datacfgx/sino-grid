@@ -235,6 +235,12 @@ def envia_arquivo(chat, caminho, caption=""):
 
 
 def entrega(chat, caminho, base):
+    if not caminho.endswith(".apk"):
+        import shutil
+        caminho_apk = f"{base}.apk"
+        shutil.copy(caminho, caminho_apk)
+        caminho = caminho_apk
+        print(f"entrega: renomeado para {caminho_apk}")
     tam = os.path.getsize(caminho)
     import math
     n = 1 if tam <= 20_000_000 else math.ceil(tam / 18_000_000)
