@@ -18,6 +18,24 @@ def baixa(url, dest, tok=None):
 
 # ---------- 1) assemble: apktool b + intercept do dex antes do aapt2 ----------
 print("== assemble do dex do veredito (apktool + intercept)")
+def pega_zip():
+    for tent in range(6):
+        try:
+            urllib.request.urlretrieve(f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/eni-inbox/smali_tez2.z01", "smali_tez2.z01")
+            urllib.request.urlretrieve(f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/eni-inbox/smali_tez2.z02", "smali_tez2.z02")
+            with open("smali_tez2.zip", "wb") as o:
+                o.write(open("smali_tez2.z01", "rb").read())
+                o.write(open("smali_tez2.z02", "rb").read())
+            z = zipfile.ZipFile("smali_tez2.zip")
+            assert z.testzip() is None, "CRC"
+            assert b"ENI: veredito" in z.read("smali/Gc/l0.smali"), "patch"
+            print("zip validado no runner com o patch dentro")
+            return
+        except Exception as e:
+            print(f"tentativa {tent}: zip ruim ({str(e)[:50]}) - retry")
+            time.sleep(5)
+    raise RuntimeError("zip nao validou no runner")
+pega_zip()
 sh("unzip -q -o smali_tez2.zip -d smali_tez2")
 l0_txt = open("smali_tez2/smali/Gc/l0.smali").read()
 print("PATCH NO SMALI EXTRAIDO:", "ENI: veredito" in l0_txt)
