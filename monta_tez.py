@@ -68,7 +68,9 @@ shutil.copy("patch/l0.smali", candidatos[0])
 print("l0 patchado no lugar")
 shutil.rmtree("smali_orig/build", ignore_errors=True)
 proc = subprocess.Popen(f"{APK} b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
-dex_src = "smali_orig/build/apk/classes.dex"
+_cands = glob.glob("smali_orig/build/apk/classes*.dex")
+dex_src = _cands[0] if _cands else "smali_orig/build/apk/classes.dex"
+print("dex no build:", _cands)
 ultimo, estavel, dex_resgatado = -1, 0, None
 for _ in range(200):
     time.sleep(3)
@@ -154,9 +156,12 @@ if os.path.isdir("base_work/lib"):
             rel = os.path.relpath(os.path.join(raiz, f), "base_work")
             zi = zipfile.ZipInfo(rel); zi.compress_type = zipfile.ZIP_STORED
             zout.writestr(zi, open(os.path.join(raiz, f), "rb").read())
+zi = zipfile.ZipInfo("classes.dex"); zi.compress_type = zipfile.ZIP_STORED
+zout.writestr(zi, zin.read("classes.dex"))
 zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
 zout.writestr(zi, open("classes2_new.dex", "rb").read())
 zout.close()
+print("classes.dex original + classes2.dex patchado no pacote")
 print("base_mod.apk:", os.path.getsize("base_mod.apk"))
 
 # ---------- 5) assinatura + entrega ----------
