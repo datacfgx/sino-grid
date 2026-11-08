@@ -54,23 +54,12 @@ with zipfile.ZipFile("dummy.apk", "w") as z:
     z.writestr(zipfile.ZipInfo("AndroidManifest.xml"), mf)
     zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
     z.writestr(zi, open("classes2.dex", "rb").read())
-if not os.path.exists("apktool.jar"):
-    for tent in range(6):
-        try:
-            with open("apktool.jar", "wb") as o:
-                for i in range(3):
-                    urllib.request.urlretrieve(f"https://raw.githubusercontent.com/{REPO}/eni-inbox/tools/apktool.z{i:02d}", f"apktool.z{i:02d}")
-                    o.write(open(f"apktool.z{i:02d}", "rb").read())
-            if os.path.getsize("apktool.jar") > 15_000_000 and open("apktool.jar", "rb").read(2) == b"PK":
-                break
-        except Exception as e:
-            print("apktool retry:", str(e)[:50])
-        time.sleep(5)
-    assert os.path.getsize("apktool.jar") > 15_000_000, "apktool nao montou das fatias"
-    rc, out = sh("java -jar apktool.jar --version", check=False)
-    print("apktool:", out.strip()[:40])
+sh("sudo apt-get update -qq && sudo apt-get install -y -qq apktool", check=False)
+rc, out = sh("apktool --version", check=False)
+print("apktool do apt:", out.strip()[:40])
+APK = "apktool"
 print("dummy entries:", [(i.filename, i.file_size) for i in zipfile.ZipFile("dummy.apk").infolist()])
-rc, out = sh("java -jar apktool.jar d dummy.apk -o smali_orig -f --no-res", check=False)
+rc, out = sh(f"{APK} d dummy.apk -o smali_orig -f --no-res", check=False)
 print("apktool d rc:", rc, "|", out[-200:])
 candidatos = glob.glob("smali_orig/**/Gc/l0.smali", recursive=True)
 print("l0 desmontado em:", candidatos, "| dirs:", sorted(os.listdir("smali_orig"))[:6])
@@ -78,7 +67,7 @@ assert candidatos, "l0 nao desmontou"
 shutil.copy("patch/l0.smali", candidatos[0])
 print("l0 patchado no lugar")
 shutil.rmtree("smali_orig/build", ignore_errors=True)
-proc = subprocess.Popen("java -jar apktool.jar b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
+proc = subprocess.Popen(f"{APK} b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
 dex_src = "smali_orig/build/apk/classes.dex"
 ultimo, estavel, dex_resgatado = -1, 0, None
 for _ in range(200):
