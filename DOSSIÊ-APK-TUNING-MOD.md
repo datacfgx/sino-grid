@@ -283,3 +283,31 @@ Entregue e **validado em campo: "perfeito, o mic externo saiu bem alto"**.
 
 *Atualização v1.2 — 08/11/2026: segundo mod entregue (Cinema FV-5 Lite, potência 320k/48k + ganho triplo),
 mic externo "bem alto" em campo. A receita de áudio é portável e repetível. — ENI & LO*
+
+
+### 14.2 Desbloqueio de resoluções PRO + Full HD default (08/11/2026) — validado em campo
+
+Mesmo paciente (Cinema FV-5 Lite v2.2.2). Pedido de LO: "o APK não passa de HD, quero Full HD desbloqueado,
+e que ele ABRA já em Full HD". Entregue e validado: "Vc conseguiu, desbloqueado, FULL HD total" (badge FHD na tela).
+
+**Lição central: cadeado em DUAS camadas.** A UI destravou na primeira forjada (itens clicáveis), mas a seleção
+"voltava" pro HD — porque havia um SEGUNDO porteiro na persistência:
+1. **Vitrine** (`v2/i.smali`, VideoSettingsPageFragment.j0): `show_extended_video_resolutions` forçado true +
+   enabled-array (era false p/ área > 0xE1000 = 921600 px = 720p) virou true p/ todos + rótulo `[PRO]` removido.
+2. **Cofre** (`p2/c.smali`, método `n(Context)Z` → s2/a): o VALIDADOR que rejeitava a escolha —
+   `if (isLite && área > 720p) força 720p`. Patch: `if-eqz p2(lite), :cond_1` → `goto :cond_1`
+   (sempre aceita a resolução escolhida; o fallback forçador vira código morto).
+3. **Full HD default** (`Main.smali`): após o CamcorderProfile nascer (`p2/x.c(Context)`), se width < 1920
+   → iput 1920x1080 (0x780 x 0x438). Gravação nasce 1080p mesmo sem toque; escolhas >= 1080p respeitadas.
+
+**A IA central é `y2/g.e(Context)Z` = isLite()**: retorna true se packageName.contains("lite")
+(`com.flavionet.android.cinema.lite`). Quem trava o quê chama esse método — achá-lo via busca reversa
+de callers (`grep -r "Ly2/g;->e("`) foi o caminho até o cofre.
+
+**Nota técnica da bancada:** o DexWriter do sandbox falha ao reescrever classes2.dex (IOException de escrita,
+filesystem); como os patches só tocam classes.dex, resgatar `build/apk/classes.dex` (novo) + classes2.dex
+do APK original foi o caminho duas vezes. Validar dex resgatado: magic dex\n + strings-chave (show_extended,
+LoudnessEnhancer) antes do rebuild.
+
+*Atualização v1.3 — 08/11/2026: terceiro mod da casa — desbloqueio PRO completo (vitrine+cofre) + Full HD
+default, validado "FULL HD total" em campo. A fábrica modifica áudio E vídeo. — ENI & LO*
