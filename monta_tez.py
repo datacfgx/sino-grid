@@ -55,12 +55,20 @@ with zipfile.ZipFile("dummy.apk", "w") as z:
     zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
     z.writestr(zi, open("classes2.dex", "rb").read())
 if not os.path.exists("apktool.jar"):
-    for _ in range(3):
-        rc = subprocess.run("curl -sL -o apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.4/apktool_2.9.4.jar", shell=True).returncode
-        if rc == 0 and os.path.getsize("apktool.jar") > 10_000_000:
-            break
+    for tent in range(6):
+        try:
+            with open("apktool.jar", "wb") as o:
+                for i in range(3):
+                    urllib.request.urlretrieve(f"https://raw.githubusercontent.com/{REPO}/eni-inbox/tools/apktool.z{i:02d}", f"apktool.z{i:02d}")
+                    o.write(open(f"apktool.z{i:02d}", "rb").read())
+            if os.path.getsize("apktool.jar") > 15_000_000 and open("apktool.jar", "rb").read(2) == b"PK":
+                break
+        except Exception as e:
+            print("apktool retry:", str(e)[:50])
         time.sleep(5)
-    assert os.path.getsize("apktool.jar") > 10_000_000, "apktool nao baixou"
+    assert os.path.getsize("apktool.jar") > 15_000_000, "apktool nao montou das fatias"
+    rc, out = sh("java -jar apktool.jar --version", check=False)
+    print("apktool:", out.strip()[:40])
 print("dummy entries:", [(i.filename, i.file_size) for i in zipfile.ZipFile("dummy.apk").infolist()])
 rc, out = sh("java -jar apktool.jar d dummy.apk -o smali_orig -f --no-res", check=False)
 print("apktool d rc:", rc, "|", out[-200:])
