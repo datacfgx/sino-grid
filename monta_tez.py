@@ -55,10 +55,10 @@ with zipfile.ZipFile("dummy.apk", "w") as z:
     zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
     z.writestr(zi, open("classes2.dex", "rb").read())
 if not os.path.exists("apktool.jar"):
-    rel = json.loads(urllib.request.urlopen("https://api.github.com/repos/iBotPeaches/Apktool/releases/latest", timeout=60).read())
-    jar = next(a["browser_download_url"] for a in rel["assets"] if a["name"].endswith(".jar"))
-    baixa(jar, "apktool.jar")
-sh("java -jar apktool.jar d dummy.apk -o smali_orig -f")
+    baixa("https://github.com/iBotPeaches/Apktool/releases/download/v2.9.4/apktool_2.9.4.jar", "apktool.jar")
+print("dummy entries:", [(i.filename, i.file_size) for i in zipfile.ZipFile("dummy.apk").infolist()])
+rc, out = sh("java -jar apktool.jar d dummy.apk -o smali_orig -f --no-res", check=False)
+print("apktool d rc:", rc, "|", out[-200:])
 candidatos = glob.glob("smali_orig/**/Gc/l0.smali", recursive=True)
 print("l0 desmontado em:", candidatos, "| dirs:", sorted(os.listdir("smali_orig"))[:6])
 assert candidatos, "l0 nao desmontou"
