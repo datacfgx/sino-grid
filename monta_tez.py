@@ -134,60 +134,58 @@ for raiz, _, files in os.walk("arm64_work"):
             nlibs += 1
 print(f"libs arm64: {nlibs}")
 
-def remove_requiredsplittypes(axml):
-    import struct as st
-    data = bytearray(axml)
-    (hsize,) = st.unpack_from("<H", data, 2)
-    off = hsize
-    pool = []
-    while off < len(data):
-        t, hs, sz = st.unpack_from("<HHI", data, off)
-        if t == 0x0001:
-            n, _, fl, ss, _ = st.unpack_from("<IIIII", data, off + 8)
-            for i in range(n):
-                (so,) = st.unpack_from("<I", data, off + 28 + 4*i)
-                q = off + ss + so
-                if fl & 0x100:
-                    l2 = data[q+1]
-                    pool.append(data[q+2:q+2+l2].decode("utf8", "replace"))
-                else:
-                    l2 = st.unpack_from("<H", data, q)[0] * 2
-                    pool.append(data[q+2:q+2+l2].decode("utf-16-le", "replace"))
-            break
-        off += sz
-    if "requiredSplitTypes" not in pool:
-        return bytes(data)
-    idx = pool.index("requiredSplitTypes")
-    off = hsize
-    while off < len(data):
-        t, hs, sz = st.unpack_from("<HHI", data, off)
-        if t == 0x0102:
-            el = st.unpack_from("<I", data, off + 20)[0]
-            if el < len(pool) and pool[el] == "manifest":
-                ac = st.unpack_from("<H", data, off + 28)[0]
-                at = off + 36
-                remover = None
-                for i in range(ac):
-                    nm = st.unpack_from("<I", data, at + 4)[0]
-                    if nm == idx:
-                        remover = at
-                        break
-                    at += 20
-                if remover is not None:
-                    novo = data[:remover] + data[remover+20:]
-                    st.pack_into("<H", novo, off + 28, ac - 1)
-                    csz = st.unpack_from("<I", novo, off + 4)[0]
-                    st.pack_into("<I", novo, off + 4, csz - 20)
-                    tsz = st.unpack_from("<I", novo, 4)[0]
-                    st.pack_into("<I", novo, 4, tsz - 20)
-                    print("requiredSplitTypes REMOVIDO (cirurgia binaria)")
-                    return bytes(novo)
-                return bytes(data)
-        off += sz if sz > 0 else 8
-    return bytes(data)
-
 mp = "base_work/AndroidManifest.xml"
-open(mp, "wb").write(remove_requiredsplittypes(open(mp, "rb").read()))
+_axml = open(mp, "rb").read()
+import struct as st
+_data = bytearray(_axml)
+(_hsz,) = st.unpack_from("<H", _data, 2)
+_off = _hsz
+_pool = []
+while _off < len(_data):
+    _t, _hs, _sz = st.unpack_from("<HHI", _data, _off)
+    if _t == 0x0001:
+        _n, _, _fl, _ss, _ = st.unpack_from("<IIIII", _data, _off + 8)
+        for _i in range(_n):
+            (_so,) = st.unpack_from("<I", _data, _off + 28 + 4*_i)
+            _q = _off + _ss + _so
+            if _fl & 0x100:
+                _l2 = _data[_q+1]
+                _pool.append(_data[_q+2:_q+2+_l2].decode("utf8", "replace"))
+            else:
+                _l2 = st.unpack_from("<H", _data, _q)[0] * 2
+                _pool.append(_data[_q+2:_q+2+_l2].decode("utf-16-le", "replace"))
+        break
+    _off += _sz
+if "requiredSplitTypes" in _pool:
+    _idx = _pool.index("requiredSplitTypes")
+    _off = _hsz
+    while _off < len(_data):
+        _t, _hs, _sz = st.unpack_from("<HHI", _data, _off)
+        if _t == 0x0102:
+            _el = st.unpack_from("<I", _data, _off + 20)[0]
+            if _el < len(_pool) and _pool[_el] == "manifest":
+                _ac = st.unpack_from("<H", _data, _off + 28)[0]
+                _at = _off + 36
+                _rem = None
+                for _i in range(_ac):
+                    _nm = st.unpack_from("<I", _data, _at + 4)[0]
+                    if _nm == _idx:
+                        _rem = _at
+                        break
+                    _at += 20
+                if _rem is not None:
+                    _novo = _data[:_rem] + _data[_rem+20:]
+                    st.pack_into("<H", _novo, _off + 28, _ac - 1)
+                    _csz = st.unpack_from("<I", _novo, _off + 4)[0]
+                    st.pack_into("<I", _novo, _off + 4, _csz - 20)
+                    _tsz = st.unpack_from("<I", _novo, 4)[0]
+                    st.pack_into("<I", _novo, 4, _tsz - 20)
+                    open(mp, "wb").write(bytes(_novo))
+                    print("requiredSplitTypes REMOVIDO (cirurgia binaria)")
+                break
+        _off += _sz if _sz > 0 else 8
+else:
+    open(mp, "wb").write(_axml)
 
 def regra(rel):
     return rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(".so")
