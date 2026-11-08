@@ -66,7 +66,15 @@ print("l0 desmontado em:", candidatos, "| dirs:", sorted(os.listdir("smali_orig"
 assert candidatos, "l0 nao desmontou"
 shutil.copy("patch/l0.smali", candidatos[0])
 print("l0 patchado no lugar")
-shutil.rmtree("smali_orig/build", ignore_errors=True)
+# manequim com manifest minimo: o aapt do build falhava nas referencias do manifest real
+open("smali_orig/AndroidManifest.xml", "w").write(
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.eni.tez" '
+    'android:versionCode="1" android:versionName="1.0">\n'
+    '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34"/>\n'
+    '</manifest>\n')
+subprocess.run("rm -rf smali_orig/res smali_orig/assets smali_orig/original smali_orig/apktool.yml", shell=True)
+print("manequim enxugado (manifest minimo, sem res)")
 proc = subprocess.Popen(f"{APK} b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
 _cands = glob.glob("smali_orig/build/apk/classes*.dex")
 dex_src = _cands[0] if _cands else "smali_orig/build/apk/classes.dex"
