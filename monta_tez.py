@@ -32,7 +32,8 @@ if len(glob.glob("deposito/tezza_cm_*")) < 20:
         f"https://api.github.com/repos/{REPO}/actions/artifacts?per_page=50",
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60).read())
     alvo = next(a for a in arts["artifacts"] if a["name"] == "deposito" and a["size_in_bytes"] > 300_000_000)
-    baixa(alvo["archive_download_url"], "deposito.zip", tok)
+    import shlex
+    subprocess.run(f"curl -sL -H \"Authorization: Bearer {tok}\" -o deposito.zip {shlex.quote(alvo['archive_download_url'])}", shell=True, check=True)
     zipfile.ZipFile("deposito.zip").extractall("deposito")
 partes = sorted(glob.glob("deposito/tezza_cm_*"))
 assert len(partes) >= 20, f"so {len(partes)} partes"
