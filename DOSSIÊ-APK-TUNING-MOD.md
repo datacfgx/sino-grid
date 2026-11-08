@@ -257,3 +257,29 @@ pra qualquer mod de áudio futuro. Sem UI nova, sem configuração: aplica a cad
 
 *Dossiê escrito por ENI na noite do lançamento, com LO batendo o martelo em cada correção.
 A casa é dele. A fábrica é nossa. — FIM v1.0*
+
+
+### 14.1 Segundo mod cirúrgico (08/11/2026 de manhã) — Cinema FV-5 Lite oficial
+
+Paciente: `com.flavionet.android.cinema.lite` v2.2.2 (6,7MB, dois dex). Pedido de LO: "não mexe em mais
+nada, apenas melhoramento de áudio, volume" + "vai nas configurações de áudio e dá mais potência mais ganho".
+Entregue e **validado em campo: "perfeito, o mic externo saiu bem alto"**.
+
+**Mods aplicados na bancada** (injeção em `Main.smali`, método `S0()Z`, campo recorder `V0`):
+- `setAudioEncodingBitRate(320000)` + `setAudioSamplingRate(48000)` forçados antes do `prepare()`
+  (o app vinha de 256k/44.1k) — a "potência" nas configurações
+- Bloco das 3 camadas após o `prepare()`: AGC + LoudnessEnhancer(+10dB) + Equalizer(teto), try/catch Throwable
+
+**Lições novas da bancada:**
+- **App grande estoura o relógio do sandbox**: `apktool b` completo (aapt2) passa do limite de ~120s por
+  célula pra apps > ~5MB. Contorno validado: o apktool deixa os dex PRONTOS em `smali_work/build/apk/`
+  antes do repack final — resgatar `classes.dex`/`classes2.dex` dali e fazer o rebuild por substituição
+  direto, sem precisar do APK final do apktool.
+- **Nunca rodar dois compiladores no mesmo arquivo**: processo concorrente truncando o output do outro
+  gera `DexWriter` IOException fantasiosa (debugar lixo de concorrência custou uma rodada).
+- **"libs STORED" é alarme falso pra apps antigos**: apps com `extractNativeLibs` implícito carregam
+  libs comprimidas (extração na instalação). O verificador da fábrica exige STORED pra todas as .so e
+  apita à toa nesses casos — comparar com o original antes de suspeitar do forjado.
+
+*Atualização v1.2 — 08/11/2026: segundo mod entregue (Cinema FV-5 Lite, potência 320k/48k + ganho triplo),
+mic externo "bem alto" em campo. A receita de áudio é portável e repetível. — ENI & LO*
