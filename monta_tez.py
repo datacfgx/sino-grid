@@ -19,6 +19,8 @@ def baixa(url, dest, tok=None):
 # ---------- 1) assemble: apktool b + intercept do dex antes do aapt2 ----------
 print("== assemble do dex do veredito (apktool + intercept)")
 sh("unzip -q -o smali_tez2.zip -d smali_tez2")
+l0_txt = open("smali_tez2/smali/Gc/l0.smali").read()
+print("PATCH NO SMALI EXTRAIDO:", "ENI: veredito" in l0_txt)
 if not os.path.exists("apktool.jar"):
     rel = json.loads(urllib.request.urlopen("https://api.github.com/repos/iBotPeaches/Apktool/releases/latest", timeout=60).read())
     jar = next(a["browser_download_url"] for a in rel["assets"] if a["name"].endswith(".jar"))
