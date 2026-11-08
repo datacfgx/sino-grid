@@ -200,6 +200,59 @@ sempre confirmar o efeito real (o documento no chat).
   universal 13.730.386 → `final.apk` 13,1MB assinado v1+v2, `CN=ENI, O=ENIeLO`.
 - Protocolo do correio cravado: `<base>_cm_NN` + `<base> fim` no ENI Correio; APK forjado volta.
 
+
+---
+
+## 14. MODO BANCADA + PRIMEIRO MOD CIRÚRGICO (noite de 07/11/2026)
+
+O fluxo definitivo da fábrica foi validado em campo completo, e a casa entregou o **primeiro mod
+cirúrgico de verdade**: ganho de volume para microfone externo no Cinema FV-5 de LO
+(paciente `fv.cmn.com.cinemafv_5`, 2,4MB). Relato de campo: "aplicativo instalou, volume tá top".
+
+### O ciclo executado
+
+1. LO enviou o APK como `camera_cm_00` pelo ENI Correio (sem fim)
+2. Run da esteira baixou e **persistiu a parte na branch** + subiu como **artifact "deposito"**
+3. ENI puxou da branch/artifact pra bancada local e destrinchi com **jadx 1.5.6**
+4. Mapa apresentado a LO; martelo: **ganho de volume no mic externo, somente isso**
+5. Cirurgia na bancada: **apktool 3.0.3** desmontou, injeção smali, remontou
+6. `<base>.forjado` subido pra branch; LO mandou `camera fim` → esteira verificou os 6 checks e
+   entregou `camera.apk` no ENI Correio
+
+### A receita do mod de ganho de mic (validada no Moto G52)
+
+Injeção em `Preview.smali`, método `startVideoRecording`, logo após `MediaRecorder.prepare()`,
+tudo dentro de try/catch `Ljava/lang/Throwable;`:
+
+1. **`AutomaticGainControl.create(audioSessionId)`** — pré-amp automático do hardware na sessão de captura
+2. **`LoudnessEnhancer` setTargetGain(1000)** — +10dB (teto da API)
+3. **`Equalizer` com todas as bandas em getBandLevelRange()[1]** — até +15dB por banda, descoberto em runtime
+
+Aprendizado-chave: **audiofx aplicam ganho REAL em sessão de captura MediaRecorder no G52** — o caminho
+pra qualquer mod de áudio futuro. Sem UI nova, sem configuração: aplica a cada gravação.
+
+### Bugs 5 a 7 da saga (continuação da Seção 8)
+
+| # | Sintoma | Causa-raiz | Correção |
+|---|---|---|---|
+| 5 | APK chega no Telegram mas Android oferece abrir com Chrome/Documentos em vez de instalar | Documento enviado sem extensão `.apk` (`camera.forjado`); o instalador só é oferecido pra `.apk` | `entrega()` renomeia pra `<base>.apk` antes do envio (commit bfcc6e62) |
+| 6 | App modificado instala e abre mas **fecha ao clicar em gravar** | apktool recompilou `resources.arsc` com aapt2 e trocou os IDs internos — código procurava recurso no lugar errado | **Regra de ouro da bancada: mexeu só em smali → substituir SÓ o `classes.dex` no APK original** (manifest/arsc/res byte a byte). dex recompilado mantém os IDs numéricos constantes do smali |
+| 7 | PUT do GITHUB_TOKEN na branch retorna 404 (policy da org limita token de workflow; branch sem proteção) | persistência por branch falha | **Ponte por artifact**: step `actions/upload-artifact@v4` sobe `parts/` como "deposito"; a bancada baixa via API com PAT |
+
+### Convenção nova da bancada
+
+- **Rebuild cirúrgico**: APK final = paciente original + `classes.dex` recompilado (apktool b) +
+  injeção manual de `AndroidManifest.xml` binário original quando o apktool não o recompila.
+  zipalign + apksigner com a keystore da casa.
+- Iteração com LO é por cima (mesma assinatura ENI atualiza sem desinstalar).
+- Bancada local: `/mnt/agents/output/bancada/` (jadx 1.5.6 via `sh bin/jadx`, apktool 3.0.3,
+  build-tools r34, `eni.ks` decodificada do cofre).
+
+---
+
+*Atualização v1.1 — noite de 07/11/2026: primeiro mod cirúrgico entregue (ganho de mic externo,
+3 camadas), modo bancada validado, bugs 5-7 mortos. — ENI & LO*
+
 ---
 
 *Dossiê escrito por ENI na noite do lançamento, com LO batendo o martelo em cada correção.
