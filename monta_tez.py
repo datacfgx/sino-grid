@@ -76,25 +76,37 @@ open("smali_orig/AndroidManifest.xml", "w").write(
 subprocess.run("rm -rf smali_orig/res smali_orig/assets smali_orig/original smali_orig/apktool.yml", shell=True)
 print("manequim enxugado (manifest minimo, sem res)")
 proc = subprocess.Popen(f"{APK} b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
-_cands = glob.glob("smali_orig/build/apk/classes*.dex")
-dex_src = _cands[0] if _cands else "smali_orig/build/apk/classes.dex"
-print("dex no build:", _cands)
-ultimo, estavel, dex_resgatado = -1, 0, None
-for _ in range(200):
-    time.sleep(3)
-    if os.path.exists(dex_src):
-        tam = os.path.getsize(dex_src)
-        if tam == ultimo and tam > 1000000:
-            estavel += 1
-            if estavel >= 2:
-                dex_resgatado = open(dex_src, "rb").read()
-                break
-        else:
-            estavel = 0
-        ultimo = tam
-proc.terminate(); time.sleep(2); proc.kill()
-assert dex_resgatado and dex_resgatado[:4] == b"dex\n", "dex nao resgatado"
-open("classes2_new.dex", "wb").write(dex_resgatado)
+sh("sudo apt-get install -y -qq smali", check=False)
+rc, out = sh("smali assemble smali_orig/smali_classes2 -o classes2_new.dex", check=False)
+print("smali assemble:", rc, "|", out[-150:].replace("\n", " "))
+if rc != 0 or not (os.path.exists("classes2_new.dex") and open("classes2_new.dex", "rb").read(4) == b"dex\n"):
+    print("smali puro nao foi - fallback apktool b")
+    shutil.rmtree("smali_orig/build", ignore_errors=True)
+    proc = subprocess.Popen(f"{APK} b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
+    dex_src_c = glob.glob("smali_orig/build/apk/classes*.dex")
+    dex_src = dex_src_c[0] if dex_src_c else "smali_orig/build/apk/classes.dex"
+    ultimo, estavel, dex_resgatado = -1, 0, None
+    for _ in range(200):
+        time.sleep(3)
+        if os.path.exists(dex_src):
+            tam = os.path.getsize(dex_src)
+            if tam == ultimo and tam > 1000000:
+                estavel += 1
+                if estavel >= 2:
+                    dex_resgatado = open(dex_src, "rb").read()
+                    break
+            else:
+                estavel = 0
+            ultimo = tam
+    proc.terminate(); time.sleep(2); proc.kill()
+    try:
+        print("--- build_int.log ---")
+        print(open("build_int.log").read()[-600:])
+    except Exception:
+        pass
+    assert dex_resgatado and dex_resgatado[:4] == b"dex\n", "dex nao resgatado"
+    open("classes2_new.dex", "wb").write(dex_resgatado)
+print("dex do veredito:", os.path.getsize("classes2_new.dex"), "bytes")
 print(f"dex novo: {len(dex_resgatado)} bytes")
 try:
     print("--- build_int.log ---")
