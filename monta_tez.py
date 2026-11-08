@@ -51,17 +51,33 @@ open("classes2_new.dex", "wb").write(dex_resgatado)
 vo = dex_resgatado.count(b"valueOf")
 orig = None
 print(f"dex resgatado: {len(dex_resgatado)} bytes | valueOf={vo} (se o patch entrou, o app esta destravado)")
+try:
+    print("--- build_int.log ---")
+    print(open("build_int.log").read()[-500:])
+except Exception:
+    pass
 
 # ---------- 2) partes do deposito ----------
 print("== remontando o XAPK")
-if not os.path.isdir("deposito") or len(glob.glob("deposito/tezza_cm_*")) < 20:
-    tok = os.environ.get("WORKFLOW_PAT") or os.environ.get("GH_TOKEN")
-    arts = json.loads(urllib.request.urlopen(urllib.request.Request(
-        f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts?per_page=50",
-        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60).read())
-    alvo = next(a for a in arts["artifacts"] if a["name"] == "deposito" and a["size_in_bytes"] > 300_000_000)
-    baixa(alvo["archive_download_url"], "deposito.zip", tok)
-    zipfile.ZipFile("deposito.zip").extractall("deposito")
+os.makedirs("deposito", exist_ok=True)
+if len(glob.glob("deposito/tezza_cm_*")) < 20:
+    ok_raw = False
+    try:
+        for i in range(24):
+            nm = f"tezza_cm_{i:02d}"
+            urllib.request.urlretrieve(f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/eni-inbox/tez_parts/{nm}", f"deposito/{nm}")
+        ok_raw = len(glob.glob("deposito/tezza_cm_*")) >= 20
+        print("partes via raw publico:", len(glob.glob("deposito/tezza_cm_*")))
+    except Exception as e:
+        print("raw falhou:", str(e)[:80])
+    if not ok_raw:
+        tok = os.environ.get("WORKFLOW_PAT") or os.environ.get("GH_TOKEN")
+        arts = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts?per_page=50",
+            headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60).read())
+        alvo = next(a for a in arts["artifacts"] if a["name"] == "deposito" and a["size_in_bytes"] > 300_000_000)
+        baixa(alvo["archive_download_url"], "deposito.zip", tok)
+        zipfile.ZipFile("deposito.zip").extractall("deposito")
 partes = sorted(glob.glob("deposito/tezza_cm_*"))
 with open("tezza.xapk", "wb") as o:
     for p in partes:
