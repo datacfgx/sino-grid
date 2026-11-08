@@ -117,7 +117,9 @@ except Exception:
 print("== montando o XAPK split multiplo (caminho nativo do app)")
 
 # classes.dex com Pairip NOPado (desmonta, aplica o patch, re-assembla)
-sh("mkdir -p patch && curl -sL https://raw.githubusercontent.com/{}/eni-inbox/patch/pairip_app.smali -o patch/pairip_app.smali".format(REPO))
+sh("mkdir -p patch")
+for _f in ["pairip_app.smali", "LicenseClient.smali", "SignatureCheck.smali"]:
+    sh(f"curl -sL https://raw.githubusercontent.com/{REPO}/eni-inbox/patch/{{_f}} -o patch/{{_f}}")
 _p = open("patch/pairip_app.smali").read()
 assert "checkLicense NOPado" in _p, "patch pairip nao veio"
 zb2 = zipfile.ZipFile("org.tezza.apk")
@@ -129,6 +131,8 @@ with zipfile.ZipFile("dummy_d1.apk", "w") as z:
     z.writestr(zi, open("classes.dex", "rb").read())
 sh("apktool d dummy_d1.apk -o smali_d1 -f")
 shutil.copy("patch/pairip_app.smali", "smali_d1/smali/com/pairip/application/Application.smali")
+shutil.copy("patch/LicenseClient.smali", "smali_d1/smali/com/pairip/licensecheck/LicenseClient.smali")
+shutil.copy("patch/SignatureCheck.smali", "smali_d1/smali/com/pairip/SignatureCheck.smali")
 sh("smali assemble smali_d1/smali -o classes1_new.dex")
 assert open("classes1_new.dex", "rb").read(4) == b"dex\n"
 print("classes.dex com Pairip NOPado")
