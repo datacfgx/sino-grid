@@ -59,8 +59,10 @@ if not os.path.exists("apktool.jar"):
     jar = next(a["browser_download_url"] for a in rel["assets"] if a["name"].endswith(".jar"))
     baixa(jar, "apktool.jar")
 sh("java -jar apktool.jar d dummy.apk -o smali_orig -f")
-assert os.path.exists("smali_orig/smali/Gc/l0.smali"), "l0 nao desmontou"
-shutil.copy("patch/l0.smali", "smali_orig/smali/Gc/l0.smali")
+candidatos = glob.glob("smali_orig/**/Gc/l0.smali", recursive=True)
+print("l0 desmontado em:", candidatos, "| dirs:", sorted(os.listdir("smali_orig"))[:6])
+assert candidatos, "l0 nao desmontou"
+shutil.copy("patch/l0.smali", candidatos[0])
 print("l0 patchado no lugar")
 shutil.rmtree("smali_orig/build", ignore_errors=True)
 proc = subprocess.Popen("java -jar apktool.jar b smali_orig -o mod.apk > build_int.log 2>&1", shell=True, start_new_session=True)
