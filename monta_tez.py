@@ -258,6 +258,11 @@ except Exception:
     req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/tezza-mod-v2",
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
     rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
+for _a in rel.get("assets", []):
+    if _a["name"] == "Tezza-mod.apk":
+        urllib.request.urlopen(urllib.request.Request(_a["url"], method="DELETE",
+            headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60)
+        print("asset velho apagado do release")
 up = rel["upload_url"].split("{")[0] + "?name=Tezza-mod.apk"
 subprocess.run(f"curl -s -X POST -H \"Authorization: Bearer {tok}\" -H \"Content-Type: application/vnd.android.package-archive\" --data-binary @tezza-mod.apk \"{up}\"", shell=True, timeout=900)
 print("APK INTEIRO NO RELEASE")
