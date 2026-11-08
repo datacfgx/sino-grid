@@ -114,116 +114,52 @@ except Exception:
     pass
 
 # ---------- 4) montagem do universal ----------
-print("== montando o universal")
+print("== montando o XAPK split multiplo (caminho nativo do app)")
+
 shutil.rmtree("base_work", ignore_errors=True)
 zipfile.ZipFile("org.tezza.apk").extractall("base_work")
-for d in ["classes.dex", "classes2.dex"]:
-    if os.path.exists(f"base_work/{d}"):
-        os.remove(f"base_work/{d}")
+if os.path.exists("base_work/classes2.dex"):
+    os.remove("base_work/classes2.dex")
 shutil.copy("classes2_new.dex", "base_work/classes2.dex")
-zx.extract("config.arm64_v8a.apk", ".")
-zipfile.ZipFile("config.arm64_v8a.apk").extractall("arm64_work")
-nlibs = 0
-for raiz, _, files in os.walk("arm64_work"):
-    for f in files:
-        if f.endswith(".so"):
-            rel = os.path.relpath(os.path.join(raiz, f), "arm64_work")
-            dst = os.path.join("base_work", rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(os.path.join(raiz, f), dst)
-            nlibs += 1
-print(f"libs arm64: {nlibs}")
-
-mp = "base_work/AndroidManifest.xml"
-_axml = open(mp, "rb").read()
-import struct as st
-_data = bytearray(_axml)
-(_hsz,) = st.unpack_from("<H", _data, 2)
-_off = _hsz
-_pool = []
-while _off < len(_data):
-    _t, _hs, _sz = st.unpack_from("<HHI", _data, _off)
-    if _t == 0x0001:
-        _n, _, _fl, _ss, _ = st.unpack_from("<IIIII", _data, _off + 8)
-        for _i in range(_n):
-            (_so,) = st.unpack_from("<I", _data, _off + 28 + 4*_i)
-            _q = _off + _ss + _so
-            if _fl & 0x100:
-                _l2 = _data[_q+1]
-                _pool.append(_data[_q+2:_q+2+_l2].decode("utf8", "replace"))
-            else:
-                _l2 = st.unpack_from("<H", _data, _q)[0] * 2
-                _pool.append(_data[_q+2:_q+2+_l2].decode("utf-16-le", "replace"))
-        break
-    _off += _sz
-if "requiredSplitTypes" in _pool:
-    _idx = _pool.index("requiredSplitTypes")
-    _off = _hsz
-    while _off < len(_data):
-        _t, _hs, _sz = st.unpack_from("<HHI", _data, _off)
-        if _t == 0x0102:
-            _el = st.unpack_from("<I", _data, _off + 20)[0]
-            if _el < len(_pool) and _pool[_el] == "manifest":
-                _ac = st.unpack_from("<H", _data, _off + 28)[0]
-                _at = _off + 36
-                _rem = None
-                for _i in range(_ac):
-                    _nm = st.unpack_from("<I", _data, _at + 4)[0]
-                    if _nm == _idx:
-                        _rem = _at
-                        break
-                    _at += 20
-                if _rem is not None:
-                    _novo = _data[:_rem] + _data[_rem+20:]
-                    st.pack_into("<H", _novo, _off + 28, _ac - 1)
-                    _csz = st.unpack_from("<I", _novo, _off + 4)[0]
-                    st.pack_into("<I", _novo, _off + 4, _csz - 20)
-                    _tsz = st.unpack_from("<I", _novo, 4)[0]
-                    st.pack_into("<I", _novo, 4, _tsz - 20)
-                    open(mp, "wb").write(bytes(_novo))
-                    print("requiredSplitTypes REMOVIDO (cirurgia binaria)")
-                break
-        _off += _sz if _sz > 0 else 8
-else:
-    open(mp, "wb").write(_axml)
-
-def regra(rel):
-    return rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(".so")
 
 zin = zipfile.ZipFile("org.tezza.apk")
-zout = zipfile.ZipFile("base_mod.apk", "w", zipfile.ZIP_DEFLATED)
+zout = zipfile.ZipFile("base_troca.apk", "w", zipfile.ZIP_DEFLATED)
 for item in zin.infolist():
-    if item.filename.endswith(".dex") or item.filename.startswith("lib/"):
+    if item.filename.endswith(".dex"):
         continue
-    zi = zipfile.ZipInfo(item.filename, date_time=item.date_time)
-    zi.compress_type = zipfile.ZIP_STORED if regra(item.filename) else zipfile.ZIP_DEFLATED
-    src = os.path.join("base_work", item.filename)
-    zout.writestr(zi, open(src, "rb").read() if os.path.exists(src) else zin.read(item.filename))
-if os.path.isdir("base_work/lib"):
-    for raiz, _, files in os.walk("base_work/lib"):
-        for f in files:
-            rel = os.path.relpath(os.path.join(raiz, f), "base_work")
-            zi = zipfile.ZipInfo(rel); zi.compress_type = zipfile.ZIP_STORED
-            zout.writestr(zi, open(os.path.join(raiz, f), "rb").read())
+    zout.writestr(item, open(os.path.join("base_work", item.filename), "rb").read() if os.path.exists(os.path.join("base_work", item.filename)) else zin.read(item.filename))
 zi = zipfile.ZipInfo("classes.dex"); zi.compress_type = zipfile.ZIP_STORED
-zout.writestr(zi, zin.read("classes.dex"))
+zout.writestr(zi, open("base_work/classes.dex", "rb").read())
 zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
-zout.writestr(zi, open("classes2_new.dex", "rb").read())
+zout.writestr(zi, open("base_work/classes2.dex", "rb").read())
 zout.close()
-print("classes.dex original + classes2.dex patchado no pacote")
-print("base_mod.apk:", os.path.getsize("base_mod.apk"))
 
-# ---------- 5) assinatura + entrega ----------
 sh("wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip && unzip -q build-tools_r34-linux.zip -d bt")
 sh("base64 -d eni.keystore.b64 > eni.keystore")
 env = 'LD_LIBRARY_PATH=$PWD/bt/android-14/lib64'
-sh(f"{env} bt/android-14/zipalign -f -p 4 base_mod.apk alinhado.apk")
-sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out tezza-mod.apk alinhado.apk")
-rc, _ = sh("java -jar bt/android-14/lib/apksigner.jar verify --print-certs tezza-mod.apk")
-assert rc == 0, "assinatura falhou"
-print("assinado:", os.path.getsize("tezza-mod.apk"), "bytes")
+sh(f"{env} bt/android-14/zipalign -f -p 4 base_troca.apk base_al.apk")
+sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out base_mod.apk base_al.apk")
+rc, _ = sh("java -jar bt/android-14/lib/apksigner.jar verify --print-certs base_mod.apk")
+assert rc == 0, "assinatura do base falhou"
+print("base modificado assinado:", os.path.getsize("base_mod.apk"))
+
+os.makedirs("xapk_out", exist_ok=True)
+shutil.copy("base_mod.apk", "xapk_out/org.tezza.apk")
+zx = zipfile.ZipFile("tezza.xapk")
+for s in [n for n in zx.namelist() if n.endswith(".apk") and n != "org.tezza.apk"]:
+    zx.extract(s, ".")
+    sh(f"{env} bt/android-14/zipalign -f -p 4 {s} {s}.al")
+    sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out xapk_out/{s} {s}.al")
+    print("split re-assinado:", s)
+if "manifest.json" in zx.namelist():
+    zx.extract("manifest.json", "xapk_out/")
+shutil.make_archive("tezza-mod", "zip", "xapk_out")
+os.rename("tezza-mod.zip", "tezza-mod.xapk")
+tam = os.path.getsize("tezza-mod.xapk")
+print("tezza-mod.xapk:", tam, "bytes")
 
 TOK = os.environ["TELEGRAM_TOKEN"]
+CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 def envia(caminho, legenda):
     for _ in range(3):
         r = subprocess.run(["curl", "-s", "-F", f"chat_id={CHAT}", "-F", f"document=@{caminho}",
@@ -234,36 +170,29 @@ def envia(caminho, legenda):
         time.sleep(8)
     return False
 
-tam = os.path.getsize("tezza-mod.apk")
-if tam <= 20_000_000:
-    envia("tezza-mod.apk", f"Tezza mod - {tam} bytes (assinado ENI)")
-else:
-    subprocess.run("split -b 18000000 -d -a 2 tezza-mod.apk tezza_out_", shell=True, check=True)
-    for f in sorted(glob.glob("tezza_out_*")):
-        assert envia(f, os.path.basename(f)), f"fatia {f} falhou"
-    urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{TOK}/sendMessage",
-        data=json.dumps({"chat_id": CHAT, "text": f"Tezza mod em fatias - junta: cat tezza_out_* > tezza-mod.apk ({tam} bytes)"}).encode(),
-        headers={"Content-Type": "application/json"}), timeout=60)
+subprocess.run("split -b 18000000 -d -a 2 tezza-mod.xapk tezsplit_", shell=True, check=True)
+for f in sorted(glob.glob("tezsplit_*")):
+    assert envia(f, os.path.basename(f)), f"fatia {f} falhou"
+urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{TOK}/sendMessage",
+    data=json.dumps({"chat_id": CHAT, "text": f"Tezza MOD: junta cat tezsplit_* > tezza-mod.xapk e instala com o INSTALADOR XAPK ({tam} bytes)"}).encode(),
+    headers={"Content-Type": "application/json"}), timeout=60)
 print("ENTREGUE no telegram")
 
 tok = os.environ.get("WORKFLOW_PAT") or os.environ.get("GH_TOKEN")
 try:
     req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases",
-        data=json.dumps({"tag_name": "tezza-mod-v2", "name": "Tezza Mod v2 - manifest intacto, filtros liberados",
-                         "body": "APK universal (base+arm64). Todos os filtros Premium destravados. Baixe o Tezza-mod.apk e instale."}).encode(),
+        data=json.dumps({"tag_name": "tezza-mod-v3", "name": "Tezza Mod v3 - XAPK split multiplo",
+                         "body": "base modificado + splits re-assinados. Instale com o instalador XAPK (APKPure)."}).encode(),
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
     rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
-    print("release criado")
 except Exception:
-    req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/tezza-mod-v2",
+    req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/tezza-mod-v3",
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
     rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
 for _a in rel.get("assets", []):
-    if _a["name"] == "Tezza-mod.apk":
-        urllib.request.urlopen(urllib.request.Request(_a["url"], method="DELETE",
-            headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60)
-        print("asset velho apagado do release")
-up = rel["upload_url"].split("{")[0] + "?name=Tezza-mod.apk"
-subprocess.run(f"curl -s -X POST -H \"Authorization: Bearer {tok}\" -H \"Content-Type: application/vnd.android.package-archive\" --data-binary @tezza-mod.apk \"{up}\"", shell=True, timeout=900)
-print("APK INTEIRO NO RELEASE")
+    urllib.request.urlopen(urllib.request.Request(_a["url"], method="DELETE",
+        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}), timeout=60)
+up = rel["upload_url"].split("{")[0] + "?name=Tezza-mod.xapk"
+subprocess.run("curl -s -X POST -H 'Authorization: Bearer " + tok + "' -H 'Content-Type: application/octet-stream' --data-binary @tezza-mod.xapk '" + up + "'", shell=True, timeout=900)
+print("XAPK INTEIRO NO RELEASE")
 print("FIM DO TRAMPO")
