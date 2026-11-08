@@ -55,7 +55,12 @@ with zipfile.ZipFile("dummy.apk", "w") as z:
     zi = zipfile.ZipInfo("classes2.dex"); zi.compress_type = zipfile.ZIP_STORED
     z.writestr(zi, open("classes2.dex", "rb").read())
 if not os.path.exists("apktool.jar"):
-    baixa("https://github.com/iBotPeaches/Apktool/releases/download/v2.9.4/apktool_2.9.4.jar", "apktool.jar")
+    for _ in range(3):
+        rc = subprocess.run("curl -sL -o apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.4/apktool_2.9.4.jar", shell=True).returncode
+        if rc == 0 and os.path.getsize("apktool.jar") > 10_000_000:
+            break
+        time.sleep(5)
+    assert os.path.getsize("apktool.jar") > 10_000_000, "apktool nao baixou"
 print("dummy entries:", [(i.filename, i.file_size) for i in zipfile.ZipFile("dummy.apk").infolist()])
 rc, out = sh("java -jar apktool.jar d dummy.apk -o smali_orig -f --no-res", check=False)
 print("apktool d rc:", rc, "|", out[-200:])
