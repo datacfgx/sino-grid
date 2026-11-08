@@ -107,7 +107,6 @@ if rc != 0 or not (os.path.exists("classes2_new.dex") and open("classes2_new.dex
     assert dex_resgatado and dex_resgatado[:4] == b"dex\n", "dex nao resgatado"
     open("classes2_new.dex", "wb").write(dex_resgatado)
 print("dex do veredito:", os.path.getsize("classes2_new.dex"), "bytes")
-print(f"dex novo: {len(dex_resgatado)} bytes")
 try:
     print("--- build_int.log ---")
     print(open("build_int.log").read()[-400:])
