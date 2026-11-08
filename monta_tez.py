@@ -134,28 +134,7 @@ for raiz, _, files in os.walk("arm64_work"):
             nlibs += 1
 print(f"libs arm64: {nlibs}")
 
-import struct
-mp = "base_work/AndroidManifest.xml"
-data = bytearray(open(mp, "rb").read())
-(hsize,) = struct.unpack_from("<H", data, 2)
-off = hsize
-for _ in range(40):
-    if off + 8 > len(data): break
-    t, hs, sz = struct.unpack_from("<HHI", data, off)
-    if t == 0x0001:
-        n, _, fl, ss, _ = struct.unpack_from("<IIIII", data, off + 8)
-        base_o = off + 28
-        for i in range(n):
-            (so,) = struct.unpack_from("<I", data, base_o + 4*i)
-            q = off + ss + so
-            l2 = data[q+1]
-            s = bytes(data[q+2:q+2+l2])
-            if s in (b"requiredSplitTypes", b"isSplitRequired"):
-                data[q+2:q+2+l2] = b"\x00" * l2
-                print("manifest remendado:", s.decode())
-        break
-    off += sz
-open(mp, "wb").write(bytes(data))
+print("manifest INTACTO (o remendo de zeros quebrava o parser do Android)")
 
 def regra(rel):
     return rel == "resources.arsc" or rel.startswith("lib/") or rel.endswith(".so")
@@ -215,4 +194,20 @@ else:
         data=json.dumps({"chat_id": CHAT, "text": f"Tezza mod em fatias - junta: cat tezza_out_* > tezza-mod.apk ({tam} bytes)"}).encode(),
         headers={"Content-Type": "application/json"}), timeout=60)
 print("ENTREGUE no telegram")
+
+tok = os.environ.get("WORKFLOW_PAT") or os.environ.get("GH_TOKEN")
+try:
+    req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases",
+        data=json.dumps({"tag_name": "tezza-mod-v2", "name": "Tezza Mod v2 - manifest intacto, filtros liberados",
+                         "body": "APK universal (base+arm64). Todos os filtros Premium destravados. Baixe o Tezza-mod.apk e instale."}).encode(),
+        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
+    rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    print("release criado")
+except Exception:
+    req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/tezza-mod-v2",
+        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
+    rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
+up = rel["upload_url"].split("{")[0] + "?name=Tezza-mod.apk"
+subprocess.run(f"curl -s -X POST -H \"Authorization: Bearer {tok}\" -H \"Content-Type: application/vnd.android.package-archive\" --data-binary @tezza-mod.apk \"{up}\"", shell=True, timeout=900)
+print("APK INTEIRO NO RELEASE")
 print("FIM DO TRAMPO")
