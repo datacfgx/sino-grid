@@ -116,10 +116,29 @@ except Exception:
 # ---------- 4) montagem do universal ----------
 print("== montando o XAPK split multiplo (caminho nativo do app)")
 
+# classes.dex com Pairip NOPado (desmonta, aplica o patch, re-assembla)
+sh("mkdir -p patch && curl -sL https://raw.githubusercontent.com/{}/eni-inbox/patch/pairip_app.smali -o patch/pairip_app.smali".format(REPO))
+_p = open("patch/pairip_app.smali").read()
+assert "checkLicense NOPado" in _p, "patch pairip nao veio"
+zb2 = zipfile.ZipFile("org.tezza.apk")
+zb2.extract("classes.dex", ".")
+zb2.extract("AndroidManifest.xml", ".")
+with zipfile.ZipFile("dummy_d1.apk", "w") as z:
+    z.writestr(zipfile.ZipInfo("AndroidManifest.xml"), open("AndroidManifest.xml", "rb").read())
+    zi = zipfile.ZipInfo("classes.dex"); zi.compress_type = zipfile.ZIP_STORED
+    z.writestr(zi, open("classes.dex", "rb").read())
+sh("apktool d dummy_d1.apk -o smali_d1 -f")
+shutil.copy("patch/pairip_app.smali", "smali_d1/smali/com/pairip/application/Application.smali")
+sh("smali assemble smali_d1/smali -o classes1_new.dex")
+assert open("classes1_new.dex", "rb").read(4) == b"dex\n"
+print("classes.dex com Pairip NOPado")
+
 shutil.rmtree("base_work", ignore_errors=True)
 zipfile.ZipFile("org.tezza.apk").extractall("base_work")
-if os.path.exists("base_work/classes2.dex"):
-    os.remove("base_work/classes2.dex")
+for d in ["classes.dex", "classes2.dex"]:
+    if os.path.exists(f"base_work/{d}"):
+        os.remove(f"base_work/{d}")
+shutil.copy("classes1_new.dex", "base_work/classes.dex")
 shutil.copy("classes2_new.dex", "base_work/classes2.dex")
 
 zin = zipfile.ZipFile("org.tezza.apk")
