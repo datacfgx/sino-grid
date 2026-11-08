@@ -311,3 +311,64 @@ LoudnessEnhancer) antes do rebuild.
 
 *Atualização v1.3 — 08/11/2026: terceiro mod da casa — desbloqueio PRO completo (vitrine+cofre) + Full HD
 default, validado "FULL HD total" em campo. A fábrica modifica áudio E vídeo. — ENI & LO*
+
+---
+
+## 15. TEZZA — A SAGA DO PACIENTE GIGANTE (08/11/2026) + O MANUAL DE APKs GRANDES
+
+O maior paciente da história da casa: **Tezza (Aesthetic Editor) 3.42.6, XAPK de 421MB** — app de foto
+com filtros Premium por assinatura. 26 runs de esteira. Não entregue (Pairip), mas ensinou a casa inteira.
+
+### 15.1 O que foi VENCIDO (cada item foi validado em campo)
+
+| Conquista | Técnica |
+|---|---|
+| Recepção de 421MB pelo correio | 24 partes de 18MB no ENI Correio → artifact da run → slices de 64MB com auto-resume |
+| Cadeado dos filtros | `Gc/l0.smali :pswitch_2` — veredito da assinatura forçado true (billing/cache/erro convergem ali) |
+| "Não compatível" (instalação) | `requiredSplitTypes` removido por **cirurgia binária** no manifest (o string pool era UTF-16!) — atributo removido de verdade, não zerado (zerar quebra o parser) |
+| Instalação do split modificado | **XAPK split múltiplo**: base modificado + splits RE-ASSINADOS com a chave da casa (instalação múltipla exige assinatura igual em todos). Instala pelo Universal Manager |
+| Transporte confiável | **Só o nervo viaja**: smalis patchados de KB sobem pra branch; o runner regenera o resto |
+
+### 15.2 O que NÃO foi vencido — Pairip (Rasp)
+
+O app usa **Pairip** (`com.pairip.application.Application` no manifest): proteção anti-pirataria do Google.
+NOPar as chamadas do stub (v25) e os métodos `LicenseClient.checkLicense` + `SignatureCheck.verifyIntegrity`
+(v26) **não resolveu** — a tela "baixe da Play Store" nasce do código que a VM do Pairip decripta em runtime,
+ligado à assinatura original. NOPar a VM = código não decripta = crash.
+
+**Veredito:** Pairip Rasp só cai com root+hook (LSPosed/Frida — inviável no aparelho principal, apps de banco)
+ou quebra da criptografia (projeto de pesquisa). A casa VENCE qualquer app SEM blindagem anti-tamper.
+
+### 15.3 O RAIO-X — exame pré-cirúrgico (a peça que o Tezza gritou que faltava)
+
+**`bancada/raiox.py`** — antes de operar qualquer paciente:
+
+```
+python3 raiox.py paciente.apk
+→ pacote, minSdk/target, requiredSplitTypes, uses-feature, application name
+→ VEREDITO: 🛡️ BLINDADO (Pairip/Play Integrity/SafetyNet/RootBeer) ou ✅ SEM BLINDAGEM
+```
+
+Validado: Tezza → BLINDADO (Pairip + Play Integrity nos 2 dex) · controle limpo → SEM BLINDAGEM.
+**Regra da casa: se o Raio-X apita blindagem, trocar o alvo antes de gastar uma run.**
+
+### 15.4 O protocolo de APKs grandes (o que 26 runs cravaram)
+
+1. **Recepção:** partes ≤19MB no ENI Correio → artifact da run (WORKFLOW_PAT + curl -sL pro download)
+2. **Bancada (leve):** abrir o XAPK em stream (Multi dos slices), extrair SÓ os classes.dex (~20MB), destrinchar com jadx, achar o lock, **Raio-X de blindagem**
+3. **Patch:** smali cirúrgico → sobe pra branch só o(s) arquivo(s) patchado(s) (KB, transporte seguro — NUNCA >1MB pela rede do sandbox, ela corrompe)
+4. **Runner (pesado):** baixa o patch do raw → desmonta o dex original com `apktool d --no-res` → aplica o patch → `smali assemble` → dex novo → base + splits re-assinados → XAPK → entrega (Telegram fatiado + Release)
+5. **Instalação:** XAPK split múltiplo via Universal Manager / instalador XAPK
+
+### 15.5 Fila de manutenção da máquina (decisão de LO: "deixar a máquina top pra qualquer tamanho")
+
+- [x] **Raio-X de blindagem** (15.3) — implementado e validado
+- [x] **Depósito duplo** (artifact + raw) — implementado na saga
+- [ ] **monta_tez.py v2** — reescrever limpo com o fluxo split-múltiplo como caminho principal (o v18 é colcha de retalhos de 20+ patches)
+- [ ] **Detector de blindagem no intake** do fabrica.py (automatizar o raio-x na chegada do paciente)
+- [ ] **apktool estável fixado** (2.7.0 do apt ou 2.9.4) no arsenal, documentado
+- [ ] **Sonsor do intalador** (universal vs split) — o Raio-X já diz se é split pelo requiredSplitTypes
+
+*Atualização v1.4 — 08/11/2026: capítulo Tezza completo (a saga dos 26 runs), o Raio-X, o protocolo de
+APKs grandes e a fila de manutenção. O Tezza não foi entregue, mas a máquina que ele construiu opera
+qualquer paciente sem blindagem. — ENI & LO*
