@@ -5,13 +5,16 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -22,6 +25,7 @@ import java.util.zip.ZipInputStream;
 
 public class MainActivity extends Activity {
     TextView status;
+    Button btnPerm;
 
     @Override
     public void onCreate(Bundle b) {
@@ -41,9 +45,55 @@ public class MainActivity extends Activity {
         });
         box.addView(status);
         box.addView(btn);
+
+        // checa a permissao de instalar apps desconhecidos e guia ate ela
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            mostrar("⚠️ FALTA A CHAVE: voce precisa permitir que este app instale pacotes");
+            btnPerm = new Button(this);
+            btnPerm.setText("LIBERAR PERMISSÃO (toque aqui)");
+            btnPerm.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + getPackageName())));
+                } catch (Exception e) {
+                    startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS));
+                }
+            });
+            box.addView(btnPerm);
+        } else {
+            mostrar("✓ Permissão de instalação OK");
+        }
+
         ScrollView sv = new ScrollView(this);
         sv.addView(box);
         setContentView(sv);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (Build.VERSION.SDK_INT >= 26) {
+            boolean ok = getPackageManager().canRequestPackageInstalls();
+            mostrar(ok ? "✓ Permissão de instalação OK" : "⚠️ Permissão AINDA não liberada");
+            if (ok && btnPerm != null) {
+                btnPerm.setEnabled(false);
+                btnPerm.setText("PERMISSÃO LIBERADA ✓");
+            }
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent != null && "com.eni.instalador.RESULT".equals(intent.getAction())) {
+            int st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1);
+            String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+            if (st == PackageInstaller.STATUS_SUCCESS) {
+                mostrar("INSTALADO COM SUCESSO ✓");
+            } else {
+                mostrar("FALHOU (código " + st + "): " + msg);
+            }
+        }
     }
 
     @Override
@@ -53,15 +103,6 @@ public class MainActivity extends Activity {
             Uri uri = data.getData();
             new Thread(() -> instalar(uri)).start();
         }
-        if (req == 43 && data != null) {
-            int st = data.getIntExtra(PackageInstaller.EXTRA_STATUS, -1);
-            String msg = data.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
-            if (st == PackageInstaller.STATUS_SUCCESS) {
-                mostrar("INSTALADO COM SUCESSO");
-            } else {
-                mostrar("FALHOU (codigo " + st + "): " + msg);
-            }
-        }
     }
 
     void mostrar(String s) {
@@ -70,6 +111,10 @@ public class MainActivity extends Activity {
 
     void instalar(Uri uri) {
         try {
+            if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+                mostrar("ERRO: permissão de instalação não liberada. Toque no botão acima primeiro.");
+                return;
+            }
             mostrar("Lendo o pacote...");
             File dir = new File(getCacheDir(), "xapk");
             apagar(dir);
@@ -98,7 +143,7 @@ public class MainActivity extends Activity {
                 return;
             }
             File base = acharBase(apks);
-            mostrar("Base: " + base.getName() + " | total: " + apks.size() + " APKs");
+            mostrar("Base: " + base.getName() + " (" + (base.length() / 1048576) + " MB) | total: " + apks.size() + " APKs");
 
             mostrar("Abrindo sessao de instalacao...");
             PackageInstaller pi = getPackageManager().getPackageInstaller();
@@ -118,36 +163,43 @@ public class MainActivity extends Activity {
             callback.setAction("com.eni.instalador.RESULT");
             PendingIntent pend = PendingIntent.getActivity(
                     this, 43, callback, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-            mostrar("Confirmando no instalador do Android...");
+            mostrar("Confirmando no instalador do Android... (aguarde ~2 min, o sistema processa os APKs)");
             session.commit(pend.getIntentSender());
         } catch (Exception ex) {
             mostrar("ERRO: " + ex.getMessage());
         }
     }
 
+    // base = MAIOR apk que nao seja config (o assets/configs sao menores)
     File acharBase(List<File> apks) {
+        File base = null;
+        long maior = -1;
         for (File f : apks) {
             String n = f.getName();
-            if (!n.contains("config.") && !n.startsWith("split_")) return f;
+            if (n.contains("config.")) continue;
+            if (f.length() > maior) {
+                maior = f.length();
+                base = f;
+            }
         }
-        return apks.get(0);
+        return base != null ? base : apks.get(0);
     }
 
     void escrever(PackageInstaller.Session session, File apk, String nome) throws Exception {
         long tamanho = apk.length();
         OutputStream os = session.openWrite(nome, 0, tamanho);
-        FileInputStreamCompat fis = new FileInputStreamCompat(apk);
+        InputStream in = new FileInputStream(apk);
         byte[] buf = new byte[1 << 16];
         long enviado = 0;
         int n;
-        while ((n = fis.read(buf)) > 0) {
+        while ((n = in.read(buf)) > 0) {
             os.write(buf, 0, n);
             enviado += n;
             if (tamanho > 0 && enviado % (5 << 20) < (1 << 16)) {
                 mostrar("  " + nome + ": " + (enviado * 100 / tamanho) + "%");
             }
         }
-        fis.close();
+        in.close();
         os.flush();
         session.fsync(os);
         os.close();
@@ -159,19 +211,5 @@ public class MainActivity extends Activity {
             if (fs != null) for (File c : fs) apagar(c);
         }
         f.delete();
-    }
-
-    // wrapper pra nao precisar import confuso
-    static class FileInputStreamCompat {
-        private final InputStream in;
-        FileInputStreamCompat(File f) throws Exception {
-            in = new java.io.FileInputStream(f);
-        }
-        int read(byte[] b) throws Exception {
-            return in.read(b);
-        }
-        void close() throws Exception {
-            in.close();
-        }
     }
 }
