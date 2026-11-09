@@ -246,6 +246,9 @@ try:
         parts = [p for p in app.split() if not p.upper().startswith("DEBUG=")]
         app = " ".join(parts) + " DEBUG=2"
     app += " console=ttyS0"
+    if "SRC=" in app:
+        parts = [p if not p.upper().startswith("SRC=") else "SRC=/dev/sr0" for p in app.split()]
+        app = " ".join(parts)
     print("append escolhido:", app[:110])
     sh("sudo umount isomnt")
     print("kvm:", os.path.exists("/dev/kvm"))
