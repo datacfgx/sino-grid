@@ -190,6 +190,8 @@ try:
 except Exception as e:
     print("LSPatch falhou (", str(e)[:150], ") - segue com base_mod puro (NOPs do v6)")
 
+
+os.makedirs("xapk_out", exist_ok=True)
 shutil.copy(base_pronto, "xapk_out/org.tezza.apk")
 zx = zipfile.ZipFile("tezza.xapk")
 for s in [n for n in zx.namelist() if n.endswith(".apk") and n != "org.tezza.apk"]:
