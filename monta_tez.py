@@ -172,19 +172,24 @@ base_pronto = "base_mod.apk"
 try:
     sh("curl -sL -o lspatch.jar https://github.com/LSPosed/LSPatch/releases/download/v0.6/jar-v0.6-398-release.jar")
     sh("curl -sL -o pairipfix.apk https://github.com/ahmedmani/pairipfix/releases/download/v1.2/app-debug.apk")
-    if os.path.exists("base_lsp.apk"):
-        os.remove("base_lsp.apk")
-    sh("java -jar lspatch.jar base_mod.apk -m pairipfix.apk -o base_lsp.apk")
-    assert os.path.getsize("base_lsp.apk") > 10_000_000, "lspatch output pequeno demais"
-    sh(f"{env} bt/android-14/zipalign -f -p 4 base_lsp.apk base_lsp_al.apk")
+    print("lspatch.jar:", os.path.getsize("lspatch.jar"), "bytes | pairipfix.apk:", os.path.getsize("pairipfix.apk"), "bytes")
+    if os.path.isdir("lsp_out"):
+        shutil.rmtree("lsp_out")
+    sh("java -jar lspatch.jar base_mod.apk -m pairipfix.apk -o lsp_out --force")
+    cands = sorted(glob.glob("lsp_out/*-lspatched.apk"))
+    assert cands, "lspatch nao gerou apk (ver log acima)"
+    base_lsp = cands[0]
+    tamanho = os.path.getsize(base_lsp)
+    assert tamanho > 10_000_000, f"lspatch output pequeno: {tamanho}"
+    print("lspatched:", base_lsp, tamanho, "bytes")
+    sh(f"{env} bt/android-14/zipalign -f -p 4 {base_lsp} base_lsp_al.apk")
     sh(f"java -jar bt/android-14/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out base_final.apk base_lsp_al.apk")
     sh("java -jar bt/android-14/lib/apksigner.jar verify --print-certs base_final.apk")
     base_pronto = "base_final.apk"
     print("base com pairipfix embutido e re-assinado ENI ok")
 except Exception as e:
-    print("LSPatch falhou (", str(e)[:120], ") - segue com base_mod puro (NOPs do v6)")
+    print("LSPatch falhou (", str(e)[:150], ") - segue com base_mod puro (NOPs do v6)")
 
-os.makedirs("xapk_out", exist_ok=True)
 shutil.copy(base_pronto, "xapk_out/org.tezza.apk")
 zx = zipfile.ZipFile("tezza.xapk")
 for s in [n for n in zx.namelist() if n.endswith(".apk") and n != "org.tezza.apk"]:
@@ -222,7 +227,7 @@ print("ENTREGUE no telegram")
 tok = os.environ.get("WORKFLOW_PAT") or os.environ.get("GH_TOKEN")
 try:
     req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases",
-        data=json.dumps({"tag_name": "tezza-mod-v4", "name": "Tezza Mod v4 - XAPK split multiplo + pairipfix (LSPatch)",
+        data=json.dumps({"tag_name": "tezza-mod-v5", "name": "Tezza Mod v5 - XAPK split multiplo + pairipfix (LSPatch)",
                          "body": "base modificado (filtros liberados + Pairip NOPado) + pairipfix embutido via LSPatch + splits re-assinados ENI. Instale com o instalador XAPK (APKPure)."}).encode(),
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
     rel = json.loads(urllib.request.urlopen(req, timeout=60).read())
