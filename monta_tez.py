@@ -257,6 +257,7 @@ try:
     for pref in ["DEBUG=2", "nomodeset", "SETUPWIZARD=0", "quiet"]:
         prioridade += [a for a in alvo if pref in a.upper() and a not in prioridade]
     prioridade += [a for a in alvo if a not in prioridade]
+    prioridade = prioridade[:8]
     print("ordem de tentativa:", len(prioridade))
 
     sh("sudo umount isomnt")
@@ -272,7 +273,7 @@ try:
         subprocess.run("pkill -f qemu-system || true", shell=True)
         time.sleep(3)
         subprocess.run("rm -f qemu-serial.log qemu.log", shell=True)
-        sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
+        sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 '
            f'-kernel kernel -initrd initrd.img -append "{app2}" '
            '-drive file=bliss.qcow2,if=virtio,format=qcow2 '
            '-cdrom bliss.iso '
@@ -282,10 +283,12 @@ try:
            '-serial file:qemu-serial.log '
            '> qemu.log 2>&1 &')
         boot = ""
-        for i in range(16):
+        for i in range(32):
             time.sleep(15)
             subprocess.run("adb connect localhost:5555", shell=True, capture_output=True)
             boot = subprocess.run("adb -s localhost:5555 shell getprop sys.boot_completed", shell=True, capture_output=True, text=True).stdout.strip()
+            if i % 8 == 0:
+                print(f"   [{i}] boot='{boot}'")
             if boot == "1":
                 break
         st_s = subprocess.run("tail -6 qemu-serial.log", shell=True, capture_output=True, text=True).stdout.strip()
