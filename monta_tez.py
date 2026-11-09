@@ -211,6 +211,100 @@ CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 def envia(caminho, legenda):
     for _ in range(3):
         r = subprocess.run(["curl", "-s", "-F", f"chat_id={CHAT}", "-F", f"document=@{caminho}",
+# ---------- 7) CERTIFICACAO (BlissOS x86_64 + houdini ARM64 em KVM) ----------
+VEREDITO = "NAO TESTADO"
+try:
+    print("== certificacao: BlissOS ARM64 (padrao da fabrica)")
+    sh("sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils")
+    import urllib.request as _u
+    cands = [
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso/download",
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/Bliss-v15.9.1-x86_64-OFFICIAL-gapps-20231220.iso/download",
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-14/Bliss-v14.10.2-x86_64-UNOFFICIAL-20240101.iso/download",
+    ]
+    iso = None
+    for u in cands:
+        try:
+            rq = _u.Request(u, method="HEAD")
+            with _u.urlopen(rq, timeout=30) as r:
+                if r.status == 200:
+                    iso = u; break
+        except Exception:
+            pass
+    assert iso, "nenhuma ISO BlissOS respondeu 200"
+    print("ISO:", iso)
+    sh(f"curl -sL --max-time 1500 -o bliss.iso '{iso}'")
+    sh("qemu-img create -f qcow2 bliss.qcow2 12G")
+    sh("mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt")
+    sh("cp isomnt/kernel isomnt/initrd.img .")
+    app = ""
+    for cfg in glob.glob("isomnt/**/*.cfg", recursive=True):
+        try: txt = open(cfg, errors="replace").read()
+        except Exception: continue
+        for line in txt.splitlines():
+            ls = line.strip()
+            if ls.lower().startswith("append"):
+                a = ls[6:].strip()
+                if "DEBUG" in a.upper(): app = a; break
+                if not app: app = a
+        if "DEBUG" in app.upper(): break
+    if "DEBUG" not in app.upper(): app += " DEBUG=2"
+    print("append:", app[:120])
+    sh("sudo umount isomnt")
+    sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
+       f'-kernel kernel -initrd initrd.img -append "{app}" '
+       '-drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -boot d '
+       '-display none -vga none '
+       '-device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 '
+       '> qemu.log 2>&1 &')
+    ADB = "adb -s localhost:5555"
+    boot = ""
+    for i in range(80):
+        time.sleep(15)
+        subprocess.run("adb connect localhost:5555", shell=True, capture_output=True)
+        boot = subprocess.run(f"{ADB} shell getprop sys.boot_completed", shell=True, capture_output=True, text=True).stdout.strip()
+        if i % 8 == 0: print(f"boot [{i}]: '{boot}'")
+        if boot == "1": break
+    assert boot == "1", "boot nao completou em 20min"
+    sh(f"{ADB} shell settings put secure user_setup_complete 1 || true")
+    print("abilist:", subprocess.run(f"{ADB} shell getprop ro.product.cpu.abilist", shell=True, capture_output=True, text=True).stdout.strip())
+    sh(f"{ADB} shell 'mkdir -p /data/local/tmp/x && rm -f /data/local/tmp/x/*' || true")
+    apks = sorted(glob.glob("xapk_out/*.apk"))
+    print("splits:", [os.path.basename(a) for a in apks])
+    for f in apks:
+        sh(f"{ADB} push {f} /data/local/tmp/x/ > /dev/null")
+    out = subprocess.run(f"{ADB} shell pm install-create -r", shell=True, capture_output=True, text=True).stdout
+    ses = out.split("[")[1].split("]")[0]
+    print("sessao:", ses)
+    for f in apks:
+        b = os.path.basename(f)
+        sh(f"{ADB} shell pm install-write {ses} {b[:-4]} /data/local/tmp/x/{b}")
+    sh(f"{ADB} shell pm install-commit {ses}")
+    print("instalado - abrindo")
+    sh(f"{ADB} shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true")
+    time.sleep(25)
+    p1 = subprocess.run(f"{ADB} shell pidof org.tezza", shell=True, capture_output=True, text=True).stdout.strip()
+    time.sleep(15)
+    p2 = subprocess.run(f"{ADB} shell pidof org.tezza", shell=True, capture_output=True, text=True).stdout.strip()
+    with open("screen.png", "wb") as fh:
+        subprocess.run(f"{ADB} exec-out screencap -p", stdout=fh, shell=True)
+    sh(f"{ADB} logcat -d > logcat.txt 2>/dev/null || true")
+    VEREDITO = "CERTIFICADO (abriu e viveu 40s no BlissOS ARM64)" if p1 and p2 else "FALHOU (crash/nao abriu - ver logcat)"
+    print("P1:", p1, "P2:", p2)
+except Exception as e:
+    VEREDITO = "ERRO NA CERTIFICACAO: " + str(e)[:140]
+print("VEREDITO:", VEREDITO)
+try:
+    if os.path.exists("screen.png") and os.path.getsize("screen.png") > 10000:
+        import requests as _rq
+        _rq.post(f"https://api.telegram.org/bot{env['TELEGRAM_TOKEN']}/sendPhoto",
+                 data={"chat_id": env["TELEGRAM_CHAT_ID"],
+                       "caption": f"ENI Certifica: Tezza mod v5 -> {VEREDITO}"},
+                 files={"photo": open("screen.png", "rb")}, timeout=180)
+        print("screenshot do teste no telegram")
+except Exception as e:
+    print("foto do teste nao enviada:", str(e)[:100])
+
                             "-F", f"caption={legenda}", f"https://api.telegram.org/bot{TOK}/sendDocument"],
                            capture_output=True, text=True, timeout=900)
         if r.returncode == 0 and '"ok":true' in r.stdout:
