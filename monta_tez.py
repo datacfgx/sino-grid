@@ -250,6 +250,8 @@ try:
     sh("sudo umount isomnt")
     print("kvm:", os.path.exists("/dev/kvm"))
     assert os.path.exists("/dev/kvm"), "/dev/kvm AUSENTE no runner"
+    sh("sudo chmod a+rw /dev/kvm || true")
+    print("kvm liberado:", oct(os.stat("/dev/kvm").st_mode & 0o777))
     sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
        f'-kernel kernel -initrd initrd.img -append "{app}" '
        '-drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -boot d '
