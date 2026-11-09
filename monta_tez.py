@@ -206,11 +206,6 @@ os.rename("tezza-mod.zip", "tezza-mod.xapk")
 tam = os.path.getsize("tezza-mod.xapk")
 print("tezza-mod.xapk:", tam, "bytes")
 
-TOK = os.environ["TELEGRAM_TOKEN"]
-CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
-def envia(caminho, legenda):
-    for _ in range(3):
-        r = subprocess.run(["curl", "-s", "-F", f"chat_id={CHAT}", "-F", f"document=@{caminho}",
 # ---------- 7) CERTIFICACAO (BlissOS x86_64 + houdini ARM64 em KVM) ----------
 VEREDITO = "NAO TESTADO"
 try:
@@ -297,14 +292,19 @@ print("VEREDITO:", VEREDITO)
 try:
     if os.path.exists("screen.png") and os.path.getsize("screen.png") > 10000:
         import requests as _rq
-        _rq.post(f"https://api.telegram.org/bot{env['TELEGRAM_TOKEN']}/sendPhoto",
-                 data={"chat_id": env["TELEGRAM_CHAT_ID"],
+        _rq.post(f"https://api.telegram.org/bot{os.environ['TELEGRAM_TOKEN']}/sendPhoto",
+                 data={"chat_id": os.environ.get("TELEGRAM_CHAT_ID", ""),
                        "caption": f"ENI Certifica: Tezza mod v5 -> {VEREDITO}"},
                  files={"photo": open("screen.png", "rb")}, timeout=180)
         print("screenshot do teste no telegram")
 except Exception as e:
     print("foto do teste nao enviada:", str(e)[:100])
 
+TOK = os.environ["TELEGRAM_TOKEN"]
+CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
+def envia(caminho, legenda):
+    for _ in range(3):
+        r = subprocess.run(["curl", "-s", "-F", f"chat_id={CHAT}", "-F", f"document=@{caminho}",
                             "-F", f"caption={legenda}", f"https://api.telegram.org/bot{TOK}/sendDocument"],
                            capture_output=True, text=True, timeout=900)
         if r.returncode == 0 and '"ok":true' in r.stdout:
