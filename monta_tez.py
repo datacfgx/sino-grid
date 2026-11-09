@@ -261,7 +261,7 @@ try:
         app = " ".join(parts) + " DEBUG=2"
     app += " console=ttyS0"
     if "SRC=" in app:
-        parts = [p if not p.upper().startswith("SRC=") else "SRC=/dev/sr0" for p in app.split()]
+        parts = [p if not p.upper().startswith("SRC=") else "SRC=/dev/vda" for p in app.split()]
         app = " ".join(parts)
     print("append escolhido:", app[:110])
     sh("sudo umount isomnt")
@@ -271,7 +271,9 @@ try:
     print("kvm liberado:", oct(os.stat("/dev/kvm").st_mode & 0o777))
     sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
        f'-kernel kernel -initrd initrd.img -append "{app}" '
-       '-drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -boot d '
+       '-drive file=bliss.qcow2,if=virtio,format=qcow2 '
+       '-device virtio-blk-pci,drive=iso0 '
+       '-drive id=iso0,file=bliss.iso,format=raw,if=none,readonly=on '
        '-display none -vga none '
        '-device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 '
        '-serial file:qemu-serial.log '
