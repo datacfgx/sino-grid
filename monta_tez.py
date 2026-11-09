@@ -245,22 +245,37 @@ try:
     if "DEBUG=2" not in app.upper():
         parts = [p for p in app.split() if not p.upper().startswith("DEBUG=")]
         app = " ".join(parts) + " DEBUG=2"
+    app += " console=ttyS0"
     print("append escolhido:", app[:110])
     sh("sudo umount isomnt")
+    print("kvm:", os.path.exists("/dev/kvm"))
+    assert os.path.exists("/dev/kvm"), "/dev/kvm AUSENTE no runner"
     sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
        f'-kernel kernel -initrd initrd.img -append "{app}" '
        '-drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -boot d '
        '-display none -vga none '
        '-device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 '
+       '-serial file:qemu-serial.log '
        '> qemu.log 2>&1 &')
     ADB = "adb -s localhost:5555"
+    def serial_tail(n=25):
+        return subprocess.run(f"tail -{n} qemu-serial.log", shell=True, capture_output=True, text=True).stdout
     boot = ""
     for i in range(80):
         time.sleep(15)
         subprocess.run("adb connect localhost:5555", shell=True, capture_output=True)
         boot = subprocess.run(f"{ADB} shell getprop sys.boot_completed", shell=True, capture_output=True, text=True).stdout.strip()
-        if i % 8 == 0: print(f"boot [{i}]: '{boot}'")
+        if i % 8 == 0:
+            print(f"boot [{i}]: '{boot}'")
+            st_s = serial_tail(12).strip()
+            if st_s:
+                print("  serial:", " | ".join(st_s.splitlines()[-4:])[:280])
         if boot == "1": break
+    if boot != "1":
+        print("== qemu.log ==")
+        print(subprocess.run("tail -25 qemu.log", shell=True, capture_output=True, text=True).stdout)
+        print("== serial ultimas 40 ==")
+        print(serial_tail(40))
     assert boot == "1", "boot nao completou em 20min"
     sh(f"{ADB} shell settings put secure user_setup_complete 1 || true")
     print("abilist:", subprocess.run(f"{ADB} shell getprop ro.product.cpu.abilist", shell=True, capture_output=True, text=True).stdout.strip())
