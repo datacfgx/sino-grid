@@ -15,20 +15,19 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          set -e
           for i in 1 2 3 4 5; do
             wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip && break
             echo "wget build-tools falhou (tentativa $i)"; sleep 10
           done
-          ls -la build-tools_r34-linux.zip
-          for i in 1 2 3 4 5; do
-            wget -q https://dl.google.com/android/repository/platform-34_r03.zip && break
-            echo "wget platform falhou (tentativa $i)"; sleep 10
-          done
-          set -e
           mkdir -p sdk && unzip -q build-tools_r34-linux.zip -d sdk
-          mkdir -p plat && unzip -q platform-34_r03.zip -d plat
+          for i in 1 2 3 4 5; do
+            wget -q https://github.com/Sable/android-platforms/raw/master/android-34/android.jar && break
+            echo "wget android.jar falhou (tentativa $i)"; sleep 10
+          done
+          ls -la android.jar
           cp -r sdk/android-14 instalador/bt
-          cp plat/android-14/android.jar instalador/android.jar
+          mv android.jar instalador/android.jar
           base64 -d eni.keystore.b64 > instalador/eni.keystore
           cd instalador
           sh build.sh
