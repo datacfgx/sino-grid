@@ -225,7 +225,21 @@ try:
             iso = u; break
     assert iso, "nenhuma ISO BlissOS respondeu 200 no curl -sIL"
     print("ISO:", iso)
-    sh(f"curl -sL --max-time 1500 -o bliss.iso '{iso}'")
+    baixou = False
+    ordem = [iso] + [c for c in cands if c != iso]
+    for tent in range(2):
+        for u in ordem:
+            subprocess.run("rm -f bliss.iso", shell=True)
+            r = subprocess.run("curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o bliss.iso '" + u + "'",
+                               shell=True, capture_output=True, text=True)
+            tam = os.path.getsize("bliss.iso") if os.path.exists("bliss.iso") else 0
+            print(f"tent{tent} rc={r.returncode} {tam/1e6:.0f}MB {u[:70]}")
+            if r.returncode == 0 and tam > 500_000_000:
+                baixou = True
+                break
+        if baixou:
+            break
+    assert baixou, "ISO nao baixou em nenhum espelho/tentativa"
     sh("qemu-img create -f qcow2 bliss.qcow2 12G")
     sh("mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt")
     sh("cp isomnt/kernel isomnt/initrd.img .")
