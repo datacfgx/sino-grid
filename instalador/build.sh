@@ -17,10 +17,14 @@ echo "== d8 =="
 cd build/classes && jar cf ../classes.jar . && cd ../..
 java -cp $BT/lib/d8.jar com.android.tools.r8.D8 \
     --min-api 24 --lib android.jar --output build/ build/classes.jar
-echo "== empacota =="
-mkdir -p build/x && cd build/x && unzip -q -o ../base.apk && cp ../classes.dex . && zip -q -r ../unsigned.apk . && cd ../..
-echo "== diagnostico (o que o sistema ve) =="
-$BT/aapt2 dump badging build/unsigned.apk | head -6 || echo "BADGING FALHOU - manifest quebrado"
+echo "== empacota (arsc + manifest STORED — Android 11+ exige) =="
+mkdir -p build/x && cd build/x && unzip -q -o ../base.apk && cp ../classes.dex .
+rm -f ../unsigned.apk
+zip -q -r ../unsigned.apk . -x "resources.arsc" "AndroidManifest.xml"
+zip -q -0 ../unsigned.apk resources.arsc AndroidManifest.xml
+cd ../..
+echo "== diagnostico =="
+$BT/aapt2 dump badging build/unsigned.apk | head -4
 unzip -l build/unsigned.apk
 echo "== alinha + assina =="
 LD_LIBRARY_PATH=$PWD/$BT/lib64 $BT/zipalign -f -p 4 build/unsigned.apk build/al.apk
