@@ -211,22 +211,20 @@ VEREDITO = "NAO TESTADO"
 try:
     print("== certificacao: BlissOS ARM64 (padrao da fabrica)")
     sh("sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils")
-    import urllib.request as _u
     cands = [
         "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso/download",
         "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/Bliss-v15.9.1-x86_64-OFFICIAL-gapps-20231220.iso/download",
         "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-14/Bliss-v14.10.2-x86_64-UNOFFICIAL-20240101.iso/download",
+        "https://downloads.sourceforge.net/project/blissos-x86/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso",
     ]
     iso = None
     for u in cands:
-        try:
-            rq = _u.Request(u, method="HEAD")
-            with _u.urlopen(rq, timeout=30) as r:
-                if r.status == 200:
-                    iso = u; break
-        except Exception:
-            pass
-    assert iso, "nenhuma ISO BlissOS respondeu 200"
+        code = subprocess.run("curl -sIL -o /dev/null -w '%{http_code}' --max-time 40 '" + u + "'",
+                              shell=True, capture_output=True, text=True).stdout.strip()
+        print("iso candidato:", code, u[:90])
+        if code == "200":
+            iso = u; break
+    assert iso, "nenhuma ISO BlissOS respondeu 200 no curl -sIL"
     print("ISO:", iso)
     sh(f"curl -sL --max-time 1500 -o bliss.iso '{iso}'")
     sh("qemu-img create -f qcow2 bliss.qcow2 12G")
