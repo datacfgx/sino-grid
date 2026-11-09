@@ -12,7 +12,8 @@ mkdir -p build/classes
 javac -source 8 -target 8 -cp android.jar -d build/classes \
     src/com/eni/instalador/MainActivity.java build/gen/com/eni/instalador/R.java
 echo "== d8 =="
-java -jar $BT/lib/d8.jar --min-api 24 --lib android.jar --output build/ build/classes
+java -cp $BT/lib/d8.jar com.android.tools.r8.D8 \
+    --min-api 24 --lib android.jar --output build/ build/classes
 echo "== empacota =="
 mkdir -p build/x && cd build/x && unzip -q -o ../base.apk && cp ../classes.dex . && zip -q -r ../unsigned.apk . && cd ../..
 echo "== alinha + assina =="
