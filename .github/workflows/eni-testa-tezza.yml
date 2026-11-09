@@ -1,0 +1,62 @@
+name: ENI Testa Tezza (docker-android)
+on:
+  workflow_dispatch:
+jobs:
+  testa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: baixa o tezza-mod.xapk do release v5
+        run: |
+          set -x
+          ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"             https://api.github.com/repos/datacfgx/sino-grid/releases/tags/tezza-mod-v5             | jq -r '.assets[] | select(.name=="tezza-mod.xapk") | .id')
+          curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"             -H "Accept: application/octet-stream"             -o tezza-mod.xapk "https://api.github.com/repos/datacfgx/sino-grid/releases/assets/${ASSET_ID}"
+          ls -la tezza-mod.xapk
+          mkdir xapk && cd xapk && unzip -q ../tezza-mod.xapk && ls -la
+
+      - name: diag estatico (assinaturas + manifest)
+        run: |
+          cd xapk
+          curl -sL -o bt.zip https://dl.google.com/android/repository/build-tools_r34-linux.zip
+          unzip -q bt.zip && mv android-14 bt
+          echo "=== ASSINATURAS (todas tem que bater) ==="
+          for f in *.apk; do echo "-- $f"; java -jar bt/lib/apksigner.jar verify --print-certs "$f" 2>&1 | grep -E "SHA-256" | head -2; done
+          echo "=== BADGING BASE ==="
+          bt/aapt dump badging org.tezza.apk 2>&1 | grep -E "package:|application-label:|uses-feature:|sdkVersion|targetSdkVersion" | head -12
+          echo "=== MANIFEST (splittypes/application/pairip) ==="
+          bt/aapt dump xmltree org.tezza.apk AndroidManifest.xml 2>&1 | grep -iE "requiredSplitTypes|isSplitRequired|pairip|E: application" | head -10
+
+      - name: sobe android emulado (docker-android + KVM)
+        run: |
+          docker run -d --privileged --name android             -p 5555:5555 -p 6080:6080             -e EMULATOR_DEVICE="Samsung Galaxy S10"             --device=/dev/kvm             budtmo/docker-android:emulator_11.0_default
+          echo "aguardando boot (pode levar varios minutos)..."
+          for i in $(seq 1 40); do
+            sleep 15
+            adb connect localhost:5555 >/dev/null 2>&1 || true
+            BOOT=$(adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '' || true)
+            echo "[$i] boot='$BOOT'"
+            [ "$BOOT" = "1" ] && break
+          done
+
+      - name: instala o xapk e abre o app
+        run: |
+          adb -s localhost:5555 install-multiple -r xapk/*.apk 2>&1 | tee install.txt
+          echo "=== tentando abrir ==="
+          adb -s localhost:5555 shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
+          sleep 30
+          adb -s localhost:5555 exec-out screencap -p > screen.png 2>/dev/null || true
+          adb -s localhost:5555 logcat -d > logcat.txt 2>/dev/null || true
+          echo "=== PROCESSO VIVO? ==="
+          adb -s localhost:5555 shell pidof org.tezza || echo "processo morto"
+          echo "=== FATALS / TEZZA / PAIRIP no logcat ==="
+          grep -iE "fatal|tezza|pairip|unsatisfiedlink" logcat.txt | tail -30 || true
+          ls -la screen.png
+
+      - name: sobe evidencias
+        uses: actions/upload-artifact@v4
+        with:
+          name: teste-tezza
+          path: |
+            install.txt
+            screen.png
+            logcat.txt
