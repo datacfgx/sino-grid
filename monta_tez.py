@@ -249,36 +249,57 @@ try:
         except Exception: continue
         for line in txt.splitlines():
             ls = line.strip()
-            if ls.lower().startswith("append"):
+            if ls.lower().startswith("append") and "hd0" not in ls:
                 appends.append(ls[6:].strip())
     print("appends no ISO:", len(appends))
-    for a in appends: print("  cand:", a[:110])
-    boot_ok = [a for a in appends if "INSTALL" not in a.upper()]
-    dbg = [a for a in boot_ok if "DEBUG=2" in a.upper() or "DEBUG=1" in a.upper()]
-    app = (dbg or boot_ok or appends)[0]
-    if "DEBUG=2" not in app.upper():
-        parts = [p for p in app.split() if not p.upper().startswith("DEBUG=")]
-        app = " ".join(parts) + " DEBUG=2"
-    app += " console=ttyS0"
-    if "SRC=" in app:
-        parts = [p if not p.upper().startswith("SRC=") else "SRC=" for p in app.split()]
-        app = " ".join(parts)
-    print("append escolhido:", app[:110])
+    alvo = [a for a in appends if "INSTALL" not in a.upper()]
+    prioridade = []
+    for pref in ["DEBUG=2", "nomodeset", "SETUPWIZARD=0", "quiet"]:
+        prioridade += [a for a in alvo if pref in a.upper() and a not in prioridade]
+    prioridade += [a for a in alvo if a not in prioridade]
+    print("ordem de tentativa:", len(prioridade))
+
     sh("sudo umount isomnt")
     print("kvm:", os.path.exists("/dev/kvm"))
     assert os.path.exists("/dev/kvm"), "/dev/kvm AUSENTE no runner"
     sh("sudo chmod a+rw /dev/kvm || true")
-    print("kvm liberado:", oct(os.stat("/dev/kvm").st_mode & 0o777))
-    sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
-       f'-kernel kernel -initrd initrd.img -append "{app}" '
-       '-drive file=bliss.qcow2,if=virtio,format=qcow2 '
-       '-cdrom bliss.iso '
-       '-device virtio-blk-pci,drive=iso0 '
-       '-drive id=iso0,file=bliss.iso,format=raw,if=none,readonly=on '
-       '-display none -vga none '
-       '-device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 '
-       '-serial file:qemu-serial.log '
-       '> qemu.log 2>&1 &')
+
+    boot = ""
+    app_usado = ""
+    for app in prioridade:
+        app2 = app + " console=ttyS0"
+        print("== tentando append:", app2[:100])
+        subprocess.run("pkill -f qemu-system || true", shell=True)
+        time.sleep(3)
+        subprocess.run("rm -f qemu-serial.log qemu.log", shell=True)
+        sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
+           f'-kernel kernel -initrd initrd.img -append "{app2}" '
+           '-drive file=bliss.qcow2,if=virtio,format=qcow2 '
+           '-cdrom bliss.iso '
+           '-device virtio-blk-pci,drive=iso0 -drive id=iso0,file=bliss.iso,format=raw,if=none,readonly=on '
+           '-display none -vga none '
+           '-device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 '
+           '-serial file:qemu-serial.log '
+           '> qemu.log 2>&1 &')
+        boot = ""
+        for i in range(16):
+            time.sleep(15)
+            subprocess.run("adb connect localhost:5555", shell=True, capture_output=True)
+            boot = subprocess.run("adb -s localhost:5555 shell getprop sys.boot_completed", shell=True, capture_output=True, text=True).stdout.strip()
+            if boot == "1":
+                break
+        st_s = subprocess.run("tail -6 qemu-serial.log", shell=True, capture_output=True, text=True).stdout.strip()
+        ult = st_s.splitlines()[-1][:100] if st_s else "(vazio)"
+        print(f"   -> boot='{boot}' | serial: {ult}")
+        if boot == "1":
+            app_usado = app2
+            break
+    if boot != "1":
+        print("== NENHUM append bootou ==")
+        print(subprocess.run("tail -30 qemu.log", shell=True, capture_output=True, text=True).stdout)
+        print(subprocess.run("tail -40 qemu-serial.log", shell=True, capture_output=True, text=True).stdout)
+    assert boot == "1", "nenhum append completou boot"
+    print("BOOT OK com:", app_usado[:100])
     ADB = "adb -s localhost:5555"
     def serial_tail(n=25):
         return subprocess.run(f"tail -{n} qemu-serial.log", shell=True, capture_output=True, text=True).stdout
