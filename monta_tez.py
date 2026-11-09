@@ -212,10 +212,9 @@ try:
     print("== certificacao: BlissOS ARM64 (padrao da fabrica)")
     sh("sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils")
     cands = [
-        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso/download",
-        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/Bliss-v15.9.1-x86_64-OFFICIAL-gapps-20231220.iso/download",
-        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-14/Bliss-v14.10.2-x86_64-UNOFFICIAL-20240101.iso/download",
-        "https://downloads.sourceforge.net/project/blissos-x86/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso",
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Go/Bliss-Go-v15.9-x86_64-OFFICIAL-gapps-20240115.iso/download",
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download",
+        "https://sourceforge.net/projects/blissos-dev/files/Beta/Bliss-v15.8.6-x86_64-OFFICIAL-vanilla-20230628.iso/download",
     ]
     iso = None
     for u in cands:
