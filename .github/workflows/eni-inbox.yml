@@ -1,0 +1,29 @@
+name: APK Tuning Mod
+on:
+  workflow_dispatch:
+  push:
+    branches: [eni-inbox]
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  fabrica:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: eni-inbox
+      - name: a fábrica opera
+        run: python3 fabrica.py
+      - name: sobe deposito
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deposito
+          path: parts/
+          if-no-files-found: ignore
+
