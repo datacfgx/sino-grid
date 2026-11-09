@@ -34,7 +34,7 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(40, 60, 40, 40);
         status = new TextView(this);
-        status.setText("ENI INSTALADOR XAPK\n\nAbra um arquivo .xapk com este app\n(base + splits num so pacote)");
+        status.setText("ENI INSTALADOR XAPK\n\nAbra um arquivo .xapk com este app");
         Button btn = new Button(this);
         btn.setText("ESCOLHER .XAPK");
         btn.setOnClickListener(v -> {
@@ -46,7 +46,6 @@ public class MainActivity extends Activity {
         box.addView(status);
         box.addView(btn);
 
-        // checa a permissao de instalar apps desconhecidos e guia ate ela
         if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
             mostrar("⚠️ FALTA A CHAVE: voce precisa permitir que este app instale pacotes");
             btnPerm = new Button(this);
@@ -143,7 +142,7 @@ public class MainActivity extends Activity {
                 return;
             }
             File base = acharBase(apks);
-            mostrar("Base: " + base.getName() + " (" + (base.length() / 1048576) + " MB) | total: " + apks.size() + " APKs");
+            mostrar("Base: " + base.getName() + " | total: " + apks.size() + " APKs");
 
             mostrar("Abrindo sessao de instalacao...");
             PackageInstaller pi = getPackageManager().getPackageInstaller();
@@ -153,30 +152,36 @@ public class MainActivity extends Activity {
             PackageInstaller.Session session = pi.openSession(id);
 
             escrever(session, base, "base.apk");
+            int pulados = 0;
             for (File f : apks) {
-                if (!f.equals(base)) {
-                    escrever(session, f, "split_" + f.getName());
+                if (f.equals(base)) continue;
+                // asset packs (ex.: assets.apk) NAO sao aceitos em sideload — pulamos
+                if (f.getName().contains("assets")) {
+                    pulados++;
+                    mostrar("  pulado (asset pack nao suportado em sideload): " + f.getName());
+                    continue;
                 }
+                escrever(session, f, "split_" + f.getName());
             }
+            mostrar("Sessao: 1 base + " + (apks.size() - 1 - pulados) + " splits (" + pulados + " asset pack(s) pulado(s))");
 
             Intent callback = new Intent(this, MainActivity.class);
             callback.setAction("com.eni.instalador.RESULT");
             PendingIntent pend = PendingIntent.getActivity(
                     this, 43, callback, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-            mostrar("Confirmando no instalador do Android... (aguarde ~2 min, o sistema processa os APKs)");
+            mostrar("Confirmando no instalador do Android... (aguarde ~2 min)");
             session.commit(pend.getIntentSender());
         } catch (Exception ex) {
             mostrar("ERRO: " + ex.getMessage());
         }
     }
 
-    // base = MAIOR apk que nao seja config (o assets/configs sao menores)
     File acharBase(List<File> apks) {
         File base = null;
         long maior = -1;
         for (File f : apks) {
             String n = f.getName();
-            if (n.contains("config.")) continue;
+            if (n.contains("config.") || n.contains("assets")) continue;
             if (f.length() > maior) {
                 maior = f.length();
                 base = f;
