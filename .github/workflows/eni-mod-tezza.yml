@@ -11,6 +11,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: eni-inbox
+      - name: qemu pra certificacao BlissOS
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils
+
       - name: mod tezza
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
