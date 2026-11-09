@@ -1,5 +1,7 @@
 name: ENI Certifica APK (BlissOS ARM64)
 on:
+  push:
+    branches: [eni-cert]
   workflow_dispatch:
 jobs:
   certifica:
