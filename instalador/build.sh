@@ -19,6 +19,9 @@ java -cp $BT/lib/d8.jar com.android.tools.r8.D8 \
     --min-api 24 --lib android.jar --output build/ build/classes.jar
 echo "== empacota =="
 mkdir -p build/x && cd build/x && unzip -q -o ../base.apk && cp ../classes.dex . && zip -q -r ../unsigned.apk . && cd ../..
+echo "== diagnostico (o que o sistema ve) =="
+$BT/aapt2 dump badging build/unsigned.apk | head -6 || echo "BADGING FALHOU - manifest quebrado"
+unzip -l build/unsigned.apk
 echo "== alinha + assina =="
 LD_LIBRARY_PATH=$PWD/$BT/lib64 $BT/zipalign -f -p 4 build/unsigned.apk build/al.apk
 java -jar $BT/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 \
