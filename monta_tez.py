@@ -229,19 +229,23 @@ try:
     sh("qemu-img create -f qcow2 bliss.qcow2 12G")
     sh("mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt")
     sh("cp isomnt/kernel isomnt/initrd.img .")
-    app = ""
+    appends = []
     for cfg in glob.glob("isomnt/**/*.cfg", recursive=True):
         try: txt = open(cfg, errors="replace").read()
         except Exception: continue
         for line in txt.splitlines():
             ls = line.strip()
             if ls.lower().startswith("append"):
-                a = ls[6:].strip()
-                if "DEBUG" in a.upper(): app = a; break
-                if not app: app = a
-        if "DEBUG" in app.upper(): break
-    if "DEBUG" not in app.upper(): app += " DEBUG=2"
-    print("append:", app[:120])
+                appends.append(ls[6:].strip())
+    print("appends no ISO:", len(appends))
+    for a in appends: print("  cand:", a[:110])
+    boot_ok = [a for a in appends if "INSTALL" not in a.upper()]
+    dbg = [a for a in boot_ok if "DEBUG=2" in a.upper() or "DEBUG=1" in a.upper()]
+    app = (dbg or boot_ok or appends)[0]
+    if "DEBUG=2" not in app.upper():
+        parts = [p for p in app.split() if not p.upper().startswith("DEBUG=")]
+        app = " ".join(parts) + " DEBUG=2"
+    print("append escolhido:", app[:110])
     sh("sudo umount isomnt")
     sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
        f'-kernel kernel -initrd initrd.img -append "{app}" '
