@@ -19,12 +19,9 @@ jobs:
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
           mkdir -p sdk && unzip -q build-tools_r34-linux.zip -d sdk
           wget -q https://dl.google.com/android/repository/platform-34_r03.zip
-          unzip -q platform-34_r03.zip
-          cp -r android-14 instalador/bt
-          mv android-14 instalador_tmp_bt 2>/dev/null || true
-          cp -r sdk/android-14/* instalador/bt/ 2>/dev/null || true
-          unzip -q -o platform-34_r03.zip
-          cp android-14/android.jar instalador/android.jar
+          mkdir -p plat && unzip -q platform-34_r03.zip -d plat
+          cp -r sdk/android-14 instalador/bt
+          cp plat/android-14/android.jar instalador/android.jar
           base64 -d eni.keystore.b64 > instalador/eni.keystore
           cd instalador
           sh build.sh
