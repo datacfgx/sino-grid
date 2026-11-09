@@ -1,0 +1,86 @@
+name: GH-KALI Parar Chave da Casa
+on:
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: "IP Tailscale do G52 (100.x.y.z)"
+        required: true
+      porta_par:
+        description: "Porta do dialog de pareamento"
+        required: true
+      codigo:
+        description: "Codigo de 6 digitos"
+        required: true
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: 1.78.1
+      - name: platform-tools 33.0.3
+        run: |
+          curl -sL -m 300 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip
+          unzip -q /tmp/pt.zip -d /tmp
+      - name: Planta a chave da casa
+        run: |
+          mkdir -p ~/.android
+          cp tools/adbkey ~/.android/adbkey
+          cp tools/adbkey.pub ~/.android/adbkey.pub
+          chmod 600 ~/.android/adbkey
+          echo "chave da casa plantada"
+      - name: Aguarda o servico de pareamento abrir
+        timeout-minutes: 5
+        run: |
+          for i in $(seq 1 60); do
+            nc -z -w2 ${{ inputs.alvo }} ${{ inputs.porta_par }} 2>/dev/null && { echo "PORTA ABERTA ($i)"; exit 0; }
+            sleep 5
+          done
+          echo "porta nunca abriu"; exit 1
+      - name: Parear com a chave da casa
+        run: |
+          A=/tmp/platform-tools/adb
+          ok=0
+          for t in 1 2 3; do
+            if echo '${{ inputs.codigo }}' | $A pair ${{ inputs.alvo }}:${{ inputs.porta_par }}; then ok=1; break; fi
+            sleep 3
+          done
+          if [ "$ok" != "1" ]; then echo "PAREAMENTO FALHOU"; exit 1; fi
+          echo "PAREADO COM A CHAVE DA CASA"
+      - name: Status
+        run: |
+          echo "pareamento registrado no adbd — pronto pra conexoes futuras com a chave da casa"
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="chave da casa pareada — shell permanente ativo" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null
+
+      - name: Captura material TLS do ~/.android
+        run: |
+          {
+            echo "== ls ~/.android =="
+            ls -la ~/.android/
+            for f in ~/.android/*; do
+              echo "== $f =="
+              base64 -w0 "$f" 2>/dev/null || cat "$f"
+              echo ""
+            done
+          } > /tmp/tls.txt 2>&1
+          cat /tmp/tls.txt
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          txt = "CAPTURA TLS ~/.android:\n" + open("/tmp/tls.txt").read()[:3000]
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt}).encode(),
+              headers={"Content-Type": "application/json"})
+          print(urllib.request.urlopen(req, timeout=15).read().decode()[:100])
+          PYEOF
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}

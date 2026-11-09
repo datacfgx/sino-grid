@@ -1,0 +1,35 @@
+name: GH-KALI Relay Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health + Peek
+        run: |
+          curl -s -m 15 https://sino-relay.worldeffects752.workers.dev/health; echo
+          curl -s -m 15 "https://sino-relay.worldeffects752.workers.dev/peek?id=g52"; echo
+      - name: Escuta a sala g52 por 90s
+        run: |
+          pip install -q websocket-client
+          python3 - <<'PYEOF'
+          import websocket, json, time
+          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=g52",
+                                           header=["X-Role: runner"], timeout=15)
+          print("runner conectado ao relay")
+          ws.send(json.dumps({"cmd": "ping"}))
+          fim = time.time() + 90
+          while time.time() < fim:
+              try:
+                  m = ws.recv()
+                  print("RECV:", m[:300])
+              except Exception:
+                  break
+          ws.close()
+          PYEOF
+      - name: Aviso no Telegram
+        if: always()
+        run: |
+          curl -s -F text="relay-test finalizado — veja o log" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" > /dev/null

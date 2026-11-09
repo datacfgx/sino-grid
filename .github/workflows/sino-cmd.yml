@@ -1,0 +1,26 @@
+name: GH-KALI Cmd
+on:
+  workflow_dispatch:
+    inputs:
+      json:
+        description: "comando JSON p/ o aparelho"
+        required: true
+permissions:
+  contents: read
+jobs:
+  cmd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: entra na sala e manda o comando
+        run: |
+          pip install -q websocket-client
+          python3 - <<'PY'
+          import websocket, json, time
+          ws = websocket.create_connection("wss://sino-relay.worldeffects752.workers.dev/ws?id=g52", header=["X-Role: comandante"], timeout=30)
+          time.sleep(2)
+          cmd = json.loads(r"""${{ inputs.json }}""")
+          ws.send(json.dumps(cmd))
+          print("mandei:", json.dumps(cmd), flush=True)
+          time.sleep(4)
+          ws.close()
+          PY

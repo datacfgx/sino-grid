@@ -1,0 +1,43 @@
+name: GH-KALI Abre URL
+run-name: Abre ${{ inputs.url }} via ponte
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL pra abrir no aparelho"
+        required: true
+        default: "https://www.google.com"
+      pkg:
+        description: "Pacote alvo (opcional)"
+        required: false
+        default: ""
+      id:
+        description: "id do aparelho (sala)"
+        required: true
+        default: "g52"
+jobs:
+  abre:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manda open_url via PONTE (worker-to-worker dentro da CF)
+        run: |
+          BODY='{"cmd":"open_url","url":"${{ inputs.url }}"'
+          if [ -n "${{ inputs.pkg }}" ]; then BODY="$BODY, \"pkg\": \"${{ inputs.pkg }}\""; fi
+          BODY="$BODY}"
+          echo "body: $BODY"
+          R=$(curl -s -m 35 -X POST "https://sino-bridge.worldeffects752.workers.dev/cmd?id=${{ inputs.id }}&timeout=20000" -d "$BODY")
+          echo "ponte: $R"
+          python3 -c "
+          import json, os, urllib.request
+          r = json.loads('''$R''')
+          ok = r.get('status') == 'enviado'
+          txt = 'NAVEGADOR via ponte: ' + ('comando ENVIADO ao app (peers=%s)' % r.get('peers') if ok else 'FALHOU: ' + json.dumps(r))
+          req = urllib.request.Request('https://api.telegram.org/bot' + os.environ['TG_TOKEN'] + '/sendMessage',
+              data=json.dumps({'chat_id': os.environ['TG_CHAT'], 'text': txt}).encode(),
+              headers={'Content-Type': 'application/json'})
+          urllib.request.urlopen(req, timeout=15)
+          import sys; sys.exit(0 if ok else 1)
+          "
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}

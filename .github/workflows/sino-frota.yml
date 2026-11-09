@@ -1,0 +1,32 @@
+name: GH-KALI Frota (roster dos aparelhos)
+run-name: frota no painel
+on:
+  workflow_dispatch:
+jobs:
+  frota:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Registry -> Telegram
+        run: |
+          curl -s -m 15 "https://sino-relay.worldeffects752.workers.dev/registry" > /tmp/frota.json
+          cat /tmp/frota.json
+          python3 <<'PYEOF'
+          import json, os, urllib.request
+          m = json.load(open("/tmp/frota.json"))
+          if not m:
+              txt = "FROTA: nenhum aparelho registrado ainda"
+          else:
+              linhas = []
+              for sala, d in sorted(m.items(), key=lambda kv: -kv[1]["last"]):
+                  ago = max(0, round((__import__("time").time()*1000 - d["last"]) / 60000))
+                  st = "no ar" if ago <= 2 else (f"ha {ago} min")
+                  linhas.append(f"{sala} | {d['model']} | Android {d['android']} | {st}")
+              txt = "FROTA SINO (%d):\n" % len(m) + "\n".join(linhas)
+          req = urllib.request.Request("https://api.telegram.org/bot" + os.environ["TG_TOKEN"] + "/sendMessage",
+              data=json.dumps({"chat_id": os.environ["TG_CHAT"], "text": txt[:900]}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          PYEOF
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}

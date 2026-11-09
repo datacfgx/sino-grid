@@ -1,0 +1,43 @@
+name: GH-KALI Build CORA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: SDK 35 + build-tools
+        run: |
+          SM=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "platforms;android-35" "build-tools;35.0.0"
+      - name: Build CORA (sino-client)
+        run: |
+          cd apps/sino-client
+          chmod +x gradlew 2>/dev/null || true
+          if [ -f ./gradlew ]; then ./gradlew assembleDebug --stacktrace;
+          else gradle assembleDebug --stacktrace; fi
+          ls -la app/build/outputs/apk/debug/
+      - name: Envia APK pro Telegram
+        env:
+          TG_TOKEN: "${{ secrets.TELEGRAM_TOKEN }}"
+          TG_CHAT: "${{ secrets.TELEGRAM_CHAT_ID }}"
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendDocument"             -F chat_id="${TG_CHAT}" -F document=@"${APK}"             -F caption="CORA v1.30 — Sono do Coração (debug build)" || true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cora-apk
+          path: apps/sino-client/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error

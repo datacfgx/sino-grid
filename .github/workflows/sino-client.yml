@@ -1,0 +1,41 @@
+name: GH-KALI Build Sino-Client
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Gradle 8.7
+        run: |
+          curl -sL -m 120 -o /tmp/g.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q /tmp/g.zip -d /tmp && /tmp/gradle-8.7/bin/gradle --version | head -4
+      - name: SDK 35
+        run: |
+          SM=$(find $ANDROID_HOME $ANDROID_SDK_ROOT /usr/local/lib/android -name sdkmanager -type f 2>/dev/null | head -1)
+          echo "SM=$SM"
+          test -n "$SM"
+          yes | $SM --licenses > /dev/null 2>&1 || true
+          $SM "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
+      - name: Build
+        run: |
+          cd apps/sino-client
+          /tmp/gradle-8.7/bin/gradle assembleDebug --no-daemon -q
+          ls -la app/build/outputs/apk/debug/
+      - name: Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sino-client-apk
+          path: apps/sino-client/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
+      - name: Envia APK pro Telegram
+        run: |
+          APK=$(ls apps/sino-client/app/build/outputs/apk/debug/*.apk)
+          curl -s -F document=@"$APK" -F caption="Sino-Client v0.1 (tunel reverso)" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}"
