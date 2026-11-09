@@ -212,8 +212,8 @@ try:
     print("== certificacao: BlissOS ARM64 (padrao da fabrica)")
     sh("sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils")
     cands = [
-        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Go/Bliss-Go-v15.9-x86_64-OFFICIAL-gapps-20240115.iso/download",
         "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download",
+        "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Go/Bliss-Go-v15.9-x86_64-OFFICIAL-gapps-20240115.iso/download",
         "https://sourceforge.net/projects/blissos-dev/files/Beta/Bliss-v15.8.6-x86_64-OFFICIAL-vanilla-20230628.iso/download",
     ]
     iso = None
@@ -261,7 +261,7 @@ try:
         app = " ".join(parts) + " DEBUG=2"
     app += " console=ttyS0"
     if "SRC=" in app:
-        parts = [p if not p.upper().startswith("SRC=") else "SRC=/dev/vda" for p in app.split()]
+        parts = [p if not p.upper().startswith("SRC=") else "SRC=" for p in app.split()]
         app = " ".join(parts)
     print("append escolhido:", app[:110])
     sh("sudo umount isomnt")
@@ -272,6 +272,7 @@ try:
     sh('nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096 '
        f'-kernel kernel -initrd initrd.img -append "{app}" '
        '-drive file=bliss.qcow2,if=virtio,format=qcow2 '
+       '-cdrom bliss.iso '
        '-device virtio-blk-pci,drive=iso0 '
        '-drive id=iso0,file=bliss.iso,format=raw,if=none,readonly=on '
        '-display none -vga none '
