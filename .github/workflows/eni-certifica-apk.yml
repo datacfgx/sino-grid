@@ -1,0 +1,119 @@
+name: ENI Certifica APK (BlissOS ARM64)
+on:
+  workflow_dispatch:
+jobs:
+  certifica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: resolve ISO BlissOS (x86_64 + libhoudini ARM64)
+        run: |
+          CANDS=(
+            "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/BlissOS-15.9.x/Bliss-v15.9.2-x86_64-OFFICIAL-gapps-20240312.iso/download"
+            "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-15/Bliss-v15.9.1-x86_64-OFFICIAL-gapps-20231220.iso/download"
+            "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS-14/Bliss-v14.10.2-x86_64-UNOFFICIAL-20240101.iso/download"
+            "https://downloads.sourceforge.net/project/android-x86/Release%209.0/android-x86_64-9.0-r2.iso"
+          )
+          OK=""
+          for u in "${CANDS[@]}"; do
+            code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 30 "$u" || echo 000)
+            echo "candidato $code :: $u"
+            if [ "$code" = "200" ] && [ -z "$OK" ]; then OK="$u"; fi
+          done
+          if [ -z "$OK" ]; then echo "NENHUMA ISO RESOLVEU (lista acima)"; exit 1; fi
+          echo "ISO_URL=$OK" >> "$GITHUB_ENV"
+
+      - name: baixa ISO + instala qemu + cria disco
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 qemu-utils
+          curl -sL --max-time 1500 -o bliss.iso "$ISO_URL"
+          ls -la bliss.iso
+          qemu-img create -f qcow2 bliss.qcow2 12G
+          ls -la /dev/kvm && echo "KVM DISPONIVEL"
+
+      - name: extrai kernel/initrd/append e sobe VM (headless, adb :5555)
+        run: |
+          mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt
+          cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
+          echo "=== conteudo ISO ==="; ls isomnt | head -20
+          echo "=== procura append DEBUG ==="
+          APPEND=$(grep -rhoE 'append[[:space:]]+[^
+]*DEBUG[^
+]*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | head -1 | sed 's/^append[[:space:]]*//')
+          if [ -z "$APPEND" ]; then
+            APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | head -1 | sed 's/^append[[:space:]]*//')" DEBUG=2"
+          fi
+          echo "APPEND=$APPEND"
+          sudo umount isomnt
+          test -f kernel && test -f initrd.img || { echo "kernel/initrd nao achados na ISO"; exit 1; }
+          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 4 -m 4096             -kernel kernel -initrd initrd.img -append "$APPEND"             -drive file=bliss.qcow2,if=virtio,format=qcow2             -cdrom bliss.iso -boot d             -display none -vga none             -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555             > qemu.log 2>&1 &
+          echo $! > qemu.pid
+          echo "qemu no ar, pid $(cat qemu.pid)"
+
+      - name: aguarda boot + tira do setup wizard
+        run: |
+          export ADB="adb -s localhost:5555"
+          for i in $(seq 1 80); do
+            sleep 15
+            adb connect localhost:5555 >/dev/null 2>&1 || true
+            BOOT=$($ADB shell getprop sys.boot_completed 2>/dev/null | tr -d '' || true)
+            echo "[$i] boot='$BOOT'"
+            [ "$BOOT" = "1" ] && break
+          done
+          [ "$BOOT" = "1" ] || { echo "BOOT NAO COMPLETOU - qemu.log:"; tail -30 qemu.log; exit 1; }
+          $ADB shell settings put secure user_setup_complete 1 || true
+          $ADB shell settings put global setup_wizard_has_run 1 || true
+          echo "== ABI list do guest (houdini aparece aqui se arm64 traduzido) =="
+          $ADB shell getprop ro.product.cpu.abilist
+
+      - name: baixa tezza-mod.xapk + diag estatico
+        run: |
+          ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"             https://api.github.com/repos/datacfgx/sino-grid/releases/tags/tezza-mod-v5             | jq -r '.assets[] | select(.name=="tezza-mod.xapk") | .id')
+          curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"             -H "Accept: application/octet-stream"             -o tezza-mod.xapk "https://api.github.com/repos/datacfgx/sino-grid/releases/assets/${ASSET_ID}"
+          ls -la tezza-mod.xapk
+          mkdir x && cd x && unzip -q ../tezza-mod.xapk && ls -la
+
+      - name: instala no Bliss (pm session) + abre + veredito
+        run: |
+          export ADB="adb -s localhost:5555"
+          $ADB shell "mkdir -p /data/local/tmp/x && rm -f /data/local/tmp/x/*" || true
+          for f in x/*.apk; do $ADB push "$f" /data/local/tmp/x/ > /dev/null; done
+          $ADB shell ls -la /data/local/tmp/x
+          SES=$($ADB shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
+          echo "sessao=$SES"
+          for f in x/*.apk; do
+            b=$(basename "$f")
+            $ADB shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/x/$b" || echo "write falhou $b"
+          done
+          $ADB shell pm install-commit "$SES" 2>&1 | tee install.txt
+          echo "=== abrindo ==="
+          $ADB shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
+          sleep 25
+          P1=$($ADB shell pidof org.tezza | tr -d '' || true)
+          sleep 15
+          P2=$($ADB shell pidof org.tezza | tr -d '' || true)
+          $ADB exec-out screencap -p > screen.png 2>/dev/null || true
+          $ADB logcat -d > logcat.txt 2>/dev/null || true
+          echo "P1='$P1' P2='$P2'"
+          if [ -n "$P1" ] && [ -n "$P2" ]; then echo "VEREDITO=CERTIFICADO (processo vivo em dois checks)"; else echo "VEREDITO=FALHOU (crash/nao abriu)"; fi
+          echo "=== fatals/logcat resumo ==="
+          grep -iE "fatal|org.tezza|pairip|unsatisfied|houdini" logcat.txt | tail -40 || true
+
+      - name: evidencias + telegram
+        run: |
+          V=$(grep VEREDITO install.txt 2>/dev/null || echo "VEREDITO=?")
+          ls -la screen.png logcat.txt install.txt 2>/dev/null
+          MSG="ENI Certifica (BlissOS ARM64): Tezza mod v5 -> $V"
+          curl -s -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@screen.png             -F caption="$MSG (screenshot em anexo)"             https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto || true
+          echo "$MSG"
+
+      - name: sobe evidencias
+        uses: actions/upload-artifact@v4
+        with:
+          name: certificacao-tezza-v5
+          path: |
+            screen.png
+            logcat.txt
+            install.txt
+            qemu.log
