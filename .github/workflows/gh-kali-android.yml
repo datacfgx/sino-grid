@@ -13,27 +13,22 @@ jobs:
           tags: tag:ci
       - name: qemu + vnc web
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify python3
-      - name: resolve e baixa ISO BlissOS
+      - name: baixa android-x86 9.0
         run: |
           set -e
-          C14="https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download"
-          CVAN="https://sourceforge.net/projects/blissos-dev/files/Beta/Bliss-v15.8.6-x86_64-OFFICIAL-vanilla-20230628.iso/download"
-          OK=""
-          code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 40 "$C14" || echo 000)
-          echo "bliss14 head: $code"
-          if [ "$code" = "200" ]; then OK="$C14"; else OK="$CVAN"; fi
+          AX="https://downloads.sourceforge.net/project/android-x86/Release%209.0/android-x86_64-9.0-r2.iso"
           baixou=""
-          for u in "$OK" "$C14" "$CVAN"; do
-            rm -f bliss.iso
-            curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o bliss.iso "$u" && baixou=1 && break
+          for u in "$AX" "https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download"; do
+            rm -f ax.iso
+            curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o ax.iso "$u" && baixou=1 && break
           done
           test -n "$baixou" || { echo "ISO nao baixou"; exit 1; }
-          ls -la bliss.iso
-          qemu-img create -f qcow2 bliss.qcow2 12G
-      - name: boot bliss com receita v23
+          ls -la ax.iso
+          qemu-img create -f qcow2 ax.qcow2 10G
+      - name: boot android-x86
         run: |
           sudo chmod a+rw /dev/kvm || true
-          mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt
+          mkdir -p isomnt && sudo mount -o loop,ro ax.iso isomnt
           ls isomnt/ | head -20
           cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
           APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
@@ -42,15 +37,15 @@ jobs:
           APPEND="$APPEND nomodeset HWACCEL=0 console=ttyS0"
           echo "APPEND=$APPEND"
           sudo umount isomnt
-          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 -kernel kernel -initrd initrd.img -append "$APPEND" -drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
+          nohup qemu-system-x86_64 -accel kvm -cpu qemu64 -smp 4 -m 4096 -kernel kernel -initrd initrd.img -append "$APPEND" -drive file=ax.qcow2,if=virtio,format=qcow2 -cdrom ax.iso -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
           sleep 5
           cat qemu.log
           nohup websockify --web /usr/share/novnc 7681 localhost:5900 > novnc.log 2>&1 &
-          echo "VM receita v23 e noVNC no ar"
+          echo "VM android-x86 e noVNC no ar"
       - name: anuncia no telegram
         run: |
           TSIP=$(tailscale ip -4 2>/dev/null || echo "sem-ip")
-          MSG="ANDROID NO AR v2 receita v23
+          MSG="ANDROID NO AR v3 android-x86 9.0
           endereco: http://$TSIP:7681/vnc.html?autoconnect=true
           vida util: ~6h
           (Tailscale ligado -> abre no navegador)"
