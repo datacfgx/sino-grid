@@ -35,8 +35,11 @@ jobs:
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          export DISPLAY=:0
           Xvfb :0 -screen 0 1080x1920x24 > xvfb.log 2>&1 &
           sleep 3
+          ls -la /tmp/.X11-unix/ || true
+          cat xvfb.log || true
           nohup emulator -avd eni -no-audio -no-boot-anim -gpu guest -accel on -wipe-data -no-snapshot -no-metrics -ports 5554,5555 > emulator.log 2>&1 &
           sleep 5
           x11vnc -display :0 -forever -nopw -shared -rfbport 5900 > vnc.log 2>&1 &
