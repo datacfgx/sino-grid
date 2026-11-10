@@ -1,4 +1,4 @@
-name: GH-KALI Android
+name: GH-KALI Droid
 on:
   workflow_dispatch:
 jobs:
