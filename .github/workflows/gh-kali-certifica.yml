@@ -28,20 +28,19 @@ jobs:
           ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/sino-grid/releases/tags/tezza-mod-v5 | python3 -c "import json,sys; d=json.load(sys.stdin); print([a['id'] for a in d['assets'] if a['name'].lower()=='tezza-mod.xapk'][0])")
           curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o paciente.xapk "https://api.github.com/repos/datacfgx/sino-grid/releases/assets/${ASSET_ID}"
           ls -la paciente.xapk
-          curl -sL -o lspatch.jar https://github.com/LSPosed/LSPatch/releases/download/v0.6/jar-v0.6-398-release.jar
+          curl -sL -o manager.apk https://github.com/LSPosed/LSPatch/releases/download/v0.6/manager-v0.6-398-release.apk
           mkdir x && cd x && unzip -q ../paciente.xapk && ls *.apk
-          echo "== loaders no jar =="
-          unzip -l ../lspatch.jar | grep -iE "loader|arm64" | head -10
-          LOADER_ENTRY=$(unzip -l ../lspatch.jar | grep -iE "arm64.*loader|loader.*arm64" | head -1 | awk '{print $4}')
-          echo "LOADER_ENTRY=$LOADER_ENTRY"
-          test -n "$LOADER_ENTRY" || { echo "loader arm64 nao achado no jar"; exit 1; }
-          mkdir -p /tmp/ldr && unzip -o -j ../lspatch.jar "$LOADER_ENTRY" -d /tmp/ldr
-          mkdir -p /tmp/ldrapk && unzip -q -o /tmp/ldr/$(basename "$LOADER_ENTRY") -d /tmp/ldrapk
-          find /tmp/ldrapk -name "liblspatch.so" | head -3
-          SO=$(find /tmp/ldrapk -path "*arm64*" -name "liblspatch.so" | head -1)
-          test -n "$SO" || SO=$(find /tmp/ldrapk -name "liblspatch.so" | head -1)
-          echo "SO=$SO"
           BASE=$(ls *.apk | grep -ivE "config|split" | head -1)
+          echo "== lspatch entries no base original =="
+          unzip -l "$BASE" | grep -i lspatch
+          echo "== procurando liblspatch.so arm64 no manager =="
+          unzip -l ../manager.apk | grep -iE "arm64.*lspatch|lspatch.*arm64" | head -5
+          mkdir -p /tmp/mgr && unzip -q -o ../manager.apk -d /tmp/mgr
+          SO=$(find /tmp/mgr -path "*arm64*" -name "liblspatch.so" | head -1)
+          test -n "$SO" || SO=$(find /tmp/mgr -name "liblspatch.so" | head -1)
+          echo "SO=$SO"
+          test -n "$SO" || { echo "liblspatch.so nao achado no manager"; exit 1; }
+          file "$SO" || true
           echo "BASE=$BASE"
           mkdir -p work/assets/lspatch/so/arm64-v8a
           cp "$SO" work/assets/lspatch/so/arm64-v8a/liblspatch.so
