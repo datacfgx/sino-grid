@@ -9,7 +9,7 @@ jobs:
       - name: tailnet
         uses: tailscale/github-action@v2
         with:
-          authkey: ${{ secrets.TS_AUTKEY }}
+          authkey: ${{ secrets.TS_AUTHKEY }}
           tags: tag:ci
       - name: qemu + vnc web
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify python3
