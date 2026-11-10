@@ -34,12 +34,18 @@ jobs:
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           Xvfb :0 -screen 0 1080x1920x24 > xvfb.log 2>&1 &
           sleep 3
-          nohup emulator -avd eni -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on -wipe-data -no-snapshot -ports 5555,5555 > emulator.log 2>&1 &
+          nohup emulator -avd eni -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on -wipe-data -no-snapshot -ports 5554,5555 > emulator.log 2>&1 &
           sleep 5
           x11vnc -display :0 -forever -nopw -shared -rfbport 5900 > vnc.log 2>&1 &
           sleep 3
           nohup websockify --web /usr/share/novnc 7681 localhost:5900 > novnc.log 2>&1 &
-          echo "emulador + vnc + novnc no ar"
+          sleep 10
+          echo "== ps emulator =="
+          ps aux | grep -c "[e]mulator" || true
+          echo "== emulator.log =="
+          cat emulator.log 2>/dev/null || echo "(sem log)"
+          ps aux | grep -q "[e]mulator" || { echo "EMULADOR MORTO"; exit 1; }
+          echo "emulador vivo + vnc + novnc no ar"
       - name: aguarda boot e anuncia
         run: |
           export PATH="$GITHUB_WORKSPACE/sdk/platform-tools:$PATH"
