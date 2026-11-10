@@ -8,16 +8,14 @@ jobs:
     steps:
       - name: deps
         run: sudo apt-get update -qq && sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2t64 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 mesa-vulkan-drivers vulkan-tools && sudo chmod a+rw /dev/kvm || true
-      - name: apkeep baixa tezza da play
+      - name: miccam da familia
         run: |
-          set -e
-          AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name']]; print(a[0]['id'] if a else '')")
-          test -n "$AID" || { echo "asset apkeep nao achado"; exit 1; }
-          curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID"
-          chmod +x apkeep && ./apkeep --help | head -20
-          mkdir orig
-          ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" --split-apks orig || ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" orig || true
-          ls -la orig/
+          R=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/miccam-eni/releases/latest)
+          MID=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d.get('assets',[]) if x['name'].endswith('.apk')]; print(a[0]['id'] if a else '')")
+          echo "MICCAM_ID=$MID"
+          test -n "$MID" || { echo "miccam sem apk no release"; exit 1; }
+          curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o miccam.apk "https://api.github.com/repos/datacfgx/miccam-eni/releases/assets/$MID"
+          ls -la miccam.apk
       - name: sdk e avd
         run: |
           set -e
@@ -31,7 +29,7 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64" > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis;x86_64" --device "pixel_4" --force
-      - name: emulador e tezza original
+      - name: emulador e miccam
         run: |
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
@@ -48,42 +46,32 @@ jobs:
           done
           echo "boot_completed=$BC"
           [ "$BC" = "1" ] || { echo "BOOT NAO COMPLETOU"; tail -20 emulator.log; exit 1; }
-          echo "== preparando paciente =="
-          mkdir px && cd px
-          ls ../orig/
-          if ls ../orig/*.xapk > /dev/null 2>&1; then
-            unzip -q ../orig/*.xapk
-          elif ls ../orig/*.apk > /dev/null 2>&1; then
-            cp ../orig/*.apk .
-          fi
-          ls *.apk
-          cd ..
-          echo "== instalando =="
-          adb -s localhost:5555 push px /data/local/tmp/px > /dev/null
-          SES=$(adb -s localhost:5555 shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
-          for f in px/*.apk; do
-            b=$(basename "$f")
-            adb -s localhost:5555 shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/px/$b"
-          done
-          adb -s localhost:5555 shell pm install-commit "$SES"
+          echo "== instalando miccam =="
+          adb -s localhost:5555 install -r miccam.apk
+          MC=$("$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/avdmanager" --help > /dev/null 2>&1; aapt_bin=$(find "$GITHUB_WORKSPACE/sdk/build-tools" -name "aapt2" -type f 2>/dev/null | head -1); echo "$aapt_bin")
+          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          AAPT2=$(find "$GITHUB_WORKSPACE/sdk/build-tools" -name "aapt2" -type f 2>/dev/null | head -1)
+          echo "AAPT2=$AAPT2"
+          PKG=$("$AAPT2" dump badging miccam.apk 2>/dev/null | grep "package:" | sed "s/.*name='//;s/'.*//" | head -1)
+          echo "MICCAM_PKG=$PKG"
+          test -n "$PKG" || { echo "pacote do miccam nao identificado"; exit 1; }
           echo "== abrindo =="
-          adb -s localhost:5555 shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
-          sleep 35
-          P1=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
-          sleep 15
-          P2=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          adb -s localhost:5555 shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 || true
+          sleep 25
+          M1=$(adb -s localhost:5555 shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)
+          sleep 10
+          M2=$(adb -s localhost:5555 shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)
           adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
           adb -s localhost:5555 logcat -d > logcat.txt 2>/dev/null || true
-          echo "P1=$P1 P2=$P2"
-          if [ -n "$P1" ] && [ -n "$P2" ]; then V="TEZZA ORIGINAL ABRIU (Play direto)"; else V="TEZZA ORIGINAL FALHOU"; fi
+          echo "MICCAM P1=$M1 P2=$M2"
+          if [ -n "$M1" ] && [ -n "$M2" ]; then V="MICCAM CERTIFICADO - maquina sobe com APK instalado"; else V="MICCAM FALHOU"; fi
           echo "VEREDITO=$V"
           echo "$V" > veredito.txt
-          grep -iE "fatal|org.tezza|pairip|unsatisfied" logcat.txt | tail -15 || true
       - name: resultado no telegram
         run: |
           V=$(cat veredito.txt 2>/dev/null || echo "?")
           for t in 1 2 3; do
-            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="DEGRAU 1 - Tezza original da Play: $V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="VEREDITO FINAL: $V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
             echo "foto $t: $R"
             case "$R" in *HTTP:200*) break;; esac
             sleep 10
@@ -91,7 +79,7 @@ jobs:
       - name: evidencias
         uses: actions/upload-artifact@v4
         with:
-          name: tezza-original-play
+          name: certificacao-miccam
           path: |
             tela.png
             logcat.txt
