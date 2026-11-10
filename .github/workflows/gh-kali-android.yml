@@ -36,7 +36,8 @@ jobs:
           mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt
           cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
           APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
-          if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
+          if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2 SRC=/dev/sr0"; fi
+          if ! echo "$APPEND" | grep -q "SRC="; then APPEND="$APPEND SRC=/dev/sr0"; fi
           echo "APPEND=$APPEND"
           sudo umount isomnt
           nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 -kernel kernel -initrd initrd.img -append "$APPEND console=ttyS0" -drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
