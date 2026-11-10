@@ -11,75 +11,76 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           tags: tag:ci
-      - name: qemu + vnc web
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify python3
-      - name: baixa android-x86 9.0
+      - name: deps do emulador oficial
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 xvfb x11vnc novnc websockify qemu-kvm
+          sudo chmod a+rw /dev/kvm || true
+      - name: sdk + imagem android 11 x86_64
         run: |
           set -e
-          AX="https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download"
-          baixou=""
-          for u in "$AX"; do
-            rm -f ax.iso
-            curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o ax.iso "$u" && baixou=1 && break
-          done
-          test -n "$baixou" || { echo "ISO nao baixou"; exit 1; }
-          ls -la ax.iso
-          qemu-img create -f qcow2 ax.qcow2 10G
-      - name: boot android-x86 com flags dock-droid
+          mkdir -p sdk/cmdline-tools && cd sdk/cmdline-tools
+          curl -sL -o clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q clt.zip && rm clt.zip && mv cmdline-tools latest
+          cd "$GITHUB_WORKSPACE/sdk"
+          export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
+          yes | latest/bin/sdkmanager --licenses > /dev/null || true
+          latest/bin/sdkmanager "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64" "platforms;android-30" > /dev/null
+          latest/bin/avdmanager create avd -n eni -k "system-images;android-30;google_apis;x86_64" --device "pixel_4" --force
+          echo "AVD criado"
+      - name: sobe emulador com tela via Xvfb
         run: |
-          sudo chmod a+rw /dev/kvm || true
-          mkdir -p isomnt && sudo mount -o loop,ro ax.iso isomnt
-          cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
-          APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
-          if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
-          if ! echo "$APPEND" | grep -q "SRC="; then APPEND="$APPEND SRC=/dev/sr0"; fi
-          APPEND="$APPEND SRC=/dev/sr0 i8042.noaux=1 irqpoll nomodeset HWACCEL=0 console=ttyS0"
-          echo "APPEND=$APPEND"
-          sudo umount isomnt
-          CPUFLAGS="+invtsc,vmware-cpuid-freq=on,+pcid,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
-          nohup qemu-system-x86_64 -m 4096 -enable-kvm -cpu host,$CPUFLAGS -machine q35,accel=kvm:tcg -smp 4 -kernel kernel -initrd initrd.img -append "$APPEND" -hda ax.qcow2 -cdrom ax.iso -usb -device usb-kbd -device usb-tablet -smbios type=2 -device vmxnet3,netdev=net0 -netdev user,id=net0,hostfwd=tcp::5555-:5555 -vnc 0.0.0.0:0 -serial file:qemu-serial.log > qemu.log 2>&1 &
+          export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          Xvfb :0 -screen 0 1080x1920x24 > xvfb.log 2>&1 &
+          sleep 3
+          nohup emulator -avd eni -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on -wipe-data -no-snapshot -ports 5555,5555 > emulator.log 2>&1 &
           sleep 5
-          cat qemu.log
+          x11vnc -display :0 -forever -nopw -shared -rfbport 5900 > vnc.log 2>&1 &
+          sleep 3
           nohup websockify --web /usr/share/novnc 7681 localhost:5900 > novnc.log 2>&1 &
-          echo "VM android-x86 v5 e noVNC no ar"
-      - name: anuncia no telegram com retentativa
+          echo "emulador + vnc + novnc no ar"
+      - name: aguarda boot e anuncia
         run: |
+          export PATH="$GITHUB_WORKSPACE/sdk/platform-tools:$PATH"
           TSIP=$(tailscale ip -4 2>/dev/null || true)
           [ -z "$TSIP" ] && TSIP="sem-ip"
           echo "TSIP=$TSIP"
-          MSG="ANDROID NO AR v7 kitchen-sink BlissOS
+          MSG="ANDROID NO AR v8 emulador oficial Google
           endereco: http://$TSIP:7681/vnc.html?autoconnect=true
           vida util: ~6h"
-          OK=""
           for t in 1 2 3 4 5; do
             R=$(curl -s -w "HTTP:%{http_code}" -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=$MSG")
             echo "tentativa $t: $R"
-            case "$R" in *HTTP:200*) OK=1; break;; esac
+            case "$R" in *HTTP:200*) break;; esac
             sleep $((t*5))
           done
-          [ -n "$OK" ] || { echo "ANUNCIO FALHOU DE VERDADE"; exit 1; }
-      - name: vive 6h com telemetria inteligente
+      - name: espera android ligar e manda foto
         run: |
-          ADB="adb -s localhost:5555"
-          JA_AVISOU=""
-          for i in $(seq 1 36); do
-            sleep 600
-            echo "== [$i] $(date -u +%H:%M) =="
-            tail -3 qemu-serial.log 2>/dev/null || true
-            adb connect localhost:5555 >/dev/null 2>&1 || true
-            BC=$($ADB shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
-            echo "boot_completed=$BC"
-            if [ "$BC" = "1" ] && [ "$JA_AVISOU" != "1" ]; then
-              JA_AVISOU=1
-              $ADB exec-out screencap -p > tela.png 2>/dev/null || true
-              for t in 1 2 3; do
-                R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="ANDROID ABRIU - tela ao vivo v5" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
-                echo "foto tentativa $t: $R"
-                case "$R" in *HTTP:200*) break;; esac
-                sleep 10
-              done
-            elif [ "$JA_AVISOU" != "1" ] && [ $((i % 3)) -eq 0 ]; then
-              curl -s -w "HTTP:%{http_code}" -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=[v5 $i] boot_completed='$BC' serial: $(tail -1 qemu-serial.log 2>/dev/null)"
-              echo ""
-            fi
+          export PATH="$GITHUB_WORKSPACE/sdk/platform-tools:$PATH"
+          adb connect localhost:5555 > /dev/null 2>&1 || true
+          BC=""
+          for i in $(seq 1 30); do
+            sleep 20
+            BC=$(adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            echo "[$i] boot_completed=$BC"
+            [ "$BC" = "1" ] && break
+          done
+          if [ "$BC" = "1" ]; then
+            sleep 10
+            adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
+            for t in 1 2 3; do
+              R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="ANDROID ABRIU - tela oficial v8" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
+              echo "foto $t: $R"
+              case "$R" in *HTTP:200*) break;; esac
+              sleep 10
+            done
+          fi
+      - name: vive 6h com foto da tela a cada 30min
+        run: |
+          export PATH="$GITHUB_WORKSPACE/sdk/platform-tools:$PATH"
+          for i in $(seq 1 12); do
+            sleep 1800
+            adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
+            [ -s tela.png ] && curl -s -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="[tela v8 $i]" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto" >/dev/null || true
           done
