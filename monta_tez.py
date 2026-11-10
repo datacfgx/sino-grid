@@ -227,7 +227,8 @@ try:
     print("ISO:", iso)
     baixou = False
     ordem = [iso] + [c for c in cands if c != iso]
-    for tent in range(2):
+    ordem = [u for u in ordem if "BlissOS14" in u] * 6 + [u for u in ordem if "BlissOS14" not in u]
+    for tent in range(8):
         for u in ordem:
             subprocess.run("rm -f bliss.iso", shell=True)
             r = subprocess.run("curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o bliss.iso '" + u + "'",
