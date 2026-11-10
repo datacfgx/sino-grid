@@ -24,6 +24,8 @@ jobs:
           unzip -q clt.zip && rm clt.zip && mv cmdline-tools latest
           cd "$GITHUB_WORKSPACE/sdk"
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
+          export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           yes | "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64" "platforms;android-30" > /dev/null
           "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis;x86_64" --device "pixel_4" --force
@@ -31,6 +33,7 @@ jobs:
       - name: sobe emulador com tela via Xvfb
         run: |
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
+          export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           Xvfb :0 -screen 0 1080x1920x24 > xvfb.log 2>&1 &
           sleep 3
