@@ -24,7 +24,7 @@ jobs:
           echo "AVD pronto"
       - name: baixa o paciente tezza v5
         run: |
-          ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/sino-grid/releases/tags/tezza-mod-v5 | python3 -c "import json,sys; d=json.load(sys.stdin); print([a['id'] for a in d['assets'] if a['name']=='tezza-mod.xapk'][0])")
+          ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/sino-grid/releases/tags/tezza-mod-v5 | python3 -c "import json,sys; d=json.load(sys.stdin); print([a['id'] for a in d['assets'] if a['name'].lower()=='tezza-mod.xapk'][0])")
           curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o paciente.xapk "https://api.github.com/repos/datacfgx/sino-grid/releases/assets/${ASSET_ID}"
           ls -la paciente.xapk
           mkdir x && cd x && unzip -q ../paciente.xapk && ls *.apk
