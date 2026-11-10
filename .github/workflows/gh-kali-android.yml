@@ -16,9 +16,9 @@ jobs:
       - name: baixa android-x86 9.0
         run: |
           set -e
-          AX="https://downloads.sourceforge.net/project/android-x86/Release%209.0/android-x86_64-9.0-r2.iso"
+          AX="https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download"
           baixou=""
-          for u in "$AX" "https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download"; do
+          for u in "$AX"; do
             rm -f ax.iso
             curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o ax.iso "$u" && baixou=1 && break
           done
@@ -33,7 +33,7 @@ jobs:
           APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
           if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
           if ! echo "$APPEND" | grep -q "SRC="; then APPEND="$APPEND SRC=/dev/sr0"; fi
-          APPEND="$APPEND i8042.noaux=1 console=ttyS0"
+          APPEND="$APPEND SRC=/dev/sr0 i8042.noaux=1 irqpoll nomodeset HWACCEL=0 console=ttyS0"
           echo "APPEND=$APPEND"
           sudo umount isomnt
           CPUFLAGS="+invtsc,vmware-cpuid-freq=on,+pcid,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
@@ -47,7 +47,7 @@ jobs:
           TSIP=$(tailscale ip -4 2>/dev/null || true)
           [ -z "$TSIP" ] && TSIP="sem-ip"
           echo "TSIP=$TSIP"
-          MSG="ANDROID NO AR v5
+          MSG="ANDROID NO AR v7 kitchen-sink BlissOS
           endereco: http://$TSIP:7681/vnc.html?autoconnect=true
           vida util: ~6h"
           OK=""
