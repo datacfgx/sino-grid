@@ -7,7 +7,7 @@ jobs:
     timeout-minutes: 300
     steps:
       - name: deps
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2t64 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 mesa-vulkan-drivers vulkan-tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2t64 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 mesa-vulkan-drivers vulkan-tools && sudo chmod a+rw /dev/kvm || true
       - name: sdk e avd
         run: |
           set -e
