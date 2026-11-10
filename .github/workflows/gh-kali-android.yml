@@ -56,10 +56,22 @@ jobs:
           (Tailscale ligado -> abre no navegador)"
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=$MSG"
           echo "anunciado: $TSIP:7681"
-      - name: vive 6h
+      - name: vive 6h com telemetria
         run: |
+          ADB="adb -s localhost:5555"
           for i in $(seq 1 36); do
             sleep 600
             echo "== [$i] $(date -u +%H:%M) =="
             tail -3 qemu-serial.log 2>/dev/null || true
+            adb connect localhost:5555 >/dev/null 2>&1 || true
+            BC=$($ADB shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            echo "boot_completed=$BC"
+            if [ "$BC" = "1" ]; then
+              $ADB exec-out screencap -p > tela.png 2>/dev/null || true
+              if [ -s tela.png ]; then
+                curl -s -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="Android vivo (boot_completed=1) - tela ao vivo" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto" >/dev/null || true
+              fi
+            else
+              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=[telemetria] boot_completed='$BC' serial: $(tail -1 qemu-serial.log 2>/dev/null)" >/dev/null || true
+            fi
           done
