@@ -254,7 +254,7 @@ try:
                 appends.append(ls[6:].strip())
     print("appends no ISO:", len(appends))
     alvo = [a for a in appends if "INSTALL" not in a.upper()]
-    prioridade = []
+    prioridade = ["initrd=/initrd.img root=/dev/ram0 DEBUG=2 SRC=/dev/sr0 DATA="]
     for pref in ["DEBUG=2", "nomodeset", "SETUPWIZARD=0", "quiet"]:
         prioridade += [a for a in alvo if pref in a.upper() and a not in prioridade]
     prioridade += [a for a in alvo if a not in prioridade]
