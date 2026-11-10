@@ -37,7 +37,7 @@ jobs:
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           Xvfb :0 -screen 0 1080x1920x24 > xvfb.log 2>&1 &
           sleep 3
-          nohup emulator -avd eni -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on -wipe-data -no-snapshot -no-metrics -ports 5554,5555 > emulator.log 2>&1 &
+          nohup emulator -avd eni -no-audio -no-boot-anim -gpu guest -accel on -wipe-data -no-snapshot -no-metrics -ports 5554,5555 > emulator.log 2>&1 &
           sleep 5
           x11vnc -display :0 -forever -nopw -shared -rfbport 5900 > vnc.log 2>&1 &
           sleep 3
