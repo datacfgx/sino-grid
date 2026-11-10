@@ -33,7 +33,7 @@ jobs:
           APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
           if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
           if ! echo "$APPEND" | grep -q "SRC="; then APPEND="$APPEND SRC=/dev/sr0"; fi
-          APPEND="$APPEND console=ttyS0"
+          APPEND="$APPEND i8042.noaux=1 console=ttyS0"
           echo "APPEND=$APPEND"
           sudo umount isomnt
           CPUFLAGS="+invtsc,vmware-cpuid-freq=on,+pcid,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
