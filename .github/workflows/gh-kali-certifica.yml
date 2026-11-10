@@ -56,6 +56,13 @@ jobs:
           PKG=$(adb -s localhost:5555 shell pm list packages -3 2>/dev/null | tr -d '\r' | cut -d: -f2 | head -1)
           echo "MICCAM_PKG=$PKG"
           test -n "$PKG" || { echo "pacote nao identificado"; exit 1; }
+          echo "== concedendo TODAS as permissoes (regra da casa) =="
+          for p in $(adb -s localhost:5555 shell dumpsys package "$PKG" | grep -oE "android.permission.[A-Z_]+" | sort -u); do
+            adb -s localhost:5555 shell pm grant "$PKG" "$p" 2>/dev/null && echo "granted $p" || true
+          done
+          adb -s localhost:5555 shell appops set "$PKG" RECORD_AUDIO allow || true
+          adb -s localhost:5555 shell appops set "$PKG" CAMERA allow || true
+          adb -s localhost:5555 shell appops set "$PKG" RECORD_VIDEO allow || true
           echo "== abrindo =="
           adb -s localhost:5555 shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 || true
           sleep 25
