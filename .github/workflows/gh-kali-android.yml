@@ -30,20 +30,30 @@ jobs:
           test -n "$baixou" || { echo "ISO nao baixou"; exit 1; }
           ls -la bliss.iso
           qemu-img create -f qcow2 bliss.qcow2 12G
-      - name: boot bliss (BIOS puro pelo CD - sem injecao de kernel)
+      - name: boot bliss com receita v23
         run: |
           sudo chmod a+rw /dev/kvm || true
-          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 -drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -boot d -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
+          mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt
+          ls isomnt/ | head -20
+          cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
+          APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
+          if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
+          if ! echo "$APPEND" | grep -q "SRC="; then APPEND="$APPEND SRC=/dev/sr0"; fi
+          APPEND="$APPEND nomodeset HWACCEL=0 console=ttyS0"
+          echo "APPEND=$APPEND"
+          sudo umount isomnt
+          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 -kernel kernel -initrd initrd.img -append "$APPEND" -drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
           sleep 5
+          cat qemu.log
           nohup websockify --web /usr/share/novnc 7681 localhost:5900 > novnc.log 2>&1 &
-          echo "VM (boot CD puro) e noVNC no ar"
+          echo "VM receita v23 e noVNC no ar"
       - name: anuncia no telegram
         run: |
           TSIP=$(tailscale ip -4 2>/dev/null || echo "sem-ip")
-          MSG="ANDROID NO AR
-          endereco: http://$TSIP:7681/vnc.html?autoconnect=true (BlissOS, abre direto na tela)
+          MSG="ANDROID NO AR v2 receita v23
+          endereco: http://$TSIP:7681/vnc.html?autoconnect=true
           vida util: ~6h
-          (Tailscale ligado no celular -> abre no navegador)"
+          (Tailscale ligado -> abre no navegador)"
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=$MSG"
           echo "anunciado: $TSIP:7681"
       - name: vive 6h
