@@ -46,15 +46,16 @@ jobs:
           done
           echo "boot_completed=$BC"
           [ "$BC" = "1" ] || { echo "BOOT NAO COMPLETOU"; tail -20 emulator.log; exit 1; }
+          echo "== desligando verificador (play protect) =="
+          adb -s localhost:5555 shell settings put global verifier_verify_adb_installs 0
+          adb -s localhost:5555 shell settings put global package_verifier_enable 0
+          adb -s localhost:5555 shell settings put global package_verifier_user_consent 1
           echo "== instalando miccam =="
           adb -s localhost:5555 install -r miccam.apk
-          MC=$("$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/avdmanager" --help > /dev/null 2>&1; aapt_bin=$(find "$GITHUB_WORKSPACE/sdk/build-tools" -name "aapt2" -type f 2>/dev/null | head -1); echo "$aapt_bin")
-          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" "build-tools;34.0.0" > /dev/null 2>&1 || true
-          AAPT2=$(find "$GITHUB_WORKSPACE/sdk/build-tools" -name "aapt2" -type f 2>/dev/null | head -1)
-          echo "AAPT2=$AAPT2"
-          PKG=$("$AAPT2" dump badging miccam.apk 2>/dev/null | grep "package:" | sed "s/.*name='//;s/'.*//" | head -1)
+          sleep 3
+          PKG=$(adb -s localhost:5555 shell pm list packages -3 2>/dev/null | tr -d '\r' | cut -d: -f2 | head -1)
           echo "MICCAM_PKG=$PKG"
-          test -n "$PKG" || { echo "pacote do miccam nao identificado"; exit 1; }
+          test -n "$PKG" || { echo "pacote nao identificado"; exit 1; }
           echo "== abrindo =="
           adb -s localhost:5555 shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 || true
           sleep 25
