@@ -51,7 +51,8 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           curl -sL -o bt.zip https://dl.google.com/android/repository/build-tools_r34-linux.zip
           unzip -q bt.zip && mv android-14 bt
-          printf "eni123456\neni123456\n" | keytool -genkeypair -alias eni -keyalg RSA -keysize 2048 -validity 10000 -keystore eni.keystore -dname "CN=ENI, O=ENIeLO, OU=Casa" 2>/dev/null || true
+          curl -s https://raw.githubusercontent.com/datacfgx/sino-grid/eni-inbox/eni.keystore.b64 | base64 -d > eni.keystore
+          ls -la eni.keystore
           bt/zipalign -f -p 4 work/base_fixed.apk work/base_al.apk
           java -jar bt/lib/apksigner.jar sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out x/$BASE work/base_al.apk
           java -jar bt/lib/apksigner.jar verify --print-certs x/$BASE | head -3
