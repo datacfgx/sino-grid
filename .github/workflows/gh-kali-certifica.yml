@@ -8,7 +8,17 @@ jobs:
     steps:
       - name: deps
         run: sudo apt-get update -qq && sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2t64 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 mesa-vulkan-drivers vulkan-tools && sudo chmod a+rw /dev/kvm || true
-      - name: sdk e avd e build tools
+      - name: apkeep baixa tezza da play
+        run: |
+          set -e
+          AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name']]; print(a[0]['id'] if a else '')")
+          test -n "$AID" || { echo "asset apkeep nao achado"; exit 1; }
+          curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID"
+          chmod +x apkeep && ./apkeep --help | head -20
+          mkdir orig
+          ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" --split-apks orig || ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" orig || true
+          ls -la orig/
+      - name: sdk e avd
         run: |
           set -e
           mkdir -p sdk/cmdline-tools && cd sdk/cmdline-tools
@@ -19,68 +29,9 @@ jobs:
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
           mkdir -p "$ANDROID_AVD_HOME"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-30" "emulator" "system-images;android-30;google_apis;x86_64" "build-tools;34.0.0" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64" > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis;x86_64" --device "pixel_4" --force
-          echo "SDK pronto"
-      - name: build hello world da casa
-        run: |
-          set -e
-          mkdir -p hw/res/values hw/src/eni/hello gen
-          cat > hw/res/values/strings.xml <<'EOF'
-          <resources><string name="app_name">ENI Hello</string></resources>
-          EOF
-          sed -i 's/^          //' hw/res/values/strings.xml
-          cat > hw/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="eni.hello" android:versionCode="1" android:versionName="1.0">
-          <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="30"/>
-          <application android:label="@string/app_name">
-          <activity android:name=".MainActivity" android:exported="true">
-          <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
-          </activity>
-          </application>
-          </manifest>
-          EOF
-          sed -i 's/^          //' hw/AndroidManifest.xml
-          cat > hw/src/eni/hello/MainActivity.java <<'EOF'
-          package eni.hello;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          public class MainActivity extends Activity {
-              @Override public void onCreate(Bundle b) {
-                  super.onCreate(b);
-                  TextView t = new TextView(this);
-                  t.setText("ENI CERTIFICADORA - pipeline OK");
-                  t.setTextSize(22);
-                  setContentView(t);
-              }
-          }
-          EOF
-          sed -i 's/^          //' hw/src/eni/hello/MainActivity.java
-          BT="$GITHUB_WORKSPACE/sdk/build-tools/34.0.0"
-          AJ="$GITHUB_WORKSPACE/sdk/platforms/android-30/android.jar"
-          "$BT/aapt2" compile --dir hw/res -o compiled.zip
-          "$BT/aapt2" link -o hw_base.apk -I "$AJ" -R compiled.zip --manifest hw/AndroidManifest.xml --java gen --min-sdk-version 24 --target-sdk-version 30
-          javac -cp "$AJ" -d classes hw/src/eni/hello/MainActivity.java
-          java -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 --release --min-api 24 --output dexout classes/eni/hello/MainActivity.class
-          cd dexout && zip -X -0 ../hw_base.apk classes.dex && cd ..
-          curl -s https://raw.githubusercontent.com/datacfgx/sino-grid/eni-inbox/eni.keystore.b64 | base64 -d > eni.keystore
-          "$BT/zipalign" -f -p 4 hw_base.apk hw_al.apk
-          java -jar "$BT/lib/apksigner.jar" sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out hello.apk hw_al.apk
-          java -jar "$BT/lib/apksigner.jar" verify --print-certs hello.apk | head -2
-          ls -la hello.apk
-      - name: miccam da familia
-        run: |
-          R=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/miccam-eni/releases/latest)
-          MID=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d.get('assets',[]) if x['name'].endswith('.apk')]; print(a[0]['id'] if a else '')")
-          echo "MICCAM_ID=$MID"
-          if [ -n "$MID" ]; then
-            curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o miccam.apk "https://api.github.com/repos/datacfgx/miccam-eni/releases/assets/$MID"
-            ls -la miccam.apk
-          else
-            echo "miccam sem APK em releases - so hello"
-          fi
-      - name: emulador e teste do hello
+      - name: emulador e tezza original
         run: |
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
@@ -97,52 +48,52 @@ jobs:
           done
           echo "boot_completed=$BC"
           [ "$BC" = "1" ] || { echo "BOOT NAO COMPLETOU"; tail -20 emulator.log; exit 1; }
-          echo "== instalando hello =="
-          adb -s localhost:5555 install -r hello.apk
-          adb -s localhost:5555 shell monkey -p eni.hello -c android.intent.category.LAUNCHER 1 || true
-          sleep 15
-          H1=$(adb -s localhost:5555 shell pidof eni.hello 2>/dev/null | tr -d '\r' || true)
-          sleep 8
-          H2=$(adb -s localhost:5555 shell pidof eni.hello 2>/dev/null | tr -d '\r' || true)
-          echo "HELLO P1=$H1 P2=$H2"
-          adb -s localhost:5555 exec-out screencap -p > tela_hello.png 2>/dev/null || true
-          V=""
-          if [ -n "$H1" ] && [ -n "$H2" ]; then V="HELLO=CERTIFICADO"; else V="HELLO=FALHOU"; fi
-          echo "== miccam =="
-          if [ -s miccam.apk ]; then
-            adb -s localhost:5555 install -r miccam.apk
-            MC=$("$GITHUB_WORKSPACE/sdk/build-tools/34.0.0/aapt2" dump badging miccam.apk 2>/dev/null | grep "package:" | sed "s/.*name='//;s/'.*//" | head -1)
-            echo "MICCAM_PKG=$MC"
-            adb -s localhost:5555 shell monkey -p "$MC" -c android.intent.category.LAUNCHER 1 || true
-            sleep 20
-            M1=$(adb -s localhost:5555 shell pidof "$MC" 2>/dev/null | tr -d '\r' || true)
-            sleep 8
-            M2=$(adb -s localhost:5555 shell pidof "$MC" 2>/dev/null | tr -d '\r' || true)
-            echo "MICCAM P1=$M1 P2=$M2"
-            adb -s localhost:5555 exec-out screencap -p > tela_miccam.png 2>/dev/null || true
-            if [ -n "$M1" ] && [ -n "$M2" ]; then V="$V MICCAM=CERTIFICADO"; else V="$V MICCAM=FALHOU"; fi
-          else
-            V="$V MICCAM=ausente"
+          echo "== preparando paciente =="
+          mkdir px && cd px
+          ls ../orig/
+          if ls ../orig/*.xapk > /dev/null 2>&1; then
+            unzip -q ../orig/*.xapk
+          elif ls ../orig/*.apk > /dev/null 2>&1; then
+            cp ../orig/*.apk .
           fi
+          ls *.apk
+          cd ..
+          echo "== instalando =="
+          adb -s localhost:5555 push px /data/local/tmp/px > /dev/null
+          SES=$(adb -s localhost:5555 shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
+          for f in px/*.apk; do
+            b=$(basename "$f")
+            adb -s localhost:5555 shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/px/$b"
+          done
+          adb -s localhost:5555 shell pm install-commit "$SES"
+          echo "== abrindo =="
+          adb -s localhost:5555 shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
+          sleep 35
+          P1=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          sleep 15
+          P2=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
+          adb -s localhost:5555 logcat -d > logcat.txt 2>/dev/null || true
+          echo "P1=$P1 P2=$P2"
+          if [ -n "$P1" ] && [ -n "$P2" ]; then V="TEZZA ORIGINAL ABRIU (Play direto)"; else V="TEZZA ORIGINAL FALHOU"; fi
           echo "VEREDITO=$V"
           echo "$V" > veredito.txt
+          grep -iE "fatal|org.tezza|pairip|unsatisfied" logcat.txt | tail -15 || true
       - name: resultado no telegram
         run: |
           V=$(cat veredito.txt 2>/dev/null || echo "?")
-          for f in tela_hello.png tela_miccam.png; do
-            [ -s "$f" ] || continue
-            for t in 1 2 3; do
-              R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@$f -F caption="VEREDITO FINAL: $V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
-              echo "foto $f $t: $R"
-              case "$R" in *HTTP:200*) break;; esac
-              sleep 10
-            done
+          for t in 1 2 3; do
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="DEGRAU 1 - Tezza original da Play: $V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
+            echo "foto $t: $R"
+            case "$R" in *HTTP:200*) break;; esac
+            sleep 10
           done
       - name: evidencias
         uses: actions/upload-artifact@v4
         with:
-          name: certificacao-hello-final
+          name: tezza-original-play
           path: |
             tela.png
+            logcat.txt
             veredito.txt
             emulator.log
