@@ -1,4 +1,4 @@
-name: GH-KALI Droid
+name: GH-KALI Android
 on:
   workflow_dispatch:
 jobs:
@@ -9,76 +9,53 @@ jobs:
       - name: tailnet
         uses: tailscale/github-action@v2
         with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+          authkey: ${{ secrets.TS_AUTKEY }}
           tags: tag:ci
-
       - name: qemu + vnc web
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify python3
-
-      - name: resolve e baixa ISO BlissOS (14 primeiro)
+      - name: resolve e baixa ISO BlissOS
         run: |
           set -e
-          CANDS=(
-            "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download"
-            "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Go/Bliss-Go-v15.9-x86_64-OFFICIAL-gapps-20240115.iso/download"
-            "https://sourceforge.net/projects/blissos-dev/files/Beta/Bliss-v15.8.6-x86_64-OFFICIAL-vanilla-20230628.iso/download"
-          )
+          C14="https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS14/OpenGApps/Generic/Bliss-v14.10.3-x86_64-OFFICIAL-opengapps-20240916.iso/download"
+          CVAN="https://sourceforge.net/projects/blissos-dev/files/Beta/Bliss-v15.8.6-x86_64-OFFICIAL-vanilla-20230628.iso/download"
           OK=""
-          for u in "${CANDS[@]}"; do
-            code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 40 "$u" || echo 000)
-            echo "cand $code $u"
-            [ "$code" = "200" ] && [ -z "$OK" ] && OK="$u"
-          done
-          test -n "$OK" || { echo "nenhuma ISO"; exit 1; }
+          code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 40 "$C14" || echo 000)
+          echo "bliss14 head: $code"
+          if [ "$code" = "200" ]; then OK="$C14"; else OK="$CVAN"; fi
           baixou=""
-          for u in "$OK" "${CANDS[@]}"; do
+          for u in "$OK" "$C14" "$CVAN"; do
             rm -f bliss.iso
             curl -sL --max-time 900 --speed-limit 20000 --speed-time 45 -o bliss.iso "$u" && baixou=1 && break
           done
-          test -n "$baixou" || exit 1
+          test -n "$baixou" || { echo "ISO nao baixou"; exit 1; }
           ls -la bliss.iso
           qemu-img create -f qcow2 bliss.qcow2 12G
-
-      - name: boot bliss (VNC :0 + noVNC 7681 + adb 5555, cpu qemu64)
+      - name: boot bliss
         run: |
           sudo chmod a+rw /dev/kvm || true
           mkdir -p isomnt && sudo mount -o loop,ro bliss.iso isomnt
           cp isomnt/kernel isomnt/initrd.img . 2>/dev/null || true
-          APPEND=$(grep -rhoE 'append[[:space:]]+[^
-]*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
-          [ -z "$APPEND" ] && APPEND=$(grep -rhoE 'append[[:space:]]+[^
-]*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | head -1 | sed 's/^append[[:space:]]*//')" DEBUG=2"
+          APPEND=$(grep -rhoE 'append[[:space:]]+.*' isomnt/isolinux/ isomnt/boot/ 2>/dev/null | grep -v INSTALL | grep -E 'DEBUG=2|DEBUG=1' | head -1 | sed 's/^append[[:space:]]*//')
+          if [ -z "$APPEND" ]; then APPEND="root=/dev/ram0 DEBUG=2"; fi
           echo "APPEND=$APPEND"
           sudo umount isomnt
-          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 \
-            -kernel kernel -initrd initrd.img -append "$APPEND console=ttyS0" \
-            -drive file=bliss.qcow2,if=virtio,format=qcow2 \
-            -cdrom bliss.iso \
-            -device virtio-blk-pci,drive=iso0 -drive id=iso0,file=bliss.iso,format=raw,if=none,readonly=on \
-            -vnc 0.0.0.0:0 \
-            -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 \
-            -serial file:qemu-serial.log > qemu.log 2>&1 &
+          nohup qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64 -smp 4 -m 4096 -kernel kernel -initrd initrd.img -append "$APPEND console=ttyS0" -drive file=bliss.qcow2,if=virtio,format=qcow2 -cdrom bliss.iso -vnc 0.0.0.0:0 -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp::5555-:5555 -serial file:qemu-serial.log > qemu.log 2>&1 &
           sleep 5
           nohup websockify --web /usr/share/novnc 7681 localhost:5900 > novnc.log 2>&1 &
           echo "VM e noVNC no ar"
-
       - name: anuncia no telegram
         run: |
           TSIP=$(tailscale ip -4 2>/dev/null || echo "sem-ip")
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            --data-urlencode "text=ANDROID NO AR
-endereco: http://$TSIP:7681 (BlissOS, VNC no navegador)
-vida util: ~6h
-(Tailscale ligado no celular -> abre no navegador)"
+          MSG="ANDROID NO AR
+          endereco: http://$TSIP:7681 (BlissOS, VNC no navegador)
+          vida util: ~6h
+          (Tailscale ligado no celular -> abre no navegador)"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=$MSG"
           echo "anunciado: $TSIP:7681"
-
-      - name: vive 6h (log de saude a cada 10min)
+      - name: vive 6h
         run: |
           for i in $(seq 1 36); do
             sleep 600
             echo "== [$i] $(date -u +%H:%M) =="
             tail -3 qemu-serial.log 2>/dev/null || true
-            adb connect localhost:5555 >/dev/null 2>&1 || true
-            adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null || true
           done
