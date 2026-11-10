@@ -60,7 +60,7 @@ jobs:
           BT="$GITHUB_WORKSPACE/sdk/build-tools/34.0.0"
           AJ="$GITHUB_WORKSPACE/sdk/platforms/android-30/android.jar"
           "$BT/aapt2" compile --dir hw/res -o compiled.zip
-          "$BT/aapt2" link -o hw_base.apk -I "$AJ" --manifest hw/AndroidManifest.xml --java gen --min-sdk-version 24 --target-sdk-version 30
+          "$BT/aapt2" link -o hw_base.apk -I "$AJ" -R compiled.zip --manifest hw/AndroidManifest.xml --java gen --min-sdk-version 24 --target-sdk-version 30
           javac -cp "$AJ" -d classes hw/src/eni/hello/MainActivity.java
           java -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 --release --min-api 24 --output dexout classes/eni/hello/MainActivity.class
           cd dexout && zip -X -0 ../hw_base.apk classes.dex && cd ..
@@ -69,6 +69,17 @@ jobs:
           java -jar "$BT/lib/apksigner.jar" sign --ks eni.keystore --ks-pass pass:eni123456 --key-pass pass:eni123456 --ks-key-alias eni --out hello.apk hw_al.apk
           java -jar "$BT/lib/apksigner.jar" verify --print-certs hello.apk | head -2
           ls -la hello.apk
+      - name: miccam da familia
+        run: |
+          R=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/datacfgx/miccam-eni/releases/latest)
+          MID=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d.get('assets',[]) if x['name'].endswith('.apk')]; print(a[0]['id'] if a else '')")
+          echo "MICCAM_ID=$MID"
+          if [ -n "$MID" ]; then
+            curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o miccam.apk "https://api.github.com/repos/datacfgx/miccam-eni/releases/assets/$MID"
+            ls -la miccam.apk
+          else
+            echo "miccam sem APK em releases - so hello"
+          fi
       - name: emulador e teste do hello
         run: |
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
