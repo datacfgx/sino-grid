@@ -8,33 +8,30 @@ jobs:
     steps:
       - name: deps
         run: sudo apt-get update -qq && sudo apt-get install -y -qq openjdk-17-jre-headless unzip libnss3 libxss1 libasound2t64 libpulse0 libxcursor1 libxinerama1 libxkbcommon0 mesa-vulkan-drivers vulkan-tools && sudo chmod a+rw /dev/kvm || true
-      - name: whatsapp apk
+      - name: tezza original play ou deposito
         run: |
-          ok=""
-          echo "== rota 1: site oficial =="
-          curl -sL --max-time 120 -o zap.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
-          S=$(stat -c%s zap.apk 2>/dev/null || echo 0)
-          echo "tamanho: $S"
-          if [ "$S" -gt 30000000 ] && unzip -l zap.apk > /dev/null 2>&1; then ok=1; echo "oficial OK"; fi
-          if [ -z "$ok" ]; then
-            echo "== rota 2: apkeep com a burn =="
-            AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name']]; print(a[0]['id'] if a else '')")
-            curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID" && chmod +x apkeep
-            ./apkeep -a com.whatsapp -d gplay -e "worldeffects752@gmail.com:293847Ala@#" . 2>&1 | tail -3 || true
-            ls -la *.apk 2>/dev/null || true
-            for f in com.whatsapp*.apk WhatsApp*.apk; do
-              [ -f "$f" ] && S=$(stat -c%s "$f") && [ "$S" -gt 30000000 ] && cp "$f" zap.apk && ok=1 && echo "apkeep OK ($f)" && break
-            done
+          set -e
+          mkdir orig
+          echo "== rota 1: apkeep com a burn (erro visivel) =="
+          AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name']]; print(a[0]['id'] if a else '')")
+          curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID" && chmod +x apkeep
+          ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" -o device=panther orig 2>&1 | tail -5 || echo "APKEEP FALHOU (ver acima)"
+          ls -la orig/ || true
+          if [ -z "$(ls -A orig 2>/dev/null)" ]; then
+            echo "== rota 2: deposito da casa (bytes originais) =="
+            ART=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts?per_page=100" | python3 -c "import json,sys; d=json.load(sys.stdin); a=sorted([x for x in d['artifacts'] if x['name']=='deposito' and x['size']>3e8], key=lambda x:-x['size']); print(a[0]['id'] if a else '')")
+            echo "ART=$ART"
+            test -n "$ART"
+            curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o dep.zip "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts/$ART/zip"
+            ls -la dep.zip
+            unzip -q dep.zip -d depout
+            ls depout/ | head
+            cat depout/tezza_cm_* > orig/paciente.pacote
+            mv orig/paciente.pacote orig/paciente.xapk
           fi
-          if [ -z "$ok" ]; then
-            echo "== rota 3: apkpure =="
-            curl -sL --max-time 120 -A "Mozilla/5.0" -o zap.apk "https://d.apkpure.com/b/APK/com.whatsapp?version=latest" || true
-            S=$(stat -c%s zap.apk 2>/dev/null || echo 0)
-            echo "tamanho: $S"
-            if [ "$S" -gt 30000000 ] && unzip -l zap.apk > /dev/null 2>&1; then ok=1; echo "apkpure OK"; fi
-          fi
-          test -n "$ok" || { echo "nenhuma rota deu zap"; exit 1; }
-          ls -la zap.apk
+          ls -la orig/
+          F=$(ls orig/* | head -1)
+          echo "PACIENTE=$F"
       - name: sdk e avd
         run: |
           set -e
@@ -48,7 +45,7 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis_playstore;x86_64" > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis_playstore;x86_64" --device "pixel_4" --force
-      - name: emulador e whatsapp
+      - name: emulador e tezza original
         run: |
           export ANDROID_HOME="$GITHUB_WORKSPACE/sdk"
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
@@ -67,25 +64,41 @@ jobs:
           [ "$BC" = "1" ] || { echo "BOOT NAO COMPLETOU"; tail -20 emulator.log; exit 1; }
           adb -s localhost:5555 shell settings put global verifier_verify_adb_installs 0
           adb -s localhost:5555 shell settings put global package_verifier_enable 0
-          echo "== instalando whatsapp =="
-          adb -s localhost:5555 install -r zap.apk
+          echo "== preparando paciente =="
+          mkdir px && cd px
+          if ls ../orig/*.xapk > /dev/null 2>&1; then
+            unzip -q ../orig/*.xapk
+          else
+            cp ../orig/* apk 2>/dev/null || cp ../orig/* .
+          fi
+          ls *.apk
+          cd ..
+          echo "== instalando =="
+          adb -s localhost:5555 push px /data/local/tmp/px > /dev/null
+          SES=$(adb -s localhost:5555 shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
+          for f in px/*.apk; do
+            b=$(basename "$f")
+            adb -s localhost:5555 shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/px/$b"
+          done
+          adb -s localhost:5555 shell pm install-commit "$SES"
           echo "== abrindo =="
-          adb -s localhost:5555 shell monkey -p com.whatsapp -c android.intent.category.LAUNCHER 1 || true
-          sleep 30
-          W1=$(adb -s localhost:5555 shell pidof com.whatsapp 2>/dev/null | tr -d '\r' || true)
-          sleep 10
-          W2=$(adb -s localhost:5555 shell pidof com.whatsapp 2>/dev/null | tr -d '\r' || true)
+          adb -s localhost:5555 shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
+          sleep 35
+          P1=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          sleep 15
+          P2=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
           adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
           adb -s localhost:5555 logcat -d > logcat.txt 2>/dev/null || true
-          echo "ZAP P1=$W1 P2=$W2"
-          if [ -n "$W1" ] && [ -n "$W2" ]; then V="WHATSAPP SOBE NO EMULADOR - zap roda na maquina da familia"; else V="WHATSAPP FALHOU"; fi
+          echo "P1=$P1 P2=$P2"
+          if [ -n "$P1" ] && [ -n "$P2" ]; then V="TEZZA ORIGINAL ABRIU (degrau 1 OK)"; else V="TEZZA ORIGINAL FALHOU"; fi
           echo "VEREDITO=$V"
           echo "$V" > veredito.txt
+          grep -iE "fatal|org.tezza|pairip|unsatisfied" logcat.txt | tail -12 || true
       - name: resultado no telegram
         run: |
           V=$(cat veredito.txt 2>/dev/null || echo "?")
           for t in 1 2 3; do
-            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="$V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="DEGRAU 1 (original): $V" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto")
             echo "foto $t: $R"
             case "$R" in *HTTP:200*) break;; esac
             sleep 10
@@ -93,7 +106,7 @@ jobs:
       - name: evidencias
         uses: actions/upload-artifact@v4
         with:
-          name: whatsapp-emulador
+          name: tezza-degrau1-original
           path: |
             tela.png
             logcat.txt
