@@ -57,7 +57,19 @@ jobs:
           nohup emulator -avd eni -no-window -no-audio -gpu swiftshader_indirect -accel on -no-metrics -wipe-data -no-snapshot -no-boot-anim -ports 5554,5555 > emulator.log 2>&1 &
           sleep 15
           ps aux | grep -q "[e]mulator" || { echo "EMULADOR MORTO"; cat emulator.log; exit 1; }
-          adb connect localhost:5555 > /dev/null 2>&1 || true
+          adb kill-server > /dev/null 2>&1 || true
+          adb start-server > /dev/null 2>&1 || true
+          ST=""
+          for i in $(seq 1 30); do
+            adb connect localhost:5555 > /dev/null 2>&1 || true
+            sleep 5
+            ST=$(adb -s localhost:5555 get-state 2>/dev/null | tr -d '\r' || true)
+            echo "adb state [$i]: '$ST'"
+            [ "$ST" = "device" ] && break
+            adb -s localhost:5555 reconnect > /dev/null 2>&1 || true
+            sleep 8
+          done
+          [ "$ST" = "device" ] || { echo "ADB NUNCA AUTORIZOU"; exit 1; }
           BC=""
           for i in $(seq 1 45); do
             sleep 20
