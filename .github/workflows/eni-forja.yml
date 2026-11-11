@@ -1,3 +1,4 @@
+# reindex 11/11 - registro da forja reativado
 name: ENI Forja Flipperdroid
 on:
   workflow_dispatch:
