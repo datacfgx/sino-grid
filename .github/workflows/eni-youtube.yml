@@ -22,7 +22,7 @@ jobs:
           ok=""
           for proxy in $LIST; do
             code=$(curl -s -x "http://$proxy" --max-time 12 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
-            [ "$code" != "204" ] && continue
+            if [ "$code" != "204" ]; then continue; fi
             echo "proxy vivo: $proxy - tentando download"
             if LOG=$(./yt-dlp --proxy "http://$proxy" --socket-timeout 15 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
               ok=1
