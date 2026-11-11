@@ -88,11 +88,41 @@ jobs:
               sleep 10
             done
           fi
-      - name: vive 6h com foto da tela a cada 30min
+      - name: vive 6h com AUTO-PERMISSAO total (regra de LO)
         run: |
           export PATH="$GITHUB_WORKSPACE/sdk/platform-tools:$PATH"
+          adb kill-server > /dev/null 2>&1 || true
+          adb start-server > /dev/null 2>&1 || true
+          SERIAL=""
+          for i in $(seq 1 40); do
+            adb connect localhost:5555 > /dev/null 2>&1 || true
+            sleep 5
+            SERIAL=$(adb devices 2>/dev/null | grep -E "emulator|5555" | grep -E "device$|unauthorized$" | awk '{print $1}' | head -1)
+            echo "tentativa $i: SERIAL='$SERIAL'"
+            [ -n "$SERIAL" ] && break
+            sleep 8
+          done
+          [ -n "$SERIAL" ] || { echo "ADB NUNCA APARECEU"; adb devices -l; exit 1; }
+          adb -s $SERIAL shell settings put global verifier_verify_adb_installs 0
+          adb -s $SERIAL shell settings put global package_verifier_enable 0
+          adb -s $SERIAL shell settings put global package_verifier_user_consent 1
+          PKGS_CONHECIDOS=" "
           for i in $(seq 1 12); do
-            sleep 1800
-            adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
-            [ -s tela.png ] && curl -s -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="[tela v8 $i]" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto" >/dev/null || true
+            for j in $(seq 1 10); do
+              for pkg in $(adb -s $SERIAL shell pm list packages -3 2>/dev/null | tr -d '\r' | cut -d: -f2); do
+                case "$PKGS_CONHECIDOS" in
+                  *" $pkg "*) ;;
+                  *)
+                    echo "novo app: $pkg -> concedendo TODAS as permissoes (regra LO)"
+                    for p in $(adb -s $SERIAL shell dumpsys package "$pkg" | grep -oE "android.permission.[A-Z_]+" | sort -u); do
+                      adb -s $SERIAL shell pm grant "$pkg" "$p" 2>/dev/null || true
+                    done
+                    PKGS_CONHECIDOS="$PKGS_CONHECIDOS$pkg "
+                    ;;
+                esac
+              done
+              sleep 180
+            done
+            adb -s $SERIAL exec-out screencap -p > tela.png 2>/dev/null || true
+            [ -s tela.png ] && curl -s -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F photo=@tela.png -F caption="[tela + auto-permissao total $i]" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendPhoto" >/dev/null || true
           done
