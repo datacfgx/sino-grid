@@ -10,14 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: yt-dlp e download
+      - name: yt-dlp via ProxyBR (IP residencial)
         run: |
           curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x yt-dlp
           ./yt-dlp --version
-          if ! LOG=$(./yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
-            echo "$LOG" | tail -15
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=ENI YouTube FALHOU: $(echo "$LOG" | tail -6 | tr "\n" " | ")"
+          L1=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http&timeout=8000&country=BR&ssl=all&anonymity=all")
+          L2=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=http&country=BR")
+          LIST=$(printf '%s\n%s\n' "$L1" "$L2" | grep ':' | sort -u | head -20)
+          echo "proxies BR coletados: $(echo "$LIST" | wc -l)"
+          ok=""
+          for proxy in $LIST; do
+            code=$(curl -s -x "http://$proxy" --max-time 12 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
+            [ "$code" != "204" ] && continue
+            echo "proxy vivo: $proxy - tentando download"
+            if LOG=$(./yt-dlp --proxy "http://$proxy" --socket-timeout 15 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
+              ok=1
+              echo "BAIXOU via $proxy"
+              echo "$LOG" | tail -3
+              break
+            else
+              echo "falhou via $proxy: $(echo "$LOG" | tail -2 | tr "\n" " ")"
+            fi
+          done
+          if [ -z "$ok" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=ENI YouTube: nenhum proxy BR concluiu o download (tente de novo - lista muda)"
             exit 1
           fi
           ls -la video.*
