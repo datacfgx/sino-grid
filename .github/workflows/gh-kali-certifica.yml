@@ -13,13 +13,17 @@ jobs:
           set -e
           mkdir orig
           echo "== rota 1: apkeep com a burn (erro visivel) =="
-          AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name']]; print(a[0]['id'] if a else '')")
-          curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID" && chmod +x apkeep
+          AID=$(curl -s https://api.github.com/repos/EFForg/apkeep/releases/latest | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d['assets'] if 'x86_64' in x['name'] and 'linux' in x['name'] and 'gnu' in x['name'] and 'sha' not in x['name'].lower() and 'sig' not in x['name'].lower()]; print(a[0]['id'] if a else '')")
+          echo "AID=$AID"
+          curl -sL -H "Accept: application/octet-stream" -o apkeep "https://api.github.com/repos/EFForg/apkeep/releases/assets/$AID"
+          chmod +x apkeep
+          file apkeep
+          head -c 4 apkeep | od -c | head -1
           ./apkeep -a com.tezza -d gplay -e "worldeffects752@gmail.com:293847Ala@#" -o device=panther orig 2>&1 | tail -5 || echo "APKEEP FALHOU (ver acima)"
           ls -la orig/ || true
           if [ -z "$(ls -A orig 2>/dev/null)" ]; then
             echo "== rota 2: deposito da casa (bytes originais) =="
-            ART=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts?per_page=100" | python3 -c "import json,sys; d=json.load(sys.stdin); a=sorted([x for x in d['artifacts'] if x['name']=='deposito' and x['size']>3e8], key=lambda x:-x['size']); print(a[0]['id'] if a else '')")
+            ART=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts?per_page=100" | python3 -c "import json,sys; d=json.load(sys.stdin); a=sorted([x for x in d['artifacts'] if x['name']=='deposito' and x.get('size_in_bytes',0)>3e8], key=lambda x:-x.get('size_in_bytes',0)); print(a[0]['id'] if a else '')")
             echo "ART=$ART"
             test -n "$ART"
             curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o dep.zip "https://api.github.com/repos/datacfgx/sino-grid/actions/artifacts/$ART/zip"
