@@ -1,0 +1,17 @@
+name: ENI Manda Dossie
+on:
+  workflow_dispatch:
+jobs:
+  manda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: baixa o dossie do repo e manda no telegram
+        run: |
+          curl -sL "https://raw.githubusercontent.com/datacfgx/sino-grid/main/DOSSI%C3%8A-GH-KALI-ANDROID-v1.pdf" -o dossie.pdf
+          ls -la dossie.pdf
+          for t in 1 2 3; do
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" -F document=@dossie.pdf -F caption="DOSSIÊ GH-KALI ANDROID v1.0 - a engrenagem que sobe as maquinas (md+pdf no sino-grid)" "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument")
+            echo "tentativa $t: $R"
+            case "$R" in *HTTP:200*) break;; esac
+            sleep 8
+          done
