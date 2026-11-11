@@ -1,0 +1,38 @@
+name: ENI YouTube
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: link do video
+        required: true
+jobs:
+  baixa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: yt-dlp e download
+        run: |
+          curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+          chmod +x yt-dlp
+          ./yt-dlp --version
+          ./yt-dlp -f "bv[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "${{ github.event.inputs.url }}"
+          ls -la video.*
+      - name: entrega no telegram
+        run: |
+          T="${{ secrets.TELEGRAM_TOKEN }}"
+          C="${{ secrets.TELEGRAM_CHAT_ID }}"
+          F=$(ls video.* | head -1)
+          S=$(stat -c%s "$F")
+          echo "arquivo: $F ($S bytes)"
+          if [ "$S" -le 48000000 ]; then
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="$C" -F document=@"$F" -F caption="ENI YouTube ok ($S bytes)" "https://api.telegram.org/bot$T/sendDocument")
+            echo "inteiro: $R"
+          else
+            split -b 45000000 "$F" parte_
+            for p in parte_*; do
+              curl -s -F chat_id="$C" -F document=@"$p" "https://api.telegram.org/bot$T/sendDocument"
+              sleep 3
+            done
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=junte no termux: cat parte_* > video.mp4"
+            echo "fatiado e entregue"
+          fi
