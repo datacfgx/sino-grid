@@ -59,27 +59,26 @@ jobs:
           ps aux | grep -q "[e]mulator" || { echo "EMULADOR MORTO"; cat emulator.log; exit 1; }
           adb kill-server > /dev/null 2>&1 || true
           adb start-server > /dev/null 2>&1 || true
-          ST=""
-          for i in $(seq 1 30); do
+          SERIAL=""
+          for i in $(seq 1 40); do
             adb connect localhost:5555 > /dev/null 2>&1 || true
             sleep 5
-            ST=$(adb -s localhost:5555 get-state 2>/dev/null | tr -d '\r' || true)
-            echo "adb state [$i]: '$ST'"
-            [ "$ST" = "device" ] && break
-            adb -s localhost:5555 reconnect > /dev/null 2>&1 || true
+            SERIAL=$(adb devices 2>/dev/null | grep -E "emulator|5555" | grep -E "device$|unauthorized$" | awk '{print $1}' | head -1)
+            echo "tentativa $i: SERIAL='$SERIAL'"
+            [ -n "$SERIAL" ] && break
             sleep 8
           done
-          [ "$ST" = "device" ] || { echo "ADB NUNCA AUTORIZOU"; exit 1; }
+          [ -n "$SERIAL" ] || { echo "ADB NUNCA APARECEU"; adb devices -l; tail -30 emulator.log; exit 1; }
           BC=""
           for i in $(seq 1 45); do
-            sleep 20
-            BC=$(adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            sleep 15
+            BC=$(adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
             [ "$BC" = "1" ] && break
           done
           echo "boot_completed=$BC"
           [ "$BC" = "1" ] || { echo "BOOT NAO COMPLETOU"; tail -20 emulator.log; exit 1; }
-          adb -s localhost:5555 shell settings put global verifier_verify_adb_installs 0
-          adb -s localhost:5555 shell settings put global package_verifier_enable 0
+          adb -s $SERIAL shell settings put global verifier_verify_adb_installs 0
+          adb -s $SERIAL shell settings put global package_verifier_enable 0
           echo "== preparando paciente =="
           mkdir px && cd px
           if ls ../orig/*.xapk > /dev/null 2>&1; then
@@ -90,21 +89,21 @@ jobs:
           ls *.apk
           cd ..
           echo "== instalando =="
-          adb -s localhost:5555 push px /data/local/tmp/px > /dev/null
-          SES=$(adb -s localhost:5555 shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
+          adb -s $SERIAL push px /data/local/tmp/px > /dev/null
+          SES=$(adb -s $SERIAL shell pm install-create -r 2>&1 | grep -oE '[0-9]+' | head -1)
           for f in px/*.apk; do
             b=$(basename "$f")
-            adb -s localhost:5555 shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/px/$b"
+            adb -s $SERIAL shell pm install-write "$SES" "${b%.apk}" "/data/local/tmp/px/$b"
           done
-          adb -s localhost:5555 shell pm install-commit "$SES"
+          adb -s $SERIAL shell pm install-commit "$SES"
           echo "== abrindo =="
-          adb -s localhost:5555 shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
+          adb -s $SERIAL shell monkey -p org.tezza -c android.intent.category.LAUNCHER 1 || true
           sleep 35
-          P1=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          P1=$(adb -s $SERIAL shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
           sleep 15
-          P2=$(adb -s localhost:5555 shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
-          adb -s localhost:5555 exec-out screencap -p > tela.png 2>/dev/null || true
-          adb -s localhost:5555 logcat -d > logcat.txt 2>/dev/null || true
+          P2=$(adb -s $SERIAL shell pidof org.tezza 2>/dev/null | tr -d '\r' || true)
+          adb -s $SERIAL exec-out screencap -p > tela.png 2>/dev/null || true
+          adb -s $SERIAL logcat -d > logcat.txt 2>/dev/null || true
           echo "P1=$P1 P2=$P2"
           if [ -n "$P1" ] && [ -n "$P2" ]; then V="TEZZA ORIGINAL ABRIU (degrau 1 OK)"; else V="TEZZA ORIGINAL FALHOU"; fi
           echo "VEREDITO=$V"
