@@ -16,79 +16,164 @@
     .locals 4
 
     new-instance v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;
-
     invoke-direct {v0}, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;-><init>()V
-
     sput-object v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->INSTANCE:Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;
 
-    const/16 v0, 0xa
-
+    const/16 v0, 0x32
     new-array v0, v0, [I
-
     const/4 v1, 0x0
-
     const v2, 0x1c5
-
     aput v2, v0, v1
-
     const/4 v1, 0x1
-
     const v2, 0xe98
-
     aput v2, v0, v1
-
     const/4 v1, 0x2
-
     const v2, 0xf0c
-
     aput v2, v0, v1
-
     const/4 v1, 0x3
-
     const v2, 0x2000
-
     aput v2, v0, v1
-
     const/4 v1, 0x4
-
     const v2, 0x3001
-
     aput v2, v0, v1
-
     const/4 v1, 0x5
-
     const v2, 0x3b41
-
     aput v2, v0, v1
-
     const/4 v1, 0x6
-
     const v2, 0x5bc9
-
     aput v2, v0, v1
-
     const/4 v1, 0x7
-
     const v2, 0x8263
-
     aput v2, v0, v1
-
-    const/16 v1, 0x8
-
+    const/4 v1, 0x8
     const v2, 0xa168
-
     aput v2, v0, v1
-
-    const/16 v1, 0x9
-
+    const/4 v1, 0x9
     const v2, 0xc95c
-
     aput v2, v0, v1
-
+    const/4 v1, 0xa
+    const v2, 0xdae096
+    aput v2, v0, v1
+    const/4 v1, 0xb
+    const v2, 0xa83c10
+    aput v2, v0, v1
+    const/4 v1, 0xc
+    const v2, 0x9b7339
+    aput v2, v0, v1
+    const/4 v1, 0xd
+    const v2, 0x202b3d
+    aput v2, v0, v1
+    const/4 v1, 0xe
+    const v2, 0x70000
+    aput v2, v0, v1
+    const/4 v1, 0xf
+    const v2, 0x470000
+    aput v2, v0, v1
+    const/16 v1, 0x10
+    const v2, 0x2d815
+    aput v2, v0, v1
+    const/16 v1, 0x11
+    const v2, 0x1ee890
+    aput v2, v0, v1
+    const/16 v1, 0x12
+    const v2, 0xe6e771
+    aput v2, v0, v1
+    const/16 v1, 0x13
+    const v2, 0xcab6b8
+    aput v2, v0, v1
+    const/16 v1, 0x14
+    const v2, 0x9c3997
+    aput v2, v0, v1
+    const/16 v1, 0x15
+    const v2, 0x9939bc
+    aput v2, v0, v1
+    const/16 v1, 0x16
+    const v2, 0xd7102f
+    aput v2, v0, v1
+    const/16 v1, 0x17
+    const v2, 0xca7030
+    aput v2, v0, v1
+    const/16 v1, 0x18
+    const v2, 0x5aa91
+    aput v2, v0, v1
+    const/16 v1, 0x19
+    const v2, 0x91aa05
+    aput v2, v0, v1
+    const/16 v1, 0x1a
+    const v2, 0x3aa91
+    aput v2, v0, v1
+    const/16 v1, 0x1b
+    const v2, 0x91aa03
+    aput v2, v0, v1
+    const/16 v1, 0x1c
+    const v2, 0x2aa91
+    aput v2, v0, v1
+    const/16 v1, 0x1d
+    const v2, 0x91aa02
+    aput v2, v0, v1
+    const/16 v1, 0x1e
+    const v2, 0x38f16
+    aput v2, v0, v1
+    const/16 v1, 0x1f
+    const v2, 0xaa91
+    aput v2, v0, v1
+    const/16 v1, 0x20
+    const v2, 0x91aa00
+    aput v2, v0, v1
+    const/16 v1, 0x21
+    const v2, 0xd6e870
+    aput v2, v0, v1
+    const/16 v1, 0x22
+    const v2, 0x4aa91
+    aput v2, v0, v1
+    const/16 v1, 0x23
+    const v2, 0x91aa04
+    aput v2, v0, v1
+    const/16 v1, 0x24
+    const v2, 0x1aa91
+    aput v2, v0, v1
+    const/16 v1, 0x25
+    const v2, 0x91aa01
+    aput v2, v0, v1
+    const/16 v1, 0x26
+    const v2, 0x109201
+    aput v2, v0, v1
+    const/16 v1, 0x27
+    const v2, 0xdf271c
+    aput v2, v0, v1
+    const/16 v1, 0x28
+    const v2, 0x532011
+    aput v2, v0, v1
+    const/16 v1, 0x29
+    const v2, 0xda5200
+    aput v2, v0, v1
+    const/16 v1, 0x2a
+    const v2, 0x52da
+    aput v2, v0, v1
+    const/16 v1, 0x2b
+    const v2, 0x124366
+    aput v2, v0, v1
+    const/16 v1, 0x2c
+    const v2, 0x8d13b9
+    aput v2, v0, v1
+    const/16 v1, 0x2d
+    const v2, 0x1f5865
+    aput v2, v0, v1
+    const/16 v1, 0x2e
+    const v2, 0x641630
+    aput v2, v0, v1
+    const/16 v1, 0x2f
+    const v2, 0x8e5550
+    aput v2, v0, v1
+    const/16 v1, 0x30
+    const v2, 0x21521d
+    aput v2, v0, v1
+    const/16 v1, 0x31
+    const v2, 0xcd8256
+    aput v2, v0, v1
     sput-object v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->modelIds:[I
 
-    const/4 v0, 0x1
-
+    const/4 v0, 0x2
     sput v0, Lcom/example/flipperdroid/model/object/FastPairAdvertisementSetGenerator;->setsPerModel:I
 
     return-void
