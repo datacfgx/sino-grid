@@ -1,4 +1,3 @@
-# reindex 11/11 - registro da forja reativado
 name: ENI Forja Flipperdroid
 on:
   workflow_dispatch:
@@ -42,8 +41,7 @@ jobs:
           for N in 3 6 7 8; do
             java -cp $CP org.jf.baksmali.Main d classes$N.dex -o src$N
             cp -rv ../patches/smali_classes$N/. src$N/
-            if ! OUT=$(java -cp $CP org.jf.smali.Main a src$N -o classes$N.dex 2>&1); then echo "$OUT"; echo "SMALI FALHOU em classes$N"; exit 1; fi
-  if [ -n "$OUT" ]; then echo "smali classes$N avisou: $(echo "$OUT" | tail -4)"; fi
+            java -cp $CP org.jf.smali.Main a src$N -o classes$N.dex || { echo "SMALI FALHOU em classes$N"; exit 1; }
           done
           zip -X -q ../original.apk classes3.dex classes6.dex classes7.dex classes8.dex
           unzip -p ../original.apk classes7.dex | strings | grep -q "ANDROID" || { echo "PATCH NAO EMBARCOU em classes7"; exit 1; }
