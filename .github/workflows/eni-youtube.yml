@@ -10,34 +10,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: yt-dlp via ProxyBR (IP residencial)
+      - name: cobalt instances + proxy roulette
         run: |
           set +e
           curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x yt-dlp
-          ./yt-dlp --version
-          P1=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http&timeout=8000&ssl=all&anonymity=all" | grep -E ':' | sed 's|^|http://|')
-          P2=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=socks5&timeout=8000" | grep -E ':' | sed 's|^|socks5://|')
-          P3=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=https" | grep -E ':' | sed 's|^|http://|')
-          P4=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=socks5" | grep -E ':' | sed 's|^|socks5://|')
-          LIST=$(printf '%s\n%s\n%s\n%s\n' "$P1" "$P2" "$P3" "$P4" | sort -u | head -40)
-          echo "proxies coletados (mundo): $(echo "$LIST" | wc -l)"
+          LINK="${{ github.event.inputs.url }}"
           ok=""
-          for proxy in $LIST; do
-            code=$(curl -s -x "$proxy" --max-time 8 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
-            if [ "$code" != "204" ]; then continue; fi
-            echo "proxy vivo: $proxy - tentando download"
-            if LOG=$(./yt-dlp --proxy "http://$proxy" --socket-timeout 20 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
-              ok=1
-              echo "BAIXOU via $proxy"
-              echo "$LOG" | tail -3
-              break
-            else
-              echo "falhou via $proxy: $(echo "$LOG" | tail -2 | tr "\n" " ")"
+          echo "== fase 1: cobalt instances =="
+          APIS=$(curl -s --max-time 20 "https://instances.cobalt.best/instances.json" | python3 -c "import json,sys; d=json.load(sys.stdin); inst=d if isinstance(d,list) else d.get('instances',[]); print(chr(10).join(i.get('api','') for i in inst if isinstance(i,dict) and i.get('api')))" 2>/dev/null)
+          echo "instances cobalt: $(echo "$APIS" | grep -c http)"
+          for api in $APIS; do
+            RESP=$(curl -s --max-time 30 -X POST "${api%/}/json" -H "Accept: application/json" -H "Content-Type: application/json" -d "{\"url\":\"$LINK\",\"downloadMode\":\"auto\",\"videoQuality\":\"720\"}" 2>/dev/null)
+            DL=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('url',''))" 2>/dev/null)
+            if [ -n "$DL" ]; then
+              echo "cobalt respondeu: $api"
+              curl -sL --max-time 300 -o video.mp4 "$DL" && ok=1 && break
             fi
           done
           if [ -z "$ok" ]; then
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=ENI YouTube: nenhum proxy BR concluiu o download (tente de novo - lista muda)"
+            echo "== fase 2: proxy roulette =="
+            P1=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http&timeout=8000&ssl=all&anonymity=all" | grep -E ':' | sed 's|^|http://|')
+            P2=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=socks5&timeout=8000" | grep -E ':' | sed 's|^|socks5://|')
+            LIST=$(printf '%s\n%s\n' "$P1" "$P2" | sort -u | head -30)
+            echo "proxies: $(echo "$LIST" | grep -c '://')"
+            for proxy in $LIST; do
+              code=$(curl -s -x "$proxy" --max-time 8 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
+              if [ "$code" != "204" ]; then continue; fi
+              echo "proxy vivo: $proxy - tentando"
+              if LOG=$(./yt-dlp --proxy "$proxy" --socket-timeout 20 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "$LINK" 2>&1); then
+                ok=1; echo "BAIXOU via $proxy"; break
+              else
+                echo "falhou via $proxy"
+              fi
+            done
+          fi
+          if [ -z "$ok" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=ENI YouTube: cobalt e proxies falharam todos. A rota factory pra YouTube precisa de cookies ou proxy pago - bora decidir."
             exit 1
           fi
           ls -la video.*
