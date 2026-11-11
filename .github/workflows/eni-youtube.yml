@@ -12,6 +12,7 @@ jobs:
     steps:
       - name: yt-dlp via ProxyBR (IP residencial)
         run: |
+          set +e
           curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x yt-dlp
           ./yt-dlp --version
