@@ -16,16 +16,18 @@ jobs:
           curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x yt-dlp
           ./yt-dlp --version
-          L1=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http&timeout=8000&country=BR&ssl=all&anonymity=all")
-          L2=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=http&country=BR")
-          LIST=$(printf '%s\n%s\n' "$L1" "$L2" | grep ':' | sort -u | head -20)
-          echo "proxies BR coletados: $(echo "$LIST" | wc -l)"
+          P1=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http&timeout=8000&ssl=all&anonymity=all" | grep -E ':' | sed 's|^|http://|')
+          P2=$(curl -s --max-time 40 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=socks5&timeout=8000" | grep -E ':' | sed 's|^|socks5://|')
+          P3=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=https" | grep -E ':' | sed 's|^|http://|')
+          P4=$(curl -s --max-time 40 "https://www.proxy-list.download/api/v1/get?type=socks5" | grep -E ':' | sed 's|^|socks5://|')
+          LIST=$(printf '%s\n%s\n%s\n%s\n' "$P1" "$P2" "$P3" "$P4" | sort -u | head -40)
+          echo "proxies coletados (mundo): $(echo "$LIST" | wc -l)"
           ok=""
           for proxy in $LIST; do
-            code=$(curl -s -x "http://$proxy" --max-time 12 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
+            code=$(curl -s -x "$proxy" --max-time 8 -o /dev/null -w "%{http_code}" https://www.youtube.com/generate_204 2>/dev/null)
             if [ "$code" != "204" ]; then continue; fi
             echo "proxy vivo: $proxy - tentando download"
-            if LOG=$(./yt-dlp --proxy "http://$proxy" --socket-timeout 15 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
+            if LOG=$(./yt-dlp --proxy "http://$proxy" --socket-timeout 20 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist --extractor-args "youtube:player_client=android,web" "${{ github.event.inputs.url }}" 2>&1); then
               ok=1
               echo "BAIXOU via $proxy"
               echo "$LOG" | tail -3
