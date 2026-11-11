@@ -27,8 +27,8 @@ jobs:
           export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/avd"
           mkdir -p "$ANDROID_AVD_HOME"
           yes | "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64" "platforms;android-30" > /dev/null
-          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis;x86_64" --device "pixel_4" --force
+          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-30;google_apis_playstore;x86_64" "platforms;android-30" > /dev/null
+          "$GITHUB_WORKSPACE/sdk/cmdline-tools/latest/bin/avdmanager" create avd -n eni -k "system-images;android-30;google_apis_playstore;x86_64" --device "pixel_4" --force
           echo "AVD criado"
       - name: sobe emulador com tela via Xvfb
         run: |
