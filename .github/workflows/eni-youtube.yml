@@ -17,6 +17,20 @@ jobs:
           chmod +x yt-dlp
           LINK="${{ github.event.inputs.url }}"
           ok=""
+          echo "== fase 0.5: piped instances (proxy do stream) =="
+          VID=$(echo "$LINK" | grep -oE 'v=[A-Za-z0-9_-]{11}' | cut -d= -f2)
+          [ -z "$VID" ] && VID=$(echo "$LINK" | grep -oE 'be/[A-Za-z0-9_-]{11}' | cut -d/ -f2)
+          echo "video id: $VID"
+          if [ -n "$VID" ]; then
+            for PAPI in "https://pipedapi.kavin.rocks" "https://api.piped.private.coffee" "https://pipedapi.adminforge.de" "https://pipedapi.reallyaweso.me" "https://api.piped.yt"; do
+              ST=$(curl -s --max-time 20 "$PAPI/streams/$VID" 2>/dev/null)
+              DL=$(echo "$ST" | python3 -c "import json,sys; d=json.load(sys.stdin); vs=[s for s in d.get('videoStreams',[]) if s.get('format')=='MP4' and s.get('videoOnly')==False]; vs.sort(key=lambda s:-s.get('bitrate',0)); print(vs[0]['url'] if vs else '')" 2>/dev/null)
+              if [ -n "$DL" ]; then
+                echo "piped respondeu: $PAPI"
+                curl -sL --max-time 300 -o video.mp4 "$DL" && ok=1 && break
+              fi
+            done
+          fi
           echo "== fase 1: cobalt instances =="
           APIS=$(curl -s --max-time 20 "https://instances.cobalt.best/instances.json" | python3 -c "import json,sys; d=json.load(sys.stdin); inst=d if isinstance(d,list) else d.get('instances',[]); print(chr(10).join(i.get('api','') for i in inst if isinstance(i,dict) and i.get('api')))" 2>/dev/null)
           echo "instances cobalt: $(echo "$APIS" | grep -c http)"
