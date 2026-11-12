@@ -23,7 +23,10 @@ jobs:
           PROXYFLAG=""
           if [ -n "${{ secrets.PROXY_URL }}" ]; then
             PROXYFLAG="--proxy ${{ secrets.PROXY_URL }}"
-            echo "PROXY_URL configurado - roteando tudo"
+            echo "== preflight do heroi =="
+            curl -s -x "${{ secrets.PROXY_URL }}" --max-time 15 -o /dev/null -w "youtube generate_204: %{http_code}\n" https://www.youtube.com/generate_204
+            EGRESS=$(curl -s -x "${{ secrets.PROXY_URL }}" --max-time 15 https://api.ipify.org 2>/dev/null)
+            echo "ip de saida do heroi: $EGRESS"
           fi
           echo "== fase 0: direto (cookies + proxy se houver) =="
           if LOG=$(./yt-dlp $PROXYFLAG --cookies cookies.txt --socket-timeout 25 --retries 2 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" 2>&1); then
