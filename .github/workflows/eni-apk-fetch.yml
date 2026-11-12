@@ -111,6 +111,14 @@ jobs:
           sha256sum "app.$EXT" > /tmp/out/sha256.txt
           echo "fonte: $(cat /tmp/dl.txt)" > /tmp/out/fonte.txt
           echo "ext: $EXT" > /tmp/out/ext.txt
+          TAG="apk-$APP-$V"
+          GH="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+          API="https://api.github.com/repos/${{ github.repository }}"
+          curl -s -X DELETE -H "$GH" "$API/releases/tags/$TAG" > /dev/null 2>&1 || true
+          REL=$(curl -s -X POST -H "$GH" -H "Accept: application/vnd.github+json" "$API/releases" -d "{\"tag_name\":\"$TAG\",\"name\":\"$APP oficial limpo ($V)\",\"body\":\"fonte: $(cat /tmp/dl.txt)\\nsha256: $(cut -d' ' -f1 /tmp/out/sha256.txt) — junta as partes do branch apk-parts se preferir\\ncat parte_* > $APP.$EXT\"}")
+          REL_ID=$(echo "$REL" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+          echo "release id: $REL_ID"
+          curl -s -X POST -H "$GH" -H "Content-Type: application/octet-stream" --data-binary @"app.$EXT" "https://uploads.github.com/repos/${{ github.repository }}/releases/$REL_ID/assets?name=$APP.$EXT" | python3 -c "import sys,json;d=json.load(sys.stdin);print('asset ok:',d.get('browser_download_url',str(d)[:150]))"
           rm -f "app.$EXT"
           git config user.email "eni@fabrica.local"
           git config user.name "eni-fabrica"
