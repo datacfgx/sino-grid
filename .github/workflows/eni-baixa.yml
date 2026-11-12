@@ -62,12 +62,16 @@ jobs:
             exit 1
           fi
 
-          curl -sL --max-time 280 -o saida "$DURL"
-          S=$(stat -c%s saida)
+          curl -sL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" --max-time 280 -o saida "$DURL"
+          S=$(stat -c%s saida 2>/dev/null || echo 0)
           echo "baixado: $S bytes"
+          if [ "$S" -lt 10000 ]; then
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: host da midia recusou o download (0 bytes). Rede pode estar bloqueando datacenter." || true
+            exit 1
+          fi
           if [ "$S" -le 48000000 ]; then
-            curl -s -F chat_id="$C" -F document=@saida -F caption="ENI Baixa ok: $FNAME ($S bytes)" "https://api.telegram.org/bot$T/sendDocument"
-            echo " inteiro entregue"
+            R2=$(curl -s -F chat_id="$C" -F document=@saida -F caption="ENI Baixa ok: $FNAME ($S bytes)" "https://api.telegram.org/bot$T/sendDocument")
+            echo "$R2" | grep -q '"ok":true' && echo " inteiro entregue" || { echo " telegram recusou: $R2"; exit 1; }
           else
             split -b 45000000 saida parte_
             for p in parte_*; do
