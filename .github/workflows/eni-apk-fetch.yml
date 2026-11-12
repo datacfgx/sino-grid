@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: cacar fonte (apkcombo -> apkmonk -> apkpure)
+      - name: cacar fonte (apkpure -> uptodown)
         run: |
           python3 << 'PY'
           import urllib.request, re, sys, datetime
@@ -28,21 +28,22 @@ jobs:
               if ref: h["Referer"] = ref
               return urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=35).read().decode("utf-8", "replace")
 
-          def rank(links, ctx):
-              nota = 0
-              c = ctx.lower()
-              if ".apk" in c and not any(x in c for x in (".xapk", ".apks", ".apkm", "bundle")): nota += 3
-              if "arm64-v8a" in c: nota += 2
-              if "universal" in c or "nodpi" in c: nota += 1
+          def rank(link, ctx):
+              c = ctx.lower(); l = link.lower(); nota = 0
+              if pkg in l: nota += 10
+              if "d.apkpure.com/b/apk/" in l: nota += 4
+              if "d.apkpure.com/b/xapk/" in l: nota += 2
+              if "custom" in l or "aegon" in l or "installer" in c: nota -= 10
+              if ".xapk" in l: nota += 0
+              elif ".apk" in l: nota += 2
+              if any(x in l for x in (".apkm", ".apks")): nota -= 5
               return nota
 
           fontes = [
-              ("apkcombo", f"https://apkcombo.com/{slug}/{pkg}/download/apk",
-                            r'href="(https://download\.apkcombo\.com/[^"]+)"'),
-              ("apkmonk",  f"https://www.apkmonk.com/app/{pkg}/",
-                            r'"(https://cdn\.apkmonk\.com/[^"]+\.apk[^"]*)"'),
               ("apkpure",  f"https://apkpure.com/{slug}/{pkg}/download",
                             r'"(https://d\.apkpure\.com/[^"]+)"'),
+              ("uptodown", f"https://{slug}.en.uptodown.com/android/download",
+                            r'"(https://dw\.uptodown\.com/[^"]+)"'),
           ]
 
           achou = None
@@ -57,48 +58,56 @@ jobs:
               for m in re.finditer(rx, page):
                   l = m.group(1).replace("&amp;", "&")
                   ctx = page[max(0, m.start()-300):m.end()+300]
-                  cands.append((rank([l], ctx), l))
-              cands = [c for c in cands if c[0] > 0]
+                  s = rank(l, ctx)
+                  print(f"   cand nota={s} {l[:110]}")
+                  cands.append((s, l))
               cands.sort(reverse=True)
+              cands = [c for c in cands if c[0] >= 8]
               if cands:
                   achou = (nome, cands[0][1])
                   break
-              print("   sem link candidato")
 
           if not achou:
               sys.exit("todas as fontes falharam")
           nome, link = achou
+          ext = "xapk" if ".xapk" in link.lower() else "apk"
           vers = datetime.datetime.now().strftime("%Y%m%d") + "-" + nome
           open("/tmp/dl.txt", "w").write(link)
           open("/tmp/vers.txt", "w").write(vers)
+          open("/tmp/ext.txt", "w").write(ext)
           print("FONTE:", nome)
           print("VERSAO:", vers)
+          print("EXT:", ext)
           print("DIRETO:", link)
           PY
 
       - name: baixar e conferir
         run: |
           set -e
+          EXT=$(cat /tmp/ext.txt)
           DL=$(cat /tmp/dl.txt)
-          curl -sSL --retry 3 -A "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile Safari/537.36" -o app.apk "$DL"
+          curl -sSL --retry 3 -A "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile Safari/537.36" -e "https://apkpure.com/" -o "app.$EXT" "$DL"
           python3 - << 'PY'
-          import os, sys
-          sz = os.path.getsize("app.apk")
-          with open("app.apk", "rb") as f: magic = f.read(2)
-          print("tamanho:", sz, "magic:", magic)
+          import os, sys, glob
+          f = glob.glob("app.*")[0]
+          sz = os.path.getsize(f)
+          with open(f, "rb") as fh: magic = fh.read(2)
+          print("arquivo:", f, "tamanho:", sz, "magic:", magic)
           if magic != b"PK" or sz < 20_000_000:
-              sys.exit("arquivo invalido (nao eh APK ou pequeno demais)")
+              sys.exit("arquivo invalido (nao eh zip/APK ou pequeno demais)")
           PY
 
       - name: fatiar e publicar no branch apk-parts
         run: |
           set -e
           V=$(cat /tmp/vers.txt)
+          EXT=$(cat /tmp/ext.txt)
           APP="${{ inputs.slug }}"
           mkdir -p /tmp/out
-          split -b 45M -d -a 2 app.apk /tmp/out/parte_
-          sha256sum app.apk > /tmp/out/sha256.txt
+          split -b 45M -d -a 2 "app.$EXT" /tmp/out/parte_
+          sha256sum "app.$EXT" > /tmp/out/sha256.txt
           echo "fonte: $(cat /tmp/dl.txt)" > /tmp/out/fonte.txt
+          echo "ext: $EXT" > /tmp/out/ext.txt
           git config user.email "eni@fabrica.local"
           git config user.name "eni-fabrica"
           git fetch origin apk-parts && git checkout -f -B apk-parts origin/apk-parts || { git checkout --orphan apk-parts && git rm -rf . > /dev/null 2>&1; }
