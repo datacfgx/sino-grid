@@ -13,6 +13,8 @@ jobs:
       - name: caçada real (engine da casa modernizada)
         run: |
           set +e
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
+          ffmpeg -version 2>/dev/null | head -1
           curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x yt-dlp
           LINK="${{ github.event.inputs.url }}"
@@ -20,7 +22,14 @@ jobs:
           chmod 600 cookies.txt
           ok=""
           echo "== fase 0: direto =="
-          if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > /dev/null 2>&1; then ok=1; echo "BAIXOU DIRETO"; fi
+          if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+            if ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 video.mp4 2>/dev/null | grep -q video; then
+              ok=1
+              echo "BAIXOU DIRETO COM VIDEO"
+            else
+              rm -f video.*
+            fi
+          fi
           if [ -z "$ok" ]; then
             echo "== fase 1: CAÇADA (listas checadas de hora em hora no GitHub) =="
             { curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/http.txt" | grep -E ':' | sed 's|^|http://|';
@@ -36,9 +45,15 @@ jobs:
             while read -r proxy; do
               [ -n "$ok" ] && break
               echo "tentando: $proxy"
-              if ./yt-dlp --cookies cookies.txt --proxy "$proxy" --socket-timeout 20 --retries 1 -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > /dev/null 2>&1; then
-                ok=1
-                echo "BAIXOU VIA $proxy"
+              if ./yt-dlp --cookies cookies.txt --proxy "$proxy" --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+                if ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 video.mp4 2>/dev/null | grep -q video; then
+                  ok=1
+                  echo "BAIXOU COM VIDEO VIA $proxy"
+                else
+                  echo "sem trilha de video via $proxy - proximo"
+                  tail -3 dl.log
+                  rm -f video.*
+                fi
               fi
             done < caca.txt
           fi
