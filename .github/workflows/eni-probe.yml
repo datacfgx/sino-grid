@@ -1,0 +1,56 @@
+name: ENI Probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: cobalt + sonda das redes
+        run: |
+          set -e
+          T="${{ secrets.TELEGRAM_TOKEN }}"
+          C="${{ secrets.TELEGRAM_CHAT_ID }}"
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg nscd > /dev/null 2>&1
+          sudo service nscd start || true
+          npm i -g pnpm > /dev/null 2>&1 || true
+          git clone --depth 1 https://github.com/imputnet/cobalt.git
+          cd cobalt/api
+          pnpm install > /dev/null 2>&1
+          echo "API_URL=http://localhost:9000/" > .env
+          nohup pnpm start > /tmp/cobalt.log 2>&1 &
+          NOAR=""
+          for i in $(seq 1 45); do
+            curl --noproxy '*' -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9000/ 2>/dev/null | grep -q 200 && { NOAR=1; break; }
+            sleep 2
+          done
+          [ -z "$NOAR" ] && { echo "cobalt nao subiu"; tail -20 /tmp/cobalt.log; exit 1; }
+          cd ../..
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+          RESUMO=""
+          sonda() {
+            NOME="$1"; U="$2"
+            BODY=$(python3 -c "import json;print(json.dumps({'url':'$U','downloadMode':'auto'}))")
+            RESP=$(curl --noproxy '*' -sS -X POST http://127.0.0.1:9000/ -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY" 2>/dev/null)
+            DURL=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('url',''))" 2>/dev/null)
+            ST=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('status', d.get('error',{}).get('code','erro')))" 2>/dev/null)
+            if [ -z "$DURL" ]; then
+              VEREDITO="FALHOU ($ST)"
+            else
+              BYTES=$(curl -sL -A "$UA" -r 0-200000 --max-time 40 -o /tmp/pede "$DURL" 2>/dev/null; stat -c%s /tmp/pede 2>/dev/null || echo 0)
+              [ "${BYTES:-0}" -gt 10000 ] && VEREDITO="OK (${BYTES}B amostra)" || VEREDITO="SEM BYTES (${BYTES}B)"
+            fi
+            echo "$NOME: $VEREDITO"
+            RESUMO="$RESUMO$NOME: $VEREDITO\n"
+          }
+          sonda "YOUTUBE" "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+          sonda "VIMEO"   "https://vimeo.com/76979871"
+          sonda "TIKTOK"  "https://www.tiktok.com/@khaby.lame/video/7033100501945998598"
+          sonda "X"       "https://x.com/jack/status/20"
+          sonda "INSTA"   "https://www.instagram.com/p/BsOGulcndj-/"
+          sonda "DAILYMOTION" "https://www.dailymotion.com/video/x7tgad0"
+          echo "---- RESUMO ----"
+          echo -e "$RESUMO"
+          curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Probe — placar das redes:\n$RESUMO" || true
