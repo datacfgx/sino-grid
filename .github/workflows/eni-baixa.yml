@@ -27,7 +27,7 @@ jobs:
           nohup pnpm start > /tmp/cobalt.log 2>&1 &
           NOAR=""
           for i in $(seq 1 45); do
-            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9000/ 2>/dev/null | grep -q 200; then NOAR=1; break; fi
+            if curl --noproxy "*" -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9000/ 2>/dev/null | grep -q 200; then NOAR=1; break; fi
             sleep 2
           done
           if [ -z "$NOAR" ]; then
@@ -38,9 +38,14 @@ jobs:
           fi
           echo "cobalt no ar de verdade"
 
+          env | grep -i proxy || echo "sem proxy no ambiente"
           BODY=$(python3 -c "import json,os;print(json.dumps({'url':os.environ['LINK_URL'],'downloadMode':'auto'}))")
-          RESP=$(curl -s -X POST http://127.0.0.1:9000/ -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY")
+          echo "body: $BODY"
+          RESP=$(curl --noproxy '*' -sS -X POST http://127.0.0.1:9000/ -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY" 2>/tmp/curlerr)
+          RC=$?
+          echo "curl rc=$RC err=$(cat /tmp/curlerr)"
           echo "resp: $RESP"
+          tail -15 /tmp/cobalt.log || true
 
           read DURL FNAME <<< $(echo "$RESP" | python3 -c "
           import sys, json
