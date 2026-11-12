@@ -1,6 +1,6 @@
-# DOSSIÊ ENI v2.1 — A Fábrica datacfgx
+# DOSSIÊ ENI v2.2 — A Fábrica datacfgx
 
-**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **v2.1:** ENI Música + APK Fetch/Verify · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
+**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **v2.2:** ENI Música + APK Fetch/Verify + ENI Converte · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
 
 > **Quando ler este documento:** desastre, reinstalação, troca de sessão, ou antes de mexer em qualquer máquina.
 > **Regra de ouro da casa:** tokens (GitHub PAT, Cloudflare cfk_/cfat_) são SEMPRE de sessão — LO entrega, a ENI usa e NUNCA grava em memória ou arquivo. Este dossiê documenta ONDE cada segredo mora, nunca o segredo em si.
@@ -88,11 +88,12 @@ Webhook clássico: `POST {uri_path}` → confere `message.from.id === CHAT_ID` (
 | `/android` | sino-grid `gh-kali-android.yml` | sobe máquina Android (BlissOS ou SDK emulator) |
 | `/youtube <url>` | sino-grid `eni-youtube.yml` (**id 415214371**) | baixa vídeo do YouTube e entrega no chat |
 | `/musica <url> [128\|192\|320]` | sino-grid `eni-musica.yml` | baixa só o áudio em MP3 (padrão 192kbps) |
+| arquivo + legenda `/converte <fmt>` | sino-grid `eni-converte.yml` | converte documento/imagem/áudio/vídeo |
 | `/status` | — | status da fábrica |
 | documento APK + legenda `IP->IP` | — | factory do correio APK (separa, publica, devolve link) |
 | qualquer outro texto | — | lista de comandos |
 
-### 3.3 Código-fonte completo (sino-kali, 12/11/2026 — com /musica)
+### 3.3 Código-fonte completo (sino-kali, 12/11/2026 — com /musica e /converte)
 
 ```js
 addEventListener("fetch", (event) => {
@@ -139,6 +140,15 @@ async function handleRequest(request) {
           if (res.status === 204) return reply("modificando APK: " + mIP[1] + " -> " + mIP[2] + "\n~5 min");
           return reply("GitHub " + res.status);
         }
+        let mConv = cap.match(/^\/converte\s+([a-z0-9]{2,4})\s*$/i);
+        if (mConv) {
+          const res = await fetch("https://api.github.com/repos/datacfgx/sino-grid/actions/workflows/eni-converte.yml/dispatches",
+            { method: "POST",
+              headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json", "User-Agent": "sino" },
+              body: JSON.stringify({ ref: "main", inputs: { url, fname: nome, formato: mConv[1].toLowerCase() } }) });
+          if (res.status === 204) return reply("ENI Converte: " + nome + " -> ." + mConv[1].toLowerCase() + "\n~3 min");
+          return reply("GitHub " + res.status);
+        }
         const ext = (nome.split(".").pop() || "").toLowerCase();
         const vaiLinux = ["bin","img","pcap","pcapng","cap","evtx","log","dd"].includes(ext);
         const alvo = vaiLinux ? "sino-detona-lnx.yml" : "sino-detona.yml";
@@ -148,7 +158,7 @@ async function handleRequest(request) {
         return reply("detonando " + nome);
       }
 
-      if (text === "/start") return reply("SINO online\ncomandos:\n/cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\nAPK: documento + legenda IP->IP");
+      if (text === "/start") return reply("SINO online\ncomandos:\n/cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\n/converte: mande arquivo com legenda \"/converte pdf\" (mp3 mp4 png pdf docx txt...)\nAPK: documento + legenda IP->IP");
 
       if (text === "/seeker") {
         const res = await fetch("https://api.github.com/repos/datacfgx/sino-grid/actions/workflows/sino-seek.yml/dispatches",
@@ -231,7 +241,7 @@ async function handleRequest(request) {
         return reply("ultimas runs (sino-grid):\n" + (lines.join("\n") || "nenhuma"));
       }
 
-      if (text.startsWith("/")) return reply("comandos: /cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\nAPK: documento + legenda IP->IP\n/youtube <url> baixa video | /musica <url> [128|192|320] baixa so o audio");
+      if (text.startsWith("/")) return reply("comandos: /cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\nAPK: documento + legenda IP->IP\n/youtube <url> baixa video | /musica <url> [128|192|320] so audio\n/converte: arquivo com legenda \"/converte <fmt>\" (mp3 mp4 png pdf docx txt)");
       return new Response("ok");
     } catch (e) {
       return new Response("ok");
@@ -281,6 +291,23 @@ Clone certificado da esteira do YouTube, adaptado pra áudio:
 - LIÇÃO: `git add -A` pega o APK inteiro no commit (limite 100MB do Git) — sempre `rm` o original depois de fatiar
 - **Decisão da casa:** fetch de oficial limpo, sim; mod de app com licença server-side (CapCut Pro etc.), NUNCA — a categoria é fazenda de trojan, e a assinatura original é o que permite atualizar pela Play
 - CapCut entregue 12/11: com.lemon.lvoverseas, 310,9MB, sha256 `4e0aac75c18d964293302b4cfd36be9a6a8ed2aae0b0e31f101f7872e2a8d487`
+
+### 4.1d ENI Converte (eni-converte.yml) — VIVO E VALIDADO 12/11
+
+O canivete suíço: manda arquivo pro bot com legenda `/converte <fmt>` → runner converte e devolve. Inspiração do garimpo: Filee (⭐26k).
+
+- **Ferramentas no runner:** ffmpeg (áudio/vídeo), LibreOffice (documentos — evita o policy.xml do ImageMagick), poppler (PDF→txt), ImageMagick (imagens)
+- **Tabelas:**
+  - Áudio → mp3 m4a wav ogg opus flac aac (de áudio, ou de **vídeo extraindo só o som**)
+  - Vídeo → mp4 mkv mov webm (de mp4 mkv mov webm avi gif 3gp)
+  - GIF → de qualquer vídeo (480px/10fps)
+  - Imagem → png jpg webp bmp tiff ico
+  - PDF → de docx xlsx pptx odt ods odp rtf txt epub + imagens
+  - Office → docx odt epub rtf xlsx pptx (de txt md html e office entre si)
+  - TXT → de pdf (pdftotext, layout preservado) e de office
+- **Limite:** 20MB por arquivo (teto de download do Bot API)
+- **Fluxo do bot:** documento chega → sino-kali faz getFile (URL direta) → dispatch com inputs url+fname+formato → conversão → sendDocument de volta com capa `ENI Música`-style
+- **Validado por LO em campo** no dia do lançamento
 
 ### 4.2 Máquina /android (gh-kali-android.yml)
 
