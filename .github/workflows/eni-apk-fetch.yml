@@ -111,6 +111,7 @@ jobs:
           sha256sum "app.$EXT" > /tmp/out/sha256.txt
           echo "fonte: $(cat /tmp/dl.txt)" > /tmp/out/fonte.txt
           echo "ext: $EXT" > /tmp/out/ext.txt
+          rm -f "app.$EXT"
           git config user.email "eni@fabrica.local"
           git config user.name "eni-fabrica"
           git fetch origin apk-parts && git checkout -f -B apk-parts origin/apk-parts || { git checkout --orphan apk-parts && git rm -rf . > /dev/null 2>&1; }
