@@ -9,50 +9,49 @@ jobs:
   baixa:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      LINK_URL: ${{ github.event.inputs.url }}
     steps:
-      - name: subir cobalt local no runner
-        run: |
-          set -e
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
-          npm i -g pnpm > /dev/null 2>&1 || npm i -g pnpm@latest > /dev/null 2>&1
-          git clone --depth 1 https://github.com/imputnet/cobalt.git
-          cd cobalt/api
-          pnpm install > /dev/null 2>&1
-          nohup pnpm start > /tmp/cobalt.log 2>&1 &
-          sleep 3
-          for i in $(seq 1 40); do
-            curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d '{"url":"https://example.com"}' 2>/dev/null | grep -q . && break
-            sleep 2
-          done
-          curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d '{"url":"https://www.youtube.com/watch?v=aqz-KE-bpKQ","downloadMode":"auto"}' | head -c 400
-          echo
-          echo "cobalt no ar"
-
-      - name: baixar e entregar
+      - name: cobalt local + caçada + entrega (tudo num step so)
         run: |
           set -e
           T="${{ secrets.TELEGRAM_TOKEN }}"
           C="${{ secrets.TELEGRAM_CHAT_ID }}"
-          RESP=$(curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d "{"url":"${{ github.event.inputs.url }}","downloadMode":"auto"}")
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
+          npm i -g pnpm > /dev/null 2>&1 || true
+          git clone --depth 1 https://github.com/imputnet/cobalt.git
+          cd cobalt/api
+          pnpm install > /dev/null 2>&1
+          nohup pnpm start > /tmp/cobalt.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d '{"url":"https://example.com"}' 2>/dev/null | grep -q . && break
+            sleep 2
+          done
+          echo "cobalt no ar"
+
+          BODY=$(python3 -c "import json,os;print(json.dumps({'url':os.environ['LINK_URL'],'downloadMode':'auto'}))")
+          RESP=$(curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY")
           echo "resp: $RESP"
+
           DURL=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('url',''))" 2>/dev/null)
           FNAME=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('filename','midia.bin'))" 2>/dev/null)
           if [ -z "$DURL" ]; then
-            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: cobalt recusou esse link (rede sem suporte, privado, ou precisa de cookies). Tenta outro."
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: cobalt recusou esse link (rede sem suporte, privado, ou precisa de cookies). Tenta outro." || true
             exit 1
           fi
+
           curl -sL --max-time 280 -o saida "$DURL"
           S=$(stat -c%s saida)
           echo "baixado: $S bytes"
           if [ "$S" -le 48000000 ]; then
             curl -s -F chat_id="$C" -F document=@saida -F caption="ENI Baixa ok: $FNAME ($S bytes)" "https://api.telegram.org/bot$T/sendDocument"
-            echo "inteiro entregue"
+            echo " inteiro entregue"
           else
             split -b 45000000 saida parte_
             for p in parte_*; do
               curl -s -F chat_id="$C" -F document=@"$p" "https://api.telegram.org/bot$T/sendDocument"
               sleep 3
             done
-            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=junte no termux: cat parte_* > $FNAME"
-            echo "fatiado e entregue"
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=junte no termux: cat parte_* > $FNAME" || true
+            echo " fatiado e entregue"
           fi
