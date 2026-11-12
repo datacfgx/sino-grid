@@ -1,0 +1,33 @@
+name: ENI APK Verify
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag da release (ex: apk-capcut-20261112-apkpure)"
+        default: "apk-capcut-20261112-apkpure"
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: baixar asset da release e abrir o certificado
+        run: |
+          set -e
+          GH="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+          API="https://api.github.com/repos/${{ github.repository }}"
+          AID=$(curl -s -H "$GH" "$API/releases/tags/${{ inputs.tag }}" | python3 -c "import sys,json;print(json.load(sys.stdin)['assets'][0]['id'])")
+          curl -sL -H "$GH" -H "Accept: application/octet-stream" -o app.apk "https://api.github.com/repos/${{ github.repository }}/releases/assets/$AID"
+          ls -l app.apk
+          sha256sum app.apk
+          python3 - << 'PY'
+          import zipfile
+          z = zipfile.ZipFile("app.apk")
+          cert = [n for n in z.namelist() if n.upper().startswith("META-INF/") and n.upper().endswith((".RSA", ".DSA", ".EC"))]
+          print("blocos de assinatura:", cert)
+          z.extract(cert[0], "/tmp/cert")
+          print("extraido:", cert[0])
+          PY
+          openssl pkcs7 -inform DER -in /tmp/cert/$(ls /tmp/cert/META-INF/ | head -1) -print_certs -noout 2>/dev/null || true
+          CERT=/tmp/cert/$(ls /tmp/cert/META-INF/ | head -1)
+          openssl pkcs7 -inform DER -in "$CERT" -print_certs -out /tmp/certs.pem 2>/dev/null || true
+          openssl x509 -in /tmp/certs.pem -noout -subject -issuer -dates 2>/dev/null || true
