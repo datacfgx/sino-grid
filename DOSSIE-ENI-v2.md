@@ -1,6 +1,6 @@
-# DOSSIÊ ENI v2.0 — A Fábrica datacfgx
+# DOSSIÊ ENI v2.1 — A Fábrica datacfgx
 
-**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
+**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **v2.1:** ENI Música + APK Fetch/Verify · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
 
 > **Quando ler este documento:** desastre, reinstalação, troca de sessão, ou antes de mexer em qualquer máquina.
 > **Regra de ouro da casa:** tokens (GitHub PAT, Cloudflare cfk_/cfat_) são SEMPRE de sessão — LO entrega, a ENI usa e NUNCA grava em memória ou arquivo. Este dossiê documenta ONDE cada segredo mora, nunca o segredo em si.
@@ -87,11 +87,12 @@ Webhook clássico: `POST {uri_path}` → confere `message.from.id === CHAT_ID` (
 | `/seeker` | `sino-seeker.yml` | seeker |
 | `/android` | sino-grid `gh-kali-android.yml` | sobe máquina Android (BlissOS ou SDK emulator) |
 | `/youtube <url>` | sino-grid `eni-youtube.yml` (**id 415214371**) | baixa vídeo do YouTube e entrega no chat |
+| `/musica <url> [128\|192\|320]` | sino-grid `eni-musica.yml` | baixa só o áudio em MP3 (padrão 192kbps) |
 | `/status` | — | status da fábrica |
 | documento APK + legenda `IP->IP` | — | factory do correio APK (separa, publica, devolve link) |
 | qualquer outro texto | — | lista de comandos |
 
-### 3.3 Código-fonte completo (sino-kali, 12/11/2026)
+### 3.3 Código-fonte completo (sino-kali, 12/11/2026 — com /musica)
 
 ```js
 addEventListener("fetch", (event) => {
@@ -147,7 +148,7 @@ async function handleRequest(request) {
         return reply("detonando " + nome);
       }
 
-      if (text === "/start") return reply("SINO online\ncomandos:\n/cmd /win /rdp /shell /trem /seeker /android /youtube /status\nAPK: documento + legenda IP->IP");
+      if (text === "/start") return reply("SINO online\ncomandos:\n/cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\nAPK: documento + legenda IP->IP");
 
       if (text === "/seeker") {
         const res = await fetch("https://api.github.com/repos/datacfgx/sino-grid/actions/workflows/sino-seek.yml/dispatches",
@@ -190,6 +191,18 @@ async function handleRequest(request) {
         return reply("GitHub " + res.status);
       }
 
+      if (text === "/musica") return reply("manda o link:\n/musica <url> [128|192|320]\npadrao: 192kbps MP3");
+
+      let mMu = text.match(/^\/musica\s+(\S+)(?:\s+(\d+))?\s*$/);
+      if (mMu) {
+        const q = ["128","192","320"].includes(mMu[2]) ? mMu[2] : "192";
+        const res = await fetch("https://api.github.com/repos/datacfgx/sino-grid/actions/workflows/eni-musica.yml/dispatches",
+          { method: "POST", headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json", "User-Agent": "sino" },
+            body: JSON.stringify({ ref: "main", inputs: { url: mMu[1], qualidade: q } }) });
+        if (res.status === 204) return reply("ENI Música disparada:\n" + mMu[1] + "\nMP3 " + q + "kbps — ~5 min: cacada + entrega aqui");
+        return reply("GitHub " + res.status);
+      }
+
       if (text === "/youtube") return reply("manda o link:\n/youtube <url do youtube>");
 
       let mYt = text.match(/^\/youtube\s+(\S+)\s*$/);
@@ -218,7 +231,7 @@ async function handleRequest(request) {
         return reply("ultimas runs (sino-grid):\n" + (lines.join("\n") || "nenhuma"));
       }
 
-      if (text.startsWith("/")) return reply("comandos: /cmd /win /rdp /shell /trem /seeker /android /youtube /status\nAPK: documento + legenda IP->IP\n/youtube <url> baixa video");
+      if (text.startsWith("/")) return reply("comandos: /cmd /win /rdp /shell /trem /seeker /android /youtube /musica /status\nAPK: documento + legenda IP->IP\n/youtube <url> baixa video | /musica <url> [128|192|320] baixa so o audio");
       return new Response("ok");
     } catch (e) {
       return new Response("ok");
@@ -247,6 +260,27 @@ Pipeline completo em um workflow, entrada `url`:
 **Configuração atual:** `timeout-minutes: 30`, pool 4000 proxies, filtro max-time 4, caçada 15 proxies. Run típica: ~10 min. Validado em campo: Big Buck Bunny 720p, 81.554.068 bytes, entregue fatiado e assistido por LO.
 
 **Uso:** `/youtube <url>` no bot, ou dispatch manual (`inputs: {url: ...}`).
+
+### 4.1b ENI Música (eni-musica.yml) — VIVO E VALIDADO 12/11
+
+Clone certificado da esteira do YouTube, adaptado pra áudio:
+
+- `-x --audio-format mp3 --audio-quality {Q}K` (ffmpeg transcode), mesma caçada de proxies + cookies
+- Verificação ffprobe de **trilha de áudio** — sem som = apaga e passa pro próximo proxy
+- Fase piped pega `audioStreams` (maior bitrate) em vez de videoStreams
+- Entrega **arquivo único** (capa `ENI Música ok — MP3 Xkbps (N bytes)`); fatiamento só pra mixagens 3h+ (fallback `cat parte_* > musica.mp3`)
+- Qualidades: 128 / **192 (padrão)** / 320. FLAC não oferecido de propósito — a fonte do YouTube é lossy (~160kbps Opus/AAC); FLAC seria falso
+- **Atenção:** comando é ASCII puro — `/musica`, nunca `/música` (acento cai no help genérico)
+- Validado em campo por LO: Sandstorm 192kbps entregue e baixando no celular
+
+### 4.1c ENI APK Fetch + Verify (eni-apk-fetch.yml / eni-apk-verify.yml) — VIVO 12/11
+
+- **Fetch:** runner caça APK **oficial limpo** de qualquer app (inputs `package` + `slug`). Ranking de links prioriza o **package no URL** (despista a isca do instalador do APKPure); uptodown é reserva. APKMirror bane datacenter (403); apkcombo/apkmonk nem resolvem DNS no runner
+- Verifica magic PK + tamanho → fatia 45M → branch `apk-parts` + **Release arquivo único** (tag `apk-<slug>-<data>-<fonte>`, limite 2GB)
+- **Verify:** baixa o asset da Release e abre o certificado (`keytool -printcert` / openssl no META-INF/*.RSA) — prova o assinante (CapCut: Owner CN=lemon, O=bytedance)
+- LIÇÃO: `git add -A` pega o APK inteiro no commit (limite 100MB do Git) — sempre `rm` o original depois de fatiar
+- **Decisão da casa:** fetch de oficial limpo, sim; mod de app com licença server-side (CapCut Pro etc.), NUNCA — a categoria é fazenda de trojan, e a assinatura original é o que permite atualizar pela Play
+- CapCut entregue 12/11: com.lemon.lvoverseas, 310,9MB, sha256 `4e0aac75c18d964293302b4cfd36be9a6a8ed2aae0b0e31f101f7872e2a8d487`
 
 ### 4.2 Máquina /android (gh-kali-android.yml)
 
@@ -294,6 +328,7 @@ Duas receitas no mesmo workflow:
 - **Upload de worker: PUT application/javascript clássico + readback diff.** Formato módulo falha.
 - **Log de workflow:** curl -sL com Bearer baixa (urllib falha no redirect pro Azure).
 - **Pool de proxies públicos morre toda hora** — renovar nas listas upstream; com proxy pago, pool passa a ser backup.
+- **Comandos do enikali são ASCII puros** — `/musica`, nunca `/música` (acento cai no help genérico). Normalização tá na fila.
 - **Disparo do enikali pode parar no workflow_dispatch** — checar primeiro se o yml tem `workflow_dispatch` com o input certo (url, etc).
 
 ---
@@ -304,6 +339,7 @@ Duas receitas no mesmo workflow:
 - [ ] **Sino-Windows:** Oracle JDK 21 → migrar pro Temurin (.msi silencioso no runner)
 - [ ] **Máquina /android:** BlissOS sobe mas "demora a dar o sinal verde"
 - [ ] **Watchlist:** dormindo desde 03/10 por decreto de LO — não disparar sem ordem expressa
+- [ ] **sino-kali:** normalizar acentos na entrada do bot (/música → /musica)
 - [ ] **Bucket R2:** análise dos APKs com `aapt` + `sigcheck` na próxima manutenção
 
 ---
