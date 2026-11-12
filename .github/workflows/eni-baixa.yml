@@ -12,31 +12,45 @@ jobs:
     env:
       LINK_URL: ${{ github.event.inputs.url }}
     steps:
-      - name: cobalt local + caçada + entrega (tudo num step so)
+      - name: "cobalt local no runner (manual lido: API_URL obrigatorio, POST /, nscd)"
         run: |
           set -e
           T="${{ secrets.TELEGRAM_TOKEN }}"
           C="${{ secrets.TELEGRAM_CHAT_ID }}"
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg nscd > /dev/null 2>&1
+          sudo service nscd start || true
           npm i -g pnpm > /dev/null 2>&1 || true
           git clone --depth 1 https://github.com/imputnet/cobalt.git
           cd cobalt/api
           pnpm install > /dev/null 2>&1
+          echo "API_URL=http://localhost:9000/" > .env
           nohup pnpm start > /tmp/cobalt.log 2>&1 &
+          NOAR=""
           for i in $(seq 1 45); do
-            curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d '{"url":"https://example.com"}' 2>/dev/null | grep -q . && break
+            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9000/ 2>/dev/null | grep -q 200; then NOAR=1; break; fi
             sleep 2
           done
-          echo "cobalt no ar"
+          if [ -z "$NOAR" ]; then
+            echo "cobalt NAO subiu — log:"
+            tail -20 /tmp/cobalt.log
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: cobalt nao subiu no runner (ver log da run)" || true
+            exit 1
+          fi
+          echo "cobalt no ar de verdade"
 
           BODY=$(python3 -c "import json,os;print(json.dumps({'url':os.environ['LINK_URL'],'downloadMode':'auto'}))")
-          RESP=$(curl -s -X POST http://127.0.0.1:9000/api/json -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY")
+          RESP=$(curl -s -X POST http://127.0.0.1:9000/ -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY")
           echo "resp: $RESP"
 
-          DURL=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('url',''))" 2>/dev/null)
-          FNAME=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('filename','midia.bin'))" 2>/dev/null)
+          read DURL FNAME <<< $(echo "$RESP" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          url = d.get('url','')
+          if not url and d.get('status') == 'picker' and d.get('picker'):
+              url = d['picker'][0].get('url','')
+          print(url, d.get('filename','midia.bin'))")
           if [ -z "$DURL" ]; then
-            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: cobalt recusou esse link (rede sem suporte, privado, ou precisa de cookies). Tenta outro." || true
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: cobalt recusou esse link (rede sem suporte, privado, ou precisa de cookies)." || true
             exit 1
           fi
 
