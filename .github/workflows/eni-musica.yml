@@ -1,0 +1,104 @@
+name: ENI Música
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: link do video
+        required: true
+      qualidade:
+        description: "kbps do MP3 (128, 192 ou 320)"
+        default: "192"
+jobs:
+  baixa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: caçada real (somente audio)
+        run: |
+          set +e
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
+          ffmpeg -version 2>/dev/null | head -1
+          curl -sL -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+          chmod +x yt-dlp
+          LINK="${{ github.event.inputs.url }}"
+          Q="${{ github.event.inputs.qualidade }}"
+          case "$Q" in 128|192|320) ;; *) Q=192 ;; esac
+          echo "qualidade alvo: ${Q}kbps"
+          printf '%s\n' "${{ secrets.YT_COOKIES }}" > cookies.txt
+          chmod 600 cookies.txt
+          ok=""
+          echo "== fase 0: direto =="
+          if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -x --audio-format mp3 --audio-quality "${Q}K" -o "audio.%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+            if ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 audio.mp3 2>/dev/null | grep -q audio; then
+              ok=1
+              echo "BAIXOU AUDIO DIRETO (${Q}kbps)"
+            else
+              rm -f audio.*
+            fi
+          fi
+          if [ -z "$ok" ]; then
+            echo "== fase 1: CAÇADA (listas checadas de hora em hora no GitHub) =="
+            { curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/http.txt" | grep -E ':' | sed 's|^|http://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/socks5.txt" | grep -E ':' | sed 's|^|socks5://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" | head -3000 | grep -E ':' | sed 's|^|http://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt" | head -1500 | grep -E ':' | sed 's|^|socks5://|'; } | sort -u | head -4000 > pool.txt
+            echo "pool: $(wc -l < pool.txt)"
+            echo "== filtro rapido (youtube generate_204 + tempo, 32 paralelos) =="
+            cat pool.txt | xargs -P32 -I{} sh -c 'R=$(curl -s -x {} --max-time 4 -o /dev/null -w "%{http_code} %{time_total}" https://www.youtube.com/generate_204 2>/dev/null); case "$R" in 204*) echo "$R {}";; esac' > vivos.txt 2>/dev/null
+            echo "vivos: $(wc -l < vivos.txt)"
+            sort -k2 -n vivos.txt | head -15 | awk '{print $3}' > caca.txt
+            echo "== tentando os 15 mais rapidos com cookies =="
+            while read -r proxy; do
+              [ -n "$ok" ] && break
+              echo "tentando: $proxy"
+              if ./yt-dlp --cookies cookies.txt --proxy "$proxy" --socket-timeout 20 --retries 1 -x --audio-format mp3 --audio-quality "${Q}K" -o "audio.%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+                if ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 audio.mp3 2>/dev/null | grep -q audio; then
+                  ok=1
+                  echo "BAIXOU AUDIO VIA $proxy (${Q}kbps)"
+                else
+                  echo "sem trilha de audio via $proxy - proximo"
+                  tail -3 dl.log
+                  rm -f audio.*
+                fi
+              fi
+            done < caca.txt
+          fi
+          if [ -z "$ok" ]; then
+            echo "== fase 2: piped audio =="
+            VID=$(echo "$LINK" | grep -oE 'v=[A-Za-z0-9_-]{11}' | cut -d= -f2)
+            [ -z "$VID" ] && VID=$(echo "$LINK" | grep -oE 'be/[A-Za-z0-9_-]{11}' | cut -d/ -f2)
+            for PAPI in "https://pipedapi.kavin.rocks" "https://api.piped.private.coffee" "https://pipedapi.adminforge.de" "https://pipedapi.reallyaweso.me" "https://api.piped.yt"; do
+              [ -n "$ok" ] && break
+              ST=$(curl -s --max-time 20 "$PAPI/streams/$VID" 2>/dev/null)
+              DL=$(echo "$ST" | python3 -c "import json,sys; d=json.load(sys.stdin); a=[s for s in d.get('audioStreams',[]) if s.get('format')=='M4A']; a=a or d.get('audioStreams',[]); a.sort(key=lambda s:-s.get('bitrate',0)); print(a[0]['url'] if a else '')" 2>/dev/null)
+              if [ -n "$DL" ]; then
+                curl -sL --max-time 300 -o audio.raw "$DL" && ffmpeg -y -i audio.raw -b:a ${Q}k audio.mp3 > /dev/null 2>&1 && ok=1 && echo "BAIXOU AUDIO PIPED $PAPI (${Q}kbps)"
+              fi
+            done
+          fi
+          if [ -z "$ok" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data-urlencode "text=ENI Música: caçada inteira falhou. Relatório: pool/vivos no log da run."
+            exit 1
+          fi
+          ls -la audio.*
+      - name: entrega no telegram
+        run: |
+          T="${{ secrets.TELEGRAM_TOKEN }}"
+          C="${{ secrets.TELEGRAM_CHAT_ID }}"
+          Q="${{ github.event.inputs.qualidade }}"
+          case "$Q" in 128|192|320) ;; *) Q=192 ;; esac
+          F=$(ls audio.mp3)
+          S=$(stat -c%s "$F")
+          echo "arquivo: $F ($S bytes)"
+          if [ "$S" -le 48000000 ]; then
+            R=$(curl -s -w "HTTP:%{http_code}" -F chat_id="$C" -F document=@"$F" -F caption="ENI Música ok — MP3 ${Q}kbps ($S bytes)" "https://api.telegram.org/bot$T/sendDocument")
+            echo "inteiro: $R"
+          else
+            split -b 45000000 "$F" parte_
+            for p in parte_*; do
+              curl -s -F chat_id="$C" -F document=@"$p" "https://api.telegram.org/bot$T/sendDocument"
+              sleep 3
+            done
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=junte no termux: cat parte_* > musica.mp3"
+            echo "fatiado e entregue"
+          fi
