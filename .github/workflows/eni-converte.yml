@@ -1,0 +1,94 @@
+name: ENI Converte
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL direta do arquivo (ja resolvida pelo bot)"
+        required: true
+      fname:
+        description: "nome original do arquivo"
+        required: true
+      formato:
+        description: "formato alvo (mp3, mp4, png, pdf, docx, txt...)"
+        required: true
+jobs:
+  converte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: baixar e preparar ferramentas
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libreoffice poppler-utils imagemagick > /dev/null 2>&1
+          curl -sL --max-time 60 -o entrada "${{ github.event.inputs.url }}"
+          ls -lh entrada
+          echo "fname=${{ github.event.inputs.fname }}" > /tmp/ctx
+          echo "fmt=${{ github.event.inputs.formato }}" >> /tmp/ctx
+
+      - name: converter e entregar
+        run: |
+          set -e
+          source /tmp/ctx
+          FMT=$(echo "$fmt" | tr 'A-Z' 'a-z')
+          IN=$(echo "${fname##*.}" | tr 'A-Z' 'a-z')
+          T="${{ secrets.TELEGRAM_TOKEN }}"
+          C="${{ secrets.TELEGRAM_CHAT_ID }}"
+          fala() { curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=$1" > /dev/null; }
+          echo "conversao: .$IN -> .$FMT"
+
+          if [ "$IN" = "$FMT" ]; then
+            cp entrada "saida.$FMT"
+          else
+            case "$FMT" in
+              mp3|m4a|wav|ogg|opus|flac|aac)
+                case "$IN" in
+                  mp3|m4a|wav|ogg|opus|flac|aac) ffmpeg -y -i entrada -b:a 192k "saida.$FMT" 2>/dev/null ;;
+                  mp4|mkv|mov|webm|avi|gif|3gp)   ffmpeg -y -i entrada -vn -b:a 192k "saida.$FMT" 2>/dev/null ;;
+                  *) fala "ENI Converte: nao sei tirar audio de .$IN ainda"; exit 1 ;;
+                esac ;;
+              mp4|mkv|mov|webm)
+                case "$IN" in
+                  mp4|mkv|mov|webm|avi|gif|3gp) ffmpeg -y -i entrada -c:v libx264 -preset fast -crf 23 -c:a aac "saida.$FMT" 2>/dev/null ;;
+                  *) fala "ENI Converte: nao sei converter .$IN para video"; exit 1 ;;
+                esac ;;
+              gif)
+                ffmpeg -y -i entrada -vf "fps=10,scale=480:-1:flags=lanczos" "saida.gif" 2>/dev/null || { fala "ENI Converte: gif so de video/imagem animada"; exit 1; } ;;
+              png|jpg|jpeg|webp|bmp|tiff|ico)
+                case "$IN" in
+                  png|jpg|jpeg|webp|bmp|tiff|gif|ico) convert "entrada[0]" "saida.$FMT" ;;
+                  *) fala "ENI Converte: .$IN nao eh imagem"; exit 1 ;;
+                esac ;;
+              pdf)
+                case "$IN" in
+                  docx|xlsx|pptx|odt|ods|odp|rtf|txt|epub|png|jpg|jpeg|webp|bmp|tiff|gif)
+                    libreoffice --headless --convert-to pdf --outdir /tmp/lo entrada > /dev/null 2>&1
+                    mv /tmp/lo/*.pdf saida.pdf ;;
+                  pdf) cp entrada saida.pdf ;;
+                  *) fala "ENI Converte: nao sei levar .$IN para pdf"; exit 1 ;;
+                esac ;;
+              docx|odt|epub|rtf|xlsx|pptx)
+                case "$IN" in
+                  docx|odt|epub|rtf|txt|xlsx|pptx|html|md)
+                    libreoffice --headless --convert-to "$FMT" --outdir /tmp/lo entrada > /dev/null 2>&1
+                    mv /tmp/lo/* "saida.$FMT" ;;
+                  pdf) fala "ENI Converte: pdf para .$FMT ainda nao; uso: /converte txt"; exit 1 ;;
+                  *) fala "ENI Converte: nao sei levar .$IN para .$FMT"; exit 1 ;;
+                esac ;;
+              txt)
+                if [ "$IN" = "pdf" ]; then
+                  pdftotext -layout entrada saida.txt
+                else
+                  libreoffice --headless --convert-to txt:Text --outdir /tmp/lo entrada > /dev/null 2>&1
+                  mv /tmp/lo/*.txt saida.txt
+                fi ;;
+              *)
+                fala "ENI Converte: formato .$FMT fora das tabelas. Audio: mp3 m4a wav ogg opus flac aac | Video: mp4 mkv mov webm gif | Imagem: png jpg webp bmp tiff ico | Docs: pdf docx odt txt epub"
+                exit 1 ;;
+            esac
+          fi
+
+          [ -f "saida.$FMT" ] || { fala "ENI Converte: conversao falhou no runner"; exit 1; }
+          S=$(stat -c%s "saida.$FMT")
+          echo "saida: saida.$FMT ($S bytes)"
+          curl -s -F chat_id="$C" -F document=@"saida.$FMT" -F caption="ENI Converte ok: $fname -> .$FMT ($S bytes)" "https://api.telegram.org/bot$T/sendDocument"
