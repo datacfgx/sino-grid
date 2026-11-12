@@ -62,8 +62,28 @@ jobs:
             exit 1
           fi
 
-          curl -sL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" --max-time 280 -o saida "$DURL"
+          curl -sL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" --max-time 60 -o saida "$DURL"
           S=$(stat -c%s saida 2>/dev/null || echo 0)
+          echo "direto: $S bytes"
+          if [ "${S:-0}" -lt 10000 ]; then
+            echo "== direto falhou — cacada de proxy (mesma do /youtube) =="
+            { curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/http.txt" | grep -E ':' | sed 's|^|http://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/socks5.txt" | grep -E ':' | sed 's|^|socks5://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" | head -3000 | grep -E ':' | sed 's|^|http://|';
+              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt" | head -1500 | grep -E ':' | sed 's|^|socks5://|'; } | sort -u | head -4000 > pool.txt
+            echo "pool: $(wc -l < pool.txt)"
+            echo "== filtro rapido (youtube generate_204 + tempo, 32 paralelos) =="
+            cat pool.txt | xargs -P32 -I{} sh -c 'R=$(curl -s -x {} --max-time 4 -o /dev/null -w "%{http_code} %{time_total}" https://www.youtube.com/generate_204 2>/dev/null); case "$R" in 204*) echo "$R {}";; esac' > vivos.txt 2>/dev/null
+            echo "vivos: $(wc -l < vivos.txt)"
+            sort -k2 -n vivos.txt | head -15 | awk '{print $3}' > caca.txt
+            while read -r proxy; do
+              [ "${S:-0}" -ge 10000 ] && break
+              echo "tentando: $proxy"
+              curl -s -x "$proxy" -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" --max-time 180 -o saida "$DURL"
+              S=$(stat -c%s saida 2>/dev/null || echo 0)
+              echo "via $proxy: $S bytes"
+            done < caca.txt
+          fi
           echo "baixado: $S bytes"
           if [ "$S" -lt 10000 ]; then
             curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: host da midia recusou o download (0 bytes). Rede pode estar bloqueando datacenter." || true
