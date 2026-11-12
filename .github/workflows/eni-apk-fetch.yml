@@ -2,12 +2,12 @@ name: ENI APK Fetch
 on:
   workflow_dispatch:
     inputs:
+      package:
+        description: "package id do app (ex: com.lemon.lvoverseas)"
+        default: "com.lemon.lvoverseas"
       slug:
-        description: "slug APKMirror do app"
+        description: "nome legivel do app (ex: capcut)"
         default: "capcut"
-      dev:
-        description: "slug do desenvolvedor no APKMirror"
-        default: "bytedance-pte-ltd"
 permissions:
   contents: write
 jobs:
@@ -15,70 +15,72 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: cacar link direto no APKMirror
+      - name: cacar fonte (apkcombo -> apkmonk -> apkpure)
         run: |
           python3 << 'PY'
-          import urllib.request, re, sys
+          import urllib.request, re, sys, datetime
 
           UA = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"}
-          base = "https://www.apkmirror.com"
-          slug, dev = "${{ inputs.slug }}", "${{ inputs.dev }}"
+          pkg, slug = "${{ inputs.package }}", "${{ inputs.slug }}"
 
           def get(url, ref=None):
               h = dict(UA)
               if ref: h["Referer"] = ref
-              return urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=30).read().decode("utf-8", "replace")
+              return urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=35).read().decode("utf-8", "replace")
 
-          cat = get(base + "/uploads/?appcategory=" + slug)
-          links = [l for l in dict.fromkeys(re.findall(r'href="(/apk/' + dev + '/' + slug + '/[^"]*)"', cat)) if "download" not in l]
-          links = [l for l in links if not any(b in l.lower() for b in ("beta", "alpha", "dogfood", "preview"))]
-          if not links:
-              sys.exit("sem versao estavel na categoria")
+          def rank(links, ctx):
+              nota = 0
+              c = ctx.lower()
+              if ".apk" in c and not any(x in c for x in (".xapk", ".apks", ".apkm", "bundle")): nota += 3
+              if "arm64-v8a" in c: nota += 2
+              if "universal" in c or "nodpi" in c: nota += 1
+              return nota
 
-          escolhida = None
-          for l in links[:6]:
+          fontes = [
+              ("apkcombo", f"https://apkcombo.com/{slug}/{pkg}/download/apk",
+                            r'href="(https://download\.apkcombo\.com/[^"]+)"'),
+              ("apkmonk",  f"https://www.apkmonk.com/app/{pkg}/",
+                            r'"(https://cdn\.apkmonk\.com/[^"]+\.apk[^"]*)"'),
+              ("apkpure",  f"https://apkpure.com/{slug}/{pkg}/download",
+                            r'"(https://d\.apkpure\.com/[^"]+)"'),
+          ]
+
+          achou = None
+          for nome, url, rx in fontes:
+              print(f"== tentando {nome}: {url}")
               try:
-                  vp = get(base + l)
-              except Exception:
+                  page = get(url)
+              except Exception as e:
+                  print(f"   falhou abrir: {e}")
                   continue
               cands = []
-              for m in re.finditer(r'href="(/apk/[^"]*/download/)"', vp):
-                  ctx = vp[max(0, m.start()-400):m.end()].lower()
-                  nota = 0
-                  if ">apk<" in ctx or " apk " in ctx or "apk</" in ctx: nota += 2
-                  if "bundle" in ctx: nota -= 5
-                  if "arm64-v8a" in ctx: nota += 2
-                  if "universal" in ctx: nota += 1
-                  if "nodpi" in ctx: nota += 1
-                  cands.append((nota, m.group(1)))
+              for m in re.finditer(rx, page):
+                  l = m.group(1).replace("&amp;", "&")
+                  ctx = page[max(0, m.start()-300):m.end()+300]
+                  cands.append((rank([l], ctx), l))
+              cands = [c for c in cands if c[0] > 0]
               cands.sort(reverse=True)
-              if cands and cands[0][0] > 0:
-                  escolhida = (l, cands[0][1])
+              if cands:
+                  achou = (nome, cands[0][1])
                   break
-          if not escolhida:
-              sys.exit("sem variante APK utilizavel")
-          vlink, dlink = escolhida
+              print("   sem link candidato")
 
-          dp = get(base + dlink, ref=base + vlink)
-          finals = re.findall(r'href="([^"]*(?:download\.php\?id=\d+|\.apk(?:\?|$))[^"]*)"', dp)
-          if not finals:
-              sys.exit("sem link direto na pagina de download")
-          final = finals[0]
-          if final.startswith("/"):
-              final = base + final
-
-          vers = vlink.rstrip("/").split("/")[-1]
-          open("/tmp/dl.txt", "w").write(final)
+          if not achou:
+              sys.exit("todas as fontes falharam")
+          nome, link = achou
+          vers = datetime.datetime.now().strftime("%Y%m%d") + "-" + nome
+          open("/tmp/dl.txt", "w").write(link)
           open("/tmp/vers.txt", "w").write(vers)
+          print("FONTE:", nome)
           print("VERSAO:", vers)
-          print("DIRETO:", final)
+          print("DIRETO:", link)
           PY
 
       - name: baixar e conferir
         run: |
           set -e
           DL=$(cat /tmp/dl.txt)
-          curl -sSL --retry 3 -A "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile Safari/537.36" -e "https://www.apkmirror.com/" -o app.apk "$DL"
+          curl -sSL --retry 3 -A "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile Safari/537.36" -o app.apk "$DL"
           python3 - << 'PY'
           import os, sys
           sz = os.path.getsize("app.apk")
