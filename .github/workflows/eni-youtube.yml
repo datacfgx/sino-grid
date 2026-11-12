@@ -8,7 +8,7 @@ on:
 jobs:
   baixa:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: caçada real (engine da casa modernizada)
         run: |
@@ -22,7 +22,7 @@ jobs:
           chmod 600 cookies.txt
           ok=""
           echo "== fase 0: direto =="
-          if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+          if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
             if ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 video.mp4 2>/dev/null | grep -q video; then
               ok=1
               echo "BAIXOU DIRETO COM VIDEO"
@@ -35,17 +35,17 @@ jobs:
             { curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/http.txt" | grep -E ':' | sed 's|^|http://|';
               curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/socks5.txt" | grep -E ':' | sed 's|^|socks5://|';
               curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" | head -3000 | grep -E ':' | sed 's|^|http://|';
-              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt" | head -1500 | grep -E ':' | sed 's|^|socks5://|'; } | sort -u | head -6000 > pool.txt
+              curl -s --max-time 30 "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt" | head -1500 | grep -E ':' | sed 's|^|socks5://|'; } | sort -u | head -4000 > pool.txt
             echo "pool: $(wc -l < pool.txt)"
             echo "== filtro rapido (youtube generate_204 + tempo, 32 paralelos) =="
-            cat pool.txt | xargs -P32 -I{} sh -c 'R=$(curl -s -x {} --max-time 5 -o /dev/null -w "%{http_code} %{time_total}" https://www.youtube.com/generate_204 2>/dev/null); case "$R" in 204*) echo "$R {}";; esac' > vivos.txt 2>/dev/null
+            cat pool.txt | xargs -P32 -I{} sh -c 'R=$(curl -s -x {} --max-time 4 -o /dev/null -w "%{http_code} %{time_total}" https://www.youtube.com/generate_204 2>/dev/null); case "$R" in 204*) echo "$R {}";; esac' > vivos.txt 2>/dev/null
             echo "vivos: $(wc -l < vivos.txt)"
-            sort -k2 -n vivos.txt | head -25 | awk '{print $3}' > caca.txt
-            echo "== tentando os 25 mais rapidos com cookies =="
+            sort -k2 -n vivos.txt | head -15 | awk '{print $3}' > caca.txt
+            echo "== tentando os 15 mais rapidos com cookies =="
             while read -r proxy; do
               [ -n "$ok" ] && break
               echo "tentando: $proxy"
-              if ./yt-dlp --cookies cookies.txt --proxy "$proxy" --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
+              if ./yt-dlp --cookies cookies.txt --proxy "$proxy" --socket-timeout 20 --retries 1 -f "bv[height<=720]+ba/b[height<=720]/b" --merge-output-format mp4 -o "video.%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
                 if ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 video.mp4 2>/dev/null | grep -q video; then
                   ok=1
                   echo "BAIXOU COM VIDEO VIA $proxy"
