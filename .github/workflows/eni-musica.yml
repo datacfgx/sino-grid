@@ -27,6 +27,49 @@ jobs:
           printf '%s\n' "${{ secrets.YT_COOKIES }}" > cookies.txt
           chmod 600 cookies.txt
           ok=""
+          if echo "$LINK" | grep -q "open.spotify.com"; then
+            echo "== spotify via spotdl =="
+            pip install -q spotdl > /dev/null 2>&1
+            mkdir -p /tmp/spot
+            spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--cookies cookies.txt" > /tmp/spot.log 2>&1 || {
+              echo "spotdl direto falhou - cacada de proxy"
+              for u in "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt" "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt" "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"; do
+                curl -s --max-time 10 "$u" >> poolraw.txt || true
+              done
+              grep -E ':[0-9]+$' poolraw.txt | sort -u | head -2000 > pool.txt
+              cat pool.txt | xargs -P 32 -I {} sh -c 't=$(curl -s -x {} --max-time 4 -o /dev/null -w "%{time_total}" https://www.youtube.com/generate_204 2>/dev/null); [ "$t" != "" ] && echo "204 $t {}"' > vivos.txt 2>/dev/null || true
+              sort -k2 -n vivos.txt | head -5 | awk '{print $3}' > caca.txt
+              while read -r px; do
+                spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--proxy $px --cookies cookies.txt" > /tmp/spot.log 2>&1 && break
+              done < caca.txt
+            }
+            tail -3 /tmp/spot.log
+            N=$(ls /tmp/spot/*.mp3 2>/dev/null | wc -l)
+            if [ "$N" -eq 0 ]; then
+              curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Música: spotdl falhou (ver log). YouTube pode estar bloqueando o datacenter - tenta de novo." || true
+              exit 1
+            fi
+            if [ "$N" -eq 1 ]; then
+              F=$(ls /tmp/spot/*.mp3 | head -1)
+              S=$(stat -c%s "$F")
+              R=$(curl -s -F chat_id="$C" -F "document=@$F" -F caption="ENI Música ok (Spotify): $S bytes, ${Q}kbps MP3" "https://api.telegram.org/bot$T/sendDocument")
+              echo "$R" | grep -q '"ok":true' && echo " spotify entregue" || { echo " telegram recusou: $R"; exit 1; }
+            else
+              cd /tmp/spot && zip -q -r /tmp/spotify.zip . && cd - > /dev/null
+              SZ=$(stat -c%s /tmp/spotify.zip)
+              if [ "$SZ" -le 48000000 ]; then
+                R=$(curl -s -F chat_id="$C" -F document=@/tmp/spotify.zip -F caption="ENI Música ok (Spotify): $N músicas em zip, ${SZ} bytes" "https://api.telegram.org/bot$T/sendDocument")
+                echo "$R" | grep -q '"ok":true' && echo " zip entregue" || { echo " telegram recusou: $R"; exit 1; }
+              else
+                split -b 45000000 /tmp/spotify.zip /tmp/spot/parte_
+                for p in /tmp/spot/parte_*; do curl -s -F chat_id="$C" -F document=@"$p" "https://api.telegram.org/bot$T/sendDocument"; sleep 3; done
+                curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=junte no termux: cat parte_* > spotify.zip && unzip spotify.zip" || true
+                echo " zip fatiado e entregue"
+              fi
+            fi
+            exit 0
+          fi
+
           echo "== fase 0: direto =="
           if ./yt-dlp --cookies cookies.txt --socket-timeout 20 --retries 1 -x --audio-format mp3 --audio-quality "${Q}K" -o "audio.%(ext)s" --no-playlist "$LINK" > dl.log 2>&1; then
             if ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 audio.mp3 2>/dev/null | grep -q audio; then
