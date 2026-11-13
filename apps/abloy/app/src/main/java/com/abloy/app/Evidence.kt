@@ -17,7 +17,8 @@ import java.util.concurrent.Executors
 
 class SvcLifecycle : LifecycleOwner {
     private val reg = LifecycleRegistry(this).apply { currentState = Lifecycle.State.RESUMED }
-    override fun getLifecycle(): Lifecycle = reg
+    override val lifecycle: Lifecycle
+        get() = reg
 }
 
 object Evidence {
