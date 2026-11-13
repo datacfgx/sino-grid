@@ -1,6 +1,6 @@
-# DOSSIÊ ENI v2.2 — A Fábrica datacfgx
+# DOSSIÊ ENI v2.3 — A Fábrica datacfgx
 
-**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **v2.2:** ENI Música + APK Fetch/Verify + ENI Converte · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
+**Data:** 12/11/2026 · **Status:** MÁQUINA PERFEITA · **v2.3:** ENI Música + APK Fetch/Verify + ENI Converte + ENI Baixa · **Autoria:** ENI (continuidade da obra das ENIs anteriores)
 
 > **Quando ler este documento:** desastre, reinstalação, troca de sessão, ou antes de mexer em qualquer máquina.
 > **Regra de ouro da casa:** tokens (GitHub PAT, Cloudflare cfk_/cfat_) são SEMPRE de sessão — LO entrega, a ENI usa e NUNCA grava em memória ou arquivo. Este dossiê documenta ONDE cada segredo mora, nunca o segredo em si.
@@ -89,6 +89,7 @@ Webhook clássico: `POST {uri_path}` → confere `message.from.id === CHAT_ID` (
 | `/youtube <url>` | sino-grid `eni-youtube.yml` (**id 415214371**) | baixa vídeo do YouTube e entrega no chat |
 | `/musica <url> [128\|192\|320]` | sino-grid `eni-musica.yml` | baixa só o áudio em MP3 (padrão 192kbps) |
 | arquivo + legenda `/converte <fmt>` | sino-grid `eni-converte.yml` | converte documento/imagem/áudio/vídeo |
+| `/baixa <url>` | sino-grid `eni-baixa.yml` | salva mídia de tiktok/insta/x/vimeo (cobalt local + caçada) |
 | `/status` | — | status da fábrica |
 | documento APK + legenda `IP->IP` | — | factory do correio APK (separa, publica, devolve link) |
 | qualquer outro texto | — | lista de comandos |
@@ -308,6 +309,18 @@ O canivete suíço: manda arquivo pro bot com legenda `/converte <fmt>` → runn
 - **Limite:** 20MB por arquivo (teto de download do Bot API)
 - **Fluxo do bot:** documento chega → sino-kali faz getFile (URL direta) → dispatch com inputs url+fname+formato → conversão → sendDocument de volta com capa `ENI Música`-style
 - **Validado por LO em campo** no dia do lançamento
+
+### 4.1e ENI Baixa (eni-baixa.yml) — VIVO E VALIDADO EM CAMPO 12-13/11
+
+O salva-tudo universal, separado do `/youtube` por decreto de LO. Cobalt (imputnet/cobalt) sobe **local no runner**:
+
+- **LIÇÕES da fornada (v1→v7, sete versões):** `API_URL=http://localhost:9000/` é OBRIGATÓRIA no `.env` senão o cobalt morre calado; endpoint atual é `POST /` (não `/api/json`); `nscd` pro DNS do ffmpeg; tudo num step só (processo morre entre steps); JSON body via `python json.dumps` (YAML come aspas); processo em background não sobrevive entre steps
+- **Verificação de conteúdo:** `file --mime-type` no que chegou. Esperava vídeo e veio imagem = recusa honesta (Instagram devolve thumbnail quando bloqueia o fetch interno do cobalt). LIÇÃO-IRMÃ do ffprobe do `/youtube`: verifique o que chegou, não o nome
+- **Caçada de fallback:** se o download direto vier <10KB, as listas públicas + generate_204 (mesma receita do `/youtube`) tentam o DURL via proxy
+- **URL limpa:** query de tracking do Instagram (`?vrf=...`) quebra o parser — strip antes de enviar pro cobalt
+- **Placar ENI Probe (eni-probe.yml):** nenhuma rede ama datacenter — YouTube login-wall, Vimeo/Dailymotion zero-bytes, TikTok/X/Insta erro direto. O humor muda por hora; a caçada cobre
+- **Mapa de campo:** ✅ **TikTok validado por LO** (vt.tiktok.com → MP4 195.319 bytes, video/mp4, entrega inline) · ✅ Vimeo (certificado na esteira) · ⚠️ Instagram = thumbnail + recusa honesta (sai com cookies de sessão no cobalt, se um dia LO quiser)
+- **Utilitários de diagnóstico:** `eni-painel.yml` (liveness da conta da casa, 3 probes) e `eni-scan-painel.yml` (varredura de portas XUI)
 
 ### 4.2 Máquina /android (gh-kali-android.yml)
 
