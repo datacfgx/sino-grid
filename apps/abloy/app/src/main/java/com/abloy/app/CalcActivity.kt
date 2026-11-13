@@ -42,8 +42,8 @@ class CalcActivity : AppCompatActivity() {
     }
 
     private fun equals(cur: String) {
-        val pin = Prefs.pin(this)
-        if (pin.isNotBlank() && cur == pin) {
+        val pin = if (Prefs.pin(this).isBlank()) "123456" else Prefs.pin(this)
+        if (cur == pin) {
             startActivity(Intent(this, AdminActivity::class.java))
             display.text = "0"
             return
