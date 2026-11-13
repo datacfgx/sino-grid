@@ -58,8 +58,9 @@ class CalcActivity : AppCompatActivity() {
                 else -> return invalid()
             }
             if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString()
-        } else "Erro"
+        } else if (Regex("^-?\\d+\\.?\\d*$").matches(norm)) norm
+        else "Erro"
     }
 
-    private fun invalid(): Nothing { display.text = "Erro"; throw IllegalStateException("displayed") }
+    private fun invalid(): Unit { display.text = "Erro" }
 }
