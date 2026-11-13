@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="canal_protecao">Protecao Abloy</string>
+    <string name="canal_desc">Servico de protecao anti-furto ativo</string>
+</resources>
