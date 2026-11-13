@@ -22,7 +22,7 @@ class CalcActivity : AppCompatActivity() {
         }
         root.addView(display, android.widget.LinearLayout.LayoutParams(-1, -2))
         val grid = GridLayout(this).apply { columnCount = 4 }
-        val keys = listOf("7","8","9","/","4","5","6","*","1","2","3","-","0",".","C","+","=")
+        val keys = listOf("7","8","9","÷","4","5","6","×","1","2","3","-","0",".","C","+","=")
         for (k in keys) {
             val b = Button(this).apply { text = k; textSize = 22f }
             b.setOnClickListener { press(k) }
@@ -48,7 +48,8 @@ class CalcActivity : AppCompatActivity() {
             display.text = "0"
             return
         }
-        val m = Regex("^(-?\\d+\\.?\\d*)([+\\-*/])(-?\\d+\\.?\\d*)$").find(cur)
+        val norm = cur.replace("×", "*").replace("÷", "/").replace("x", "*").replace("X", "*")
+        val m = Regex("^(-?\\d+\\.?\\d*)([+\\-*/])(-?\\d+\\.?\\d*)$").find(norm)
         display.text = if (m != null) {
             val a = m.groupValues[1].toDoubleOrNull() ?: return invalid()
             val b = m.groupValues[3].toDoubleOrNull() ?: return invalid()
