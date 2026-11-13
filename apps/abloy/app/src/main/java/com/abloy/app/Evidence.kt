@@ -1,7 +1,6 @@
 package com.abloy.app
 
 import android.content.Context
-import android.content.ContextCompat
 import android.location.Location
 import android.os.Handler
 import android.os.Looper
