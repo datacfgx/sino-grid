@@ -1,0 +1,30 @@
+name: ENI Scan Painel
+on:
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: varredura TCP via heroi nas portas XUI classicas
+        run: |
+          HERO="116.196.150.180:17981"
+          HOST="38.100.202.66"
+          T="${{ secrets.TELEGRAM_TOKEN }}"
+          C="${{ secrets.TELEGRAM_CHAT_ID }}"
+          PORTAS="80 443 3000 5000 8000 8080 8888 9000 10000 2052 2082 2083 2086 2087 2095 2096 25460 25461 25462 25463 25464 25465 25466 25467 25468 25469 25470"
+          ABERTAS=""
+          for p in $PORTAS; do
+            R=$(curl -s -x "$HERO" --max-time 8 -o /tmp/probe -w "%{http_code}" "http://$HOST:$p/" 2>/dev/null || echo 000)
+            if [ "$R" != "000" ]; then
+              HEAD=$(head -c 120 /tmp/probe 2>/dev/null | tr '\n' ' ')
+              ABERTAS="$ABERTAS$p(HTTP $R: $HEAD)\n"
+            fi
+          done
+          if [ -z "$ABERTAS" ]; then
+            MSG="SCAN: nenhuma porta respondeu via heroi. Painel pode ter migrado de IP ou heroi nao roteia TCP nessas portas."
+          else
+            MSG="SCAN — portas vivas em $HOST via heroi:\n$ABERTAS"
+          fi
+          echo -e "$MSG"
+          curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=$MSG" || true
