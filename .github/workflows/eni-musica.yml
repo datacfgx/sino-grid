@@ -33,8 +33,10 @@ jobs:
             C="${{ secrets.TELEGRAM_CHAT_ID }}"
             pip install -q spotdl > /dev/null 2>&1
             mkdir -p /tmp/spot
-            spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--cookies cookies.txt" > /tmp/spot.log 2>&1 || {
-              echo "spotdl direto falhou - cacada de proxy"
+            spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--cookies cookies.txt" > /tmp/spot.log 2>&1 || true
+            N=$(ls /tmp/spot/*.mp3 2>/dev/null | wc -l)
+            if [ "$N" -eq 0 ]; then
+              echo "spotdl direto sem mp3 - cacada de proxy"
               for u in "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt" "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt" "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"; do
                 curl -s --max-time 10 "$u" >> poolraw.txt || true
               done
@@ -43,10 +45,12 @@ jobs:
               sort -k2 -n vivos.txt | head -5 | awk '{print $3}' > caca.txt
               while read -r px; do
                 echo "spotdl via $px ..."
-                spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--proxy $px --cookies cookies.txt" > /tmp/spot.log 2>&1 && { echo "spotdl OK via $px"; break; }
+                spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--proxy $px --cookies cookies.txt" > /tmp/spot.log 2>&1 || true
+                N=$(ls /tmp/spot/*.mp3 2>/dev/null | wc -l)
+                [ "$N" -gt 0 ] && { echo "spotdl OK via $px"; break; }
                 echo "falhou via $px"
               done < caca.txt
-            }
+            fi
             tail -3 /tmp/spot.log
             N=$(ls /tmp/spot/*.mp3 2>/dev/null | wc -l)
             if [ "$N" -eq 0 ]; then
