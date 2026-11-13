@@ -39,7 +39,13 @@ jobs:
           echo "cobalt no ar de verdade"
 
           env | grep -i proxy || echo "sem proxy no ambiente"
-          BODY=$(python3 -c "import json,os;print(json.dumps({'url':os.environ['LINK_URL'],'downloadMode':'auto'}))")
+          U="$LINK_URL"
+          case "$U" in
+            *instagram.com*) U="${U%%\?*}" ;;
+          esac
+          echo "url limpa: $U"
+          U="$U" python3 -c "import json,os;print(json.dumps({'url':os.environ['U'],'downloadMode':'auto'}))" > /tmp/body.txt
+          BODY=$(cat /tmp/body.txt)
           echo "body: $BODY"
           RESP=$(curl --noproxy '*' -sS -X POST http://127.0.0.1:9000/ -H "Accept: application/json" -H "Content-Type: application/json" -d "$BODY" 2>/tmp/curlerr)
           RC=$?
@@ -64,7 +70,8 @@ jobs:
 
           curl -sL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" --max-time 60 -o saida "$DURL"
           S=$(stat -c%s saida 2>/dev/null || echo 0)
-          echo "direto: $S bytes"
+          MIME=$(file -b --mime-type saida 2>/dev/null || echo "application/octet-stream")
+          echo "direto: $S bytes ($MIME)"
           if [ "${S:-0}" -lt 10000 ]; then
             echo "== direto falhou — cacada de proxy (mesma do /youtube) =="
             { curl -s --max-time 30 "https://raw.githubusercontent.com/monosans/proxy-list/main/http.txt" | grep -E ':' | sed 's|^|http://|';
@@ -84,13 +91,21 @@ jobs:
               echo "via $proxy: $S bytes"
             done < caca.txt
           fi
-          echo "baixado: $S bytes"
+          echo "baixado: $S bytes ($MIME)"
+          EXPECT=""
+          case "$LINK_URL" in
+            *"/reel/"*|*tiktok.com*|*"/shorts/"*|*youtube.com/watch*|*/status/*) EXPECT=video ;;
+          esac
+          if [ "$EXPECT" = "video" ] && [ "${MIME%%/*}" = "image" ]; then
+            curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: era pra ser VIDEO mas a rede mandou uma imagem ($FNAME, $S bytes). O host bloqueou o fetch interno do cobalt e ele caiu na thumbnail. Tenta outro link ou de novo mais tarde." || true
+            exit 1
+          fi
           if [ "$S" -lt 10000 ]; then
             curl -s -X POST "https://api.telegram.org/bot$T/sendMessage" -d chat_id="$C" --data-urlencode "text=ENI Baixa: host da midia recusou o download (0 bytes). Rede pode estar bloqueando datacenter." || true
             exit 1
           fi
           if [ "$S" -le 48000000 ]; then
-            R2=$(curl -s -F chat_id="$C" -F document=@saida -F caption="ENI Baixa ok: $FNAME ($S bytes)" "https://api.telegram.org/bot$T/sendDocument")
+            R2=$(curl -s -F chat_id="$C" -F "document=@saida;filename=$FNAME" -F caption="ENI Baixa ok: $FNAME ($S bytes, $MIME)" "https://api.telegram.org/bot$T/sendDocument")
             echo "$R2" | grep -q '"ok":true' && echo " inteiro entregue" || { echo " telegram recusou: $R2"; exit 1; }
           else
             split -b 45000000 saida parte_
