@@ -29,7 +29,9 @@ class AdminActivity : AppCompatActivity() {
         }
         label("Bot token (do seu @BotFather)");      tk = field("token", Prefs.token(this))
         label("Seu chat id");                        ch = field("chat id", Prefs.chatId(this))
-        label("PIN (min 4 digitos)");                pin = field("pin", Prefs.pin(this))
+        label("PIN (somente numeros, min 4 digitos)"); pin = field("pin", Prefs.pin(this)).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
         label("Numero de confianca (SMS, DDI+DDD)"); tr = field("ex 5511998887777", Prefs.trusted(this))
 
         val btnAdmin = Button(this).apply { text = "1. Ativar Device Admin" }
@@ -61,8 +63,10 @@ class AdminActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "Salvar configuracao"
             setOnClickListener {
+                val p = pin.text.toString().trim()
+                if (p.length < 4 || !p.all { it.isDigit() }) { toast("PIN invalido: so numeros, min 4 digitos"); return@setOnClickListener }
                 Prefs.set(this@AdminActivity, tk.text.toString().trim(), ch.text.toString().trim(),
-                          pin.text.toString().trim(), tr.text.toString().trim())
+                          p, tr.text.toString().trim())
                 toast("salvo")
                 refresh()
             }
