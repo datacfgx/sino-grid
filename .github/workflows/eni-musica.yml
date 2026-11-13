@@ -29,6 +29,8 @@ jobs:
           ok=""
           if echo "$LINK" | grep -q "open.spotify.com"; then
             echo "== spotify via spotdl =="
+            T="${{ secrets.TELEGRAM_TOKEN }}"
+            C="${{ secrets.TELEGRAM_CHAT_ID }}"
             pip install -q spotdl > /dev/null 2>&1
             mkdir -p /tmp/spot
             spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--cookies cookies.txt" > /tmp/spot.log 2>&1 || {
@@ -40,7 +42,9 @@ jobs:
               cat pool.txt | xargs -P 32 -I {} sh -c 't=$(curl -s -x {} --max-time 4 -o /dev/null -w "%{time_total}" https://www.youtube.com/generate_204 2>/dev/null); [ "$t" != "" ] && echo "204 $t {}"' > vivos.txt 2>/dev/null || true
               sort -k2 -n vivos.txt | head -5 | awk '{print $3}' > caca.txt
               while read -r px; do
-                spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--proxy $px --cookies cookies.txt" > /tmp/spot.log 2>&1 && break
+                echo "spotdl via $px ..."
+                spotdl --audio youtube-music --format mp3 --bitrate "${Q}k" --output /tmp/spot "$LINK" --yt-dlp-args "--proxy $px --cookies cookies.txt" > /tmp/spot.log 2>&1 && { echo "spotdl OK via $px"; break; }
+                echo "falhou via $px"
               done < caca.txt
             }
             tail -3 /tmp/spot.log
