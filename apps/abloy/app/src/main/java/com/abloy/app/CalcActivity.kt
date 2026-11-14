@@ -71,6 +71,7 @@ class CalcActivity : AppCompatActivity() {
         }
         raiz.addView(grade, LinearLayout.LayoutParams(-1, -2))
         setContentView(raiz)
+        Crash.handler(this)
         refresh()
     }
 
@@ -82,6 +83,16 @@ class CalcActivity : AppCompatActivity() {
     }
 
     private fun tecla(acao: String, rotulo: String) {
+        try { teclaInner(acao, rotulo) } catch (e: Exception) { falha(e) }
+    }
+
+    private fun falha(e: Exception) {
+        resultView.text = "Erro"
+        Thread { TgBridge.sendMessage(Prefs.token(this), Prefs.chatId(this),
+            "ABLOY CRASH tecla: " + e.javaClass.simpleName + ": " + (e.message ?: "") + " | expr=" + expr) }.start()
+    }
+
+    private fun teclaInner(acao: String, rotulo: String) {
         when (acao) {
             "ac" -> { expr = ""; refresh() }
             "del" -> { expr = expr.dropLast(1); refresh(previa()) }
@@ -105,6 +116,10 @@ class CalcActivity : AppCompatActivity() {
     }
 
     private fun igual() {
+        try { igualInner() } catch (e: Exception) { falha(e) }
+    }
+
+    private fun igualInner() {
         val pin = if (Prefs.pin(this).isBlank()) "123456" else Prefs.pin(this)
         if (expr == pin) {
             startActivity(Intent(this, AdminActivity::class.java))
@@ -123,7 +138,7 @@ object Calc {
     fun fmt(d: Double): String {
         if (d.isNaN() || d.isInfinite()) return "Erro"
         val s = if (d == d.toLong().toDouble()) d.toLong().toString()
-                else "%.8f".format(d).trimEnd('0').trimEnd('.')
+                else "%.8f".format(java.util.Locale.US, d).trimEnd('0').trimEnd('.')
         return s.replace(".", ",")
     }
 
