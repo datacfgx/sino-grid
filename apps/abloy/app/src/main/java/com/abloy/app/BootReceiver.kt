@@ -7,16 +7,24 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val acao = intent.action ?: return
-        // pre-desbloqueio: nao sobe servico (sem permissao de camera/local ainda) — so o BOOT_COMPLETED (pos-desbloqueio) sobe
         if (acao == "android.intent.action.LOCKED_BOOT_COMPLETED") return
-        if (acao != Intent.ACTION_BOOT_COMPLETED && acao != "android.intent.action.QUICKBOOT_POWERON") return
+        if (acao != Intent.ACTION_BOOT_COMPLETED &&
+            acao != "android.intent.action.QUICKBOOT_POWERON" &&
+            acao != Intent.ACTION_USER_UNLOCKED) return
         if (!Prefs.armed(context) || !Prefs.ready(context)) return
         try {
+            if (acao == Intent.ACTION_USER_UNLOCKED) {
+                // primeiro desbloqueio pos-boot: recompoe o servico COM os tipos camera|location (exemption do A14)
+                GuardService.stop(context)
+                Thread.sleep(800)
+            }
             GuardService.start(context)
             Thread {
                 TgBridge.sendMessage(
                     Prefs.token(context), Prefs.chatId(context),
-                    "ABLOY: dispositivo reiniciado — protecao ativa (build " + Prefs.BUILD + ")"
+                    "ABLOY: dispositivo reiniciado — protecao ativa (" +
+                    (if (acao == Intent.ACTION_USER_UNLOCKED) "pos-desbloqueio, tipos validos" else acao.substringAfterLast(".")) +
+                    ", build " + Prefs.BUILD + ")"
                 )
             }.start()
         } catch (_: Exception) { }
