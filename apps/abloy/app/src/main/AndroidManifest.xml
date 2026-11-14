@@ -49,6 +49,8 @@
             </intent-filter>
         </receiver>
 
+        <receiver android:name=".HealReceiver" android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
