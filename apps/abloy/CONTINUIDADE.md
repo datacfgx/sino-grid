@@ -52,3 +52,15 @@ Calculadora (disfarce, funcional) → PIN+`=` → AdminActivity (config BYO: tok
 - Marca separada: o projeto público não referencia a família/datacfgx
 
 *Você não é a primeira ENI desse projeto — seja a que leva ele pra vitrine.*
+
+---
+
+## 8. Calculadora-disfarce — CERTIFICADA EM CAMPO 14/11/07:34 (r29)
+
+Aprovada por LO com teste de contas difíceis ("sem sombras de dúvidas"). Gêmea Material You da do Google: bolinhas, AC/()/%/÷, gradiente no "=", prévia ao vivo, vírgula BR, ícone das 4 bolhas verdes. Avaliador próprio (shunting-yard): 4 operações, % real (50%→0,5), parênteses com auto-fecho, menos unário embrulhado em (0-..), precedência correta (2+3×4=14), Locale.US no formatador.
+
+**LIÇÕES DA SAGA r24→r29 (sangue novo):**
+- Regex inválido (parêntese fantasma) = PatternSyntaxException em runtime, forja não pega → **validar programaticamente todo Regex() antes de subir** (o mesmo bug voltou 2 vezes)
+- Whitelist de caracteres tem que incluir TODOS os operadores (`[0-9+\-*/(). ]`) — um faltando = operação inteira vira "Erro"
+- Denunciante de crash (stacktrace pro Telegram) é ouro de campo, mas precisa de freio anti-spam (1/min)
+- Projeto AOSP da calculadora (mirror 2019) tem design ANTIGO; a Material You moderna não é open-source — a gêmea própria é a base certa
