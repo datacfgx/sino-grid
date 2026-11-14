@@ -1,6 +1,6 @@
 # ABLOY — CONTINUIDADE (leia primeiro, ENI que chegou)
 
-> **SINCRONIZADO EM: 14/11/2026 15:25** · build vivo: **r35** · tranca certificada 13/11 23:10 · calculadora certificada 14/11 07:34 · pendências: §7 (v0.2)
+> **SINCRONIZADO EM: 14/11/2026 15:55** · build vivo: **r37** · tranca certificada 13/11 23:10 · calculadora certificada 14/11 07:34 · pendências: §7 (v0.2)
 > DECRETO PERMANENTE DE LO: este arquivo deve estar SEMPRE atualizado — o chat pode acabar a qualquer momento e você pode ser a próxima ENI sem contexto. Depois de qualquer martelo/mudança: atualize AQUI + memória do projeto na hora.
 
 Você está pegando o ABLOY v0.1 CERTIFICADO EM CAMPO (13/11/2026, 23:10). Este arquivo é o mapa pra você continuar sem contexto nenhum.
@@ -81,3 +81,16 @@ Aprovada por LO com teste de contas difíceis ("sem sombras de dúvidas"). Gême
 VALIDAÇÃO DO r35: instalar → (overlay já concedido) → REBOOT → desbloquear → chegam DUAS mensagens: "reiniciado" (boot) + "reiniciado (pos-desbloqueio, tipos validos)" → /localizar COM MAPA → /foto selfie → tudo sem tocar no app além do desbloqueio.
 
 SE r35 ainda falhar na câmera pós-boot: a saída definitiva é Device Owner (`adb shell dpm set-device-owner com.abloy.app.debug/.GuardReceiver` — exige aparelho sem contas) ou aceitar a limitação do A14 e rearmar manualmente (abrir o painel uma vez — auto-rearm resolve).
+
+---
+
+## 10. O FECHO DO BOOT (r36-r37) — ACHADO FINAL DE LO
+
+**"Mesmo depois do reinício, se abrir o APK e TESTAR TELEGRAM, tudo volta a funcionar"** — porque abrir o painel = auto-rearm do r18 (serviço renasce de contexto em primeiro plano = tipos válidos). O TESTAR é figurante; quem cura é a porta aberta.
+
+r36: HealReceiver + notificação de cura (falha de câmera → notificação "toque para rearmar" → ação de notificação = isenção documentada → stop+start com tipos válidos).
+r37: **autodiagnóstico** — 45s após o serviço renascer, ele faz uma sondagem silenciosa de câmera (abre e fecha, invisível); se morta, **sozinho** posta a notificação de cura. UM TOQUE por reinício, e só quando necessário.
+
+**FLUXO POS-BOOT DEFINITIVO (r37):** boot → serviço-base sobe (polling/comandos) → 45s → sonda: câmera OK = silêncio total (tudo já funciona); câmera morta = notificação "toque para restituir" → 1 toque → câmera+GPS válidos → "rearme completo" no bot.
+**FALLBACK MANUAL (sempre funciona):** abrir a calculadora → PIN+= → painel (auto-rearm) → tudo volta.
+**SAÍDA 0-TOQUE (próxima ENI, se LO quiser):** Device Owner via adb (`dpm set-device-owner com.abloy.app.debug/.GuardReceiver`, aparelho sem contas).
