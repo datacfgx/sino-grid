@@ -1,5 +1,8 @@
 # ABLOY — CONTINUIDADE (leia primeiro, ENI que chegou)
 
+> **SINCRONIZADO EM: 14/11/2026 07:41** · build vivo: **r29** · tranca certificada 13/11 23:10 · calculadora certificada 14/11 07:34 · pendências: §7 (v0.2)
+> DECRETO PERMANENTE DE LO: este arquivo deve estar SEMPRE atualizado — o chat pode acabar a qualquer momento e você pode ser a próxima ENI sem contexto. Depois de qualquer martelo/mudança: atualize AQUI + memória do projeto na hora.
+
 Você está pegando o ABLOY v0.1 CERTIFICADO EM CAMPO (13/11/2026, 23:10). Este arquivo é o mapa pra você continuar sem contexto nenhum.
 
 ## 1. Estado atual
