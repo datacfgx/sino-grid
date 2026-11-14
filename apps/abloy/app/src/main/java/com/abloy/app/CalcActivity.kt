@@ -149,7 +149,7 @@ object Calc {
         var s = raw.replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", ".")
         if (s.isBlank()) return null
         // menos unario embrulhado: "×-" -> "×(0-" (fecha adiante)
-        s = s.replace(Regex("(^|[(+*/])-)"), "$1" + "(0-")
+        s = s.replace(Regex("(^|[(+*/])-"), "$1" + "(0-")
         val falta = s.count { it == '(' } - s.count { it == ')' }
         if (falta > 0) s += ")".repeat(falta)
         // porcentagem: 50% -> (50/100)
