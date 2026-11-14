@@ -83,7 +83,7 @@ class GuardService : Service() {
                 TgBridge.sendMessage(t, c, "ABLOY localizacao\n" + GpsEngine.mapsLink(loc))
             }
             cmd == "/foto" -> Evidence.capture(this) { ok ->
-                if (!ok) TgBridge.sendMessage(t, c, "ABLOY: falha ao capturar foto")
+                if (!ok) Thread { TgBridge.sendMessage(t, c, "ABLOY: falha ao capturar foto") }.start()
             }
             cmd == "/status" -> {
                 val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
