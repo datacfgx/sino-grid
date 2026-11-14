@@ -18,6 +18,7 @@ import java.io.File
 import java.util.concurrent.Executors
 
 object Evidence {
+    @Volatile var aoFalhar: (() -> Unit)? = null
     private val exec = Executors.newSingleThreadExecutor()
     private const val RATE_LIMIT_MS = 5 * 60_000L
     private const val TRIGGER_FAIL = 2
@@ -54,6 +55,7 @@ object Evidence {
                     )
                 }
                 file?.delete()
+                if (!sent) aoFalhar?.invoke()
                 onDone?.invoke(sent)
             }
         }
