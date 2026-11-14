@@ -148,6 +148,8 @@ object Calc {
     fun avaliar(raw: String): Double? {
         var s = raw.replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", ".")
         if (s.isBlank()) return null
+        // menos unario embrulhado: "×-" -> "×(0-" (fecha adiante)
+        s = s.replace(Regex("(^|[(+*/])-)"), "$1" + "(0-")
         val falta = s.count { it == '(' } - s.count { it == ')' }
         if (falta > 0) s += ")".repeat(falta)
         // porcentagem: 50% -> (50/100)
@@ -155,9 +157,7 @@ object Calc {
             val m = Regex("(\\d+\\.?\\d*)%").find(s) ?: break
             s = s.replaceRange(m.range, "(${m.groupValues[1]}/100)")
         }
-        // menos unario
-        s = s.replace(Regex("(^|[(+*/])-"), "$1" + "0-")
-        if (!Regex("^[0-9+*/(). ]+$").matches(s)) return null
+        if (!Regex("^[0-9+\\-*/(). ]+$").matches(s)) return null
         // shunting-yard
         val saida = mutableListOf<String>()
         val pilha = mutableListOf<Char>()
