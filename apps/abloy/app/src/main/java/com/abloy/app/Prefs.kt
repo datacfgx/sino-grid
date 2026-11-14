@@ -5,8 +5,10 @@ import android.content.SharedPreferences
 
 object Prefs {
     const val BUILD = "r29"
-    private fun sp(ctx: Context): SharedPreferences =
-        ctx.getSharedPreferences("abloy", Context.MODE_PRIVATE)
+    private fun sp(ctx: Context): SharedPreferences {
+        val c = if (android.os.Build.VERSION.SDK_INT >= 24) ctx.createDeviceProtectedStorageContext() else ctx
+        return c.getSharedPreferences("abloy", Context.MODE_PRIVATE)
+    }
 
     fun token(c: Context) = sp(c).getString("token", "") ?: ""
     fun chatId(c: Context) = sp(c).getString("chat", "") ?: ""
