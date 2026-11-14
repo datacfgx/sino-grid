@@ -88,7 +88,7 @@ class GuardService : Service() {
             cmd == "/status" -> {
                 val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
                 val admin = ComponentName(this, GuardReceiver::class.java)
-                TgBridge.sendMessage(t, c, "ABLOY status\nprotecao: ${if (Prefs.armed(this)) "armada" else "desarmada"}\ndevice admin: ${dpm.isAdminActive(admin)}\nlocal: " + GpsEngine.mapsLink(GpsEngine.fix(this, 5000)))
+                TgBridge.sendMessage(t, c, "ABLOY status build=" + Prefs.BUILD + "\nprotecao: ${if (Prefs.armed(this)) "armada" else "desarmada"}\ndevice admin: ${dpm.isAdminActive(admin)}\nlocal: " + GpsEngine.mapsLink(GpsEngine.fix(this, 5000)))
             }
             cmd == "/alarme" -> {
                 stopAlarm()
@@ -97,6 +97,10 @@ class GuardService : Service() {
                 TgBridge.sendMessage(t, c, "ABLOY: alarme tocando. /parar para silenciar.")
             }
             cmd == "/parar" -> { stopAlarm(); TgBridge.sendMessage(t, c, "ABLOY: alarme silenciado.") }
+            cmd == "/reiniciar" -> {
+                TgBridge.sendMessage(t, c, "ABLOY: reiniciando servico (build " + Prefs.BUILD + ")")
+                GuardService.stop(this); Thread.sleep(800); GuardService.start(this)
+            }
             cmd == "/trancar" -> {
                 val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
                 dpm.lockNow()
