@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 object Prefs {
-    const val BUILD = "r29"
+    const val BUILD = "r30"
     private fun sp(ctx: Context): SharedPreferences {
         val c = if (android.os.Build.VERSION.SDK_INT >= 24) ctx.createDeviceProtectedStorageContext() else ctx
         return c.getSharedPreferences("abloy", Context.MODE_PRIVATE)
