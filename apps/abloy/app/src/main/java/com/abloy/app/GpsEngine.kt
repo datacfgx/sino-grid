@@ -8,28 +8,26 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 object GpsEngine {
-    private const val MIN_ACCURACY = 20f
-
-    fun fix(ctx: Context, timeoutMs: Long = 10000): Location? {
+    fun fix(ctx: Context, timeoutMs: Long = 15000): Location? {
         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        var best: Location? = null
+        var melhor: Location? = null
         for (p in lm.getProviders(true)) {
             try {
                 val l = lm.getLastKnownLocation(p) ?: continue
-                if (l.accuracy <= MIN_ACCURACY && (best == null || l.time > best.time)) best = l
+                if (melhor == null || l.time > melhor.time) melhor = l
             } catch (_: SecurityException) { }
         }
-        if (best != null && System.currentTimeMillis() - best.time < 120_000) return best
-
-        val latch = CountDownLatch(1)
-        var fresh: Location? = null
+        val trava = CountDownLatch(1)
+        var fresco: Location? = null
         try {
-            lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, { loc ->
-                if (loc.accuracy <= MIN_ACCURACY || fresh == null) { fresh = loc; latch.countDown() }
-            }, Looper.getMainLooper())
-        } catch (_: SecurityException) { return best }
-        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
-        return fresh ?: best
+            for (prov in listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)) {
+                lm.requestSingleUpdate(prov, { loc ->
+                    if (fresco == null) { fresco = loc; trava.countDown() }
+                }, Looper.getMainLooper())
+            }
+        } catch (_: SecurityException) { return melhor }
+        trava.await(timeoutMs, TimeUnit.MILLISECONDS)
+        return fresco ?: melhor
     }
 
     fun mapsLink(loc: Location?): String =
