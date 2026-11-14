@@ -23,6 +23,28 @@ object Evidence {
     private const val RATE_LIMIT_MS = 5 * 60_000L
     private const val TRIGGER_FAIL = 2
 
+    fun sonda(ctx: Context, cb: (Boolean) -> Unit) {
+        exec.execute {
+            try {
+                val mgr = ctx.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                val id = mgr.cameraIdList.firstOrNull {
+                    mgr.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
+                } ?: mgr.cameraIdList.firstOrNull()
+                if (id == null) { cb(false); return@execute }
+                var respondido = false
+                fun fim(ok: Boolean) { if (!respondido) { respondido = true; cb(ok) } }
+                val th = HandlerThread("sonda").apply { start() }
+                val h = Handler(th.looper)
+                mgr.openCamera(id, object : android.hardware.camera2.CameraDevice.StateCallback() {
+                    override fun onOpened(dev: android.hardware.camera2.CameraDevice) { dev.close(); th.quitSafely(); fim(true) }
+                    override fun onDisconnected(dev: android.hardware.camera2.CameraDevice) { dev.close(); th.quitSafely(); fim(false) }
+                    override fun onError(dev: android.hardware.camera2.CameraDevice, error: Int) { dev.close(); th.quitSafely(); fim(false) }
+                }, h)
+                Handler(Looper.getMainLooper()).postDelayed({ fim(false) }, 6000)
+            } catch (_: Exception) { cb(false) }
+        }
+    }
+
     fun onFailedUnlock(ctx: Context) {
         Prefs.addFail(ctx)
         if (Prefs.fails(ctx) < TRIGGER_FAIL) return
