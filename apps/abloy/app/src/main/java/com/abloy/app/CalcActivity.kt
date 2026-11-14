@@ -170,8 +170,8 @@ object Calc {
                     while (j < s.length && (s[j].isDigit() || s[j] == '.')) j++
                     saida.add(s.substring(i, j)); i = j
                 }
-                c in "+*/" -> {
-                    while (pilha.isNotEmpty() && pilha.last() in "+*/" && prec(c) <= prec(pilha.last()))
+                c in "+-*/" -> {
+                    while (pilha.isNotEmpty() && pilha.last() in "+-*/" && prec(c) <= prec(pilha.last()))
                         saida.add(pilha.removeAt(pilha.size - 1).toString())
                     pilha.add(c); i++
                 }
