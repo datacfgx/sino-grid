@@ -142,12 +142,14 @@ class GuardService : Service() {
 
     private fun stopAlarm() { try { alarm?.stop() } catch (_: Exception) { }; alarm = null }
 
+    @Volatile private var ultimaCura = 0L
     fun curar() {
-        // câmera morta pós-boot: se sobreposição vigente, A PORTA ABRE SOZINHA (auto-rearm do painel = cura total)
+        if (System.currentTimeMillis() - ultimaCura < 120_000) return
+        ultimaCura = System.currentTimeMillis()
+        // camera morta pos-boot: sobreposicao vigente -> a FANTASMA abre sozinha (isencao de janela visivel, segredo intacto)
         if (android.provider.Settings.canDrawOverlays(this)) {
             try {
-                startActivity(Intent(this, AdminActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                Thread { TgBridge.sendMessage(Prefs.token(this), Prefs.chatId(this), "ABLOY: auto-rearme disparado (sobreposicao) — painel aberto, protecao completa") }.start()
+                startActivity(Intent(this, RearmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 return
             } catch (_: Exception) { }
         }
