@@ -74,8 +74,10 @@ class AdminActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "Testar Telegram"
             setOnClickListener {
-                val ok = TgBridge.sendMessage(Prefs.token(this@AdminActivity), Prefs.chatId(this@AdminActivity), "ABLOY OK — canal vivo")
-                toast(if (ok) "enviado" else "falha — confira token/chat")
+                Thread {
+                    val ok = TgBridge.sendMessage(Prefs.token(this@AdminActivity), Prefs.chatId(this@AdminActivity), "ABLOY OK — canal vivo")
+                    runOnUiThread { toast(if (ok) "enviado — olhe o chat do bot" else "falha — confira token/chat") }
+                }.start()
             }
         })
         setContentView(root)
