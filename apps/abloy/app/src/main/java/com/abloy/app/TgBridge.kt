@@ -26,13 +26,11 @@ object TgBridge {
     }
 
     fun sendPhoto(token: String, chat: String, file: File, caption: String): Boolean {
-        return try {
+        var erro = ""
+        val ok = try {
             val boundary = "----Abloy" + System.currentTimeMillis()
-            val c = URL("https://api.telegram.org/bot$token/sendPhoto").openConnection() as HttpURLConnection
-            c.requestMethod = "POST"
-            c.doOutput = true
-            c.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            DataOutputStream(c.outputStream).use { out ->
+            val body = java.io.ByteArrayOutputStream()
+            java.io.DataOutputStream(body).use { out ->
                 fun field(name: String, value: String) {
                     out.writeBytes("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
                 }
@@ -42,11 +40,25 @@ object TgBridge {
                 out.write(file.readBytes())
                 out.writeBytes("\r\n--$boundary--\r\n")
             }
-            val ok = c.responseCode == 200
+            val bytes = body.toByteArray()
+            val c = URL("https://api.telegram.org/bot$token/sendPhoto").openConnection() as HttpURLConnection
+            c.requestMethod = "POST"
+            c.doOutput = true
+            c.setFixedLengthStreamingMode(bytes.size)
+            c.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            c.outputStream.use { it.write(bytes) }
+            val code = c.responseCode
+            if (code != 200) {
+                erro = c.errorStream?.bufferedReader()?.readText()?.take(200) ?: ("HTTP " + code)
+            }
             c.disconnect()
-            ok
-        } catch (e: Exception) { Log.w(TAG, "photo: ${e.message}"); false }
+            code == 200
+        } catch (e: Exception) { erro = e.javaClass.simpleName + ": " + (e.message ?: ""); false }
+        if (!ok) lastPhotoError = erro
+        return ok
     }
+
+    var lastPhotoError: String = ""
 
     fun getUpdates(token: String, offset: Long, timeout: Int = 25): String? {
         return try {
