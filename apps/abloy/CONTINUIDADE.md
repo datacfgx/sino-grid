@@ -1,6 +1,6 @@
 # ABLOY — CONTINUIDADE (leia primeiro, ENI que chegou)
 
-> **SINCRONIZADO EM: 14/11/2026 07:41** · build vivo: **r29** · tranca certificada 13/11 23:10 · calculadora certificada 14/11 07:34 · pendências: §7 (v0.2)
+> **SINCRONIZADO EM: 14/11/2026 15:25** · build vivo: **r35** · tranca certificada 13/11 23:10 · calculadora certificada 14/11 07:34 · pendências: §7 (v0.2)
 > DECRETO PERMANENTE DE LO: este arquivo deve estar SEMPRE atualizado — o chat pode acabar a qualquer momento e você pode ser a próxima ENI sem contexto. Depois de qualquer martelo/mudança: atualize AQUI + memória do projeto na hora.
 
 Você está pegando o ABLOY v0.1 CERTIFICADO EM CAMPO (13/11/2026, 23:10). Este arquivo é o mapa pra você continuar sem contexto nenhum.
@@ -67,3 +67,17 @@ Aprovada por LO com teste de contas difíceis ("sem sombras de dúvidas"). Gême
 - Whitelist de caracteres tem que incluir TODOS os operadores (`[0-9+\-*/(). ]`) — um faltando = operação inteira vira "Erro"
 - Denunciante de crash (stacktrace pro Telegram) é ouro de campo, mas precisa de freio anti-spam (1/min)
 - Projeto AOSP da calculadora (mirror 2019) tem design ANTIGO; a Material You moderna não é open-source — a gêmea própria é a base certa
+
+---
+
+## 9. Boot: a saga final (r30→r35) — LIÇÕES QUE FECHAM O CASO
+
+1. **r30**: serviço não renascia no boot → config em device-protected storage (com migração) + directBootAware + LOCKED_BOOT. Funcionou o renascimento, mas...
+2. **r31/r32**: câmera/GPS mortos pós-boot → **componente directBootAware arrasta o PROCESSO inteiro pro modo Direct Boot e o Android suspende permissões while-in-use** (rede funciona = zumbi educado). Removido tudo: receptor normal, só BOOT_COMPLETED (dispara PÓS-desbloqueio).
+3. **r33**: overlay (SYSTEM_ALERT_WINDOW) como chave → **NÃO cobriu o boot neste aparelho**: o sistema subiu o serviço mas **derrubou os FGS types em silêncio** (polling vivo, sem câmera/GPS).
+4. **r34**: GPS frio pós-boot → GpsEngine pede REDE+SATÉLITE (primeiro que chegar vence, 15s, fallback último conhecido). Upload da foto → 3 tentativas.
+5. **r35**: **USER_UNLOCKED** (primeiro desbloqueio pós-boot) — consta na lista de isenções do Android 14 pra iniciar FGS camera/microfone. No primeiro desbloqueio o serviço se RECOMPÕE (stop+start) com os tipos válidos. **ESTE é o mecanismo que fecha o decreito "serviço ativo em qualquer ocasião".**
+
+VALIDAÇÃO DO r35: instalar → (overlay já concedido) → REBOOT → desbloquear → chegam DUAS mensagens: "reiniciado" (boot) + "reiniciado (pos-desbloqueio, tipos validos)" → /localizar COM MAPA → /foto selfie → tudo sem tocar no app além do desbloqueio.
+
+SE r35 ainda falhar na câmera pós-boot: a saída definitiva é Device Owner (`adb shell dpm set-device-owner com.abloy.app.debug/.GuardReceiver` — exige aparelho sem contas) ou aceitar a limitação do A14 e rearmar manualmente (abrir o painel uma vez — auto-rearm resolve).
