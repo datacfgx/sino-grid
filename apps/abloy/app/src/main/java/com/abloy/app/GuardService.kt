@@ -31,6 +31,7 @@ class GuardService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Evidence.aoFalhar = { postarCura() }
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH, getString(R.string.canal_protecao), NotificationManager.IMPORTANCE_LOW).apply {
             description = getString(R.string.canal_desc)
