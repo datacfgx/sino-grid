@@ -36,7 +36,6 @@
         <service
             android:name=".GuardService"
             android:exported="false"
-            android:directBootAware="true"
             android:foregroundServiceType="camera|location" />
 
         <receiver
