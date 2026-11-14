@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 object Prefs {
-    const val BUILD = "r28"
+    const val BUILD = "r29"
     private fun sp(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences("abloy", Context.MODE_PRIVATE)
 
