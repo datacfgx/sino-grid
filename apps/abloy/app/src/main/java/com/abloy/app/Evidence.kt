@@ -75,10 +75,13 @@ object Evidence {
                 val cap = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
+                val stub = ImageAnalysis.Builder().build().also {
+                    it.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { img -> img.close() }
+                }
                 provider.unbindAll()
-                provider.bindToLifecycle(SvcLifecycle(), selector, cap)
+                provider.bindToLifecycle(SvcLifecycle(), selector, cap, stub)
                 val file = File(ctx.cacheDir, "ev_${System.currentTimeMillis()}.jpg")
-                cap.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), main,
+                cap.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), Executors.newSingleThreadExecutor(),
                     object : ImageCapture.OnImageSavedCallback {
                         override fun onImageSaved(o: ImageCapture.OutputFileResults) {
                             provider.unbindAll(); cb(file, null)
