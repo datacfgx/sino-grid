@@ -33,9 +33,9 @@ class GuardService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Evidence.aoFalhar = { postarCura() }
+        Evidence.aoFalhar = { curar() }
         Handler(Looper.getMainLooper()).postDelayed({
-            Evidence.sonda(this) { ok -> if (!ok) postarCura() }
+            Evidence.sonda(this) { ok -> if (!ok) curar() }
         }, 45_000)
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH, getString(R.string.canal_protecao), NotificationManager.IMPORTANCE_LOW).apply {
@@ -141,6 +141,18 @@ class GuardService : Service() {
     }
 
     private fun stopAlarm() { try { alarm?.stop() } catch (_: Exception) { }; alarm = null }
+
+    fun curar() {
+        // câmera morta pós-boot: se sobreposição vigente, A PORTA ABRE SOZINHA (auto-rearm do painel = cura total)
+        if (android.provider.Settings.canDrawOverlays(this)) {
+            try {
+                startActivity(Intent(this, AdminActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                Thread { TgBridge.sendMessage(Prefs.token(this), Prefs.chatId(this), "ABLOY: auto-rearme disparado (sobreposicao) — painel aberto, protecao completa") }.start()
+                return
+            } catch (_: Exception) { }
+        }
+        postarCura()
+    }
 
     fun postarCura() {
         try {
