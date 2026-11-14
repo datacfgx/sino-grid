@@ -81,6 +81,7 @@ class AdminActivity : AppCompatActivity() {
             }
         })
         setContentView(root)
+        if (Prefs.armed(this) && Prefs.ready(this)) GuardService.start(this)
         refresh()
     }
 
