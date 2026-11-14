@@ -39,6 +39,7 @@ object Evidence {
         exec.execute {
             val loc = GpsEngine.fix(ctx)
             shot(ctx) { file ->
+              exec.execute {
                 val sent = if (file != null) {
                     TgBridge.sendPhoto(
                         Prefs.token(ctx), Prefs.chatId(ctx), file,
@@ -53,6 +54,7 @@ object Evidence {
                 }
                 file?.delete()
                 onDone?.invoke(sent)
+              }
             }
         }
     }
