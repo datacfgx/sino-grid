@@ -38,7 +38,7 @@ object Evidence {
     fun capture(ctx: Context, onDone: ((Boolean) -> Unit)? = null) {
         exec.execute {
             val loc = GpsEngine.fix(ctx)
-            shot(ctx) { file ->
+            shot(ctx) { file, motivo ->
               exec.execute {
                 val sent = if (file != null) {
                     TgBridge.sendPhoto(
@@ -49,7 +49,7 @@ object Evidence {
                 } else {
                     TgBridge.sendMessage(
                         Prefs.token(ctx), Prefs.chatId(ctx),
-                        "ABLOY: tentativa de desbloqueio falho (sem camera)\n" + GpsEngine.mapsLink(loc)
+                        "ABLOY: foto NAO capturada ($motivo)\n" + GpsEngine.mapsLink(loc)
                     )
                 }
                 file?.delete()
@@ -59,7 +59,12 @@ object Evidence {
         }
     }
 
-    private fun shot(ctx: Context, cb: (File?) -> Unit) {
+    private fun shot(ctx: Context, cb: (File?, String?) -> Unit) {
+        if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            cb(null, "sem permissao de camera — conceda nas configuracoes do app")
+            return
+        }
         val future = ProcessCameraProvider.getInstance(ctx)
         val main = ContextCompat.getMainExecutor(ctx)
         future.addListener({
@@ -76,13 +81,13 @@ object Evidence {
                 cap.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), main,
                     object : ImageCapture.OnImageSavedCallback {
                         override fun onImageSaved(o: ImageCapture.OutputFileResults) {
-                            provider.unbindAll(); cb(file)
+                            provider.unbindAll(); cb(file, null)
                         }
                         override fun onError(e: ImageCaptureException) {
-                            provider.unbindAll(); cb(null)
+                            provider.unbindAll(); cb(null, "capture erro " + e.imageCaptureError)
                         }
                     })
-            } catch (e: Exception) { cb(null) }
+            } catch (e: Exception) { cb(null, "excecao: " + e.javaClass.simpleName) }
         }, main)
     }
 }
