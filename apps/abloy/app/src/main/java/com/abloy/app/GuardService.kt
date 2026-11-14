@@ -44,7 +44,10 @@ class GuardService : Service() {
             .setContentIntent(pi)
             .setOngoing(true)
             .build()
-        startForeground(1, n)
+        val tipo = if (android.os.Build.VERSION.SDK_INT >= 29)
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+        androidx.core.app.ServiceCompat.startForeground(this, 1, n, tipo)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
