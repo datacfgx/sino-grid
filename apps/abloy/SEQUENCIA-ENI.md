@@ -11,16 +11,16 @@
 | **Sem reboot** | ✅ TUDO FUNCIONA: foto do meliante (Camera2) + mapa GPS ±11-34m + todos os comandos Telegram + calculadora-disfarce certificada |
 | **Após reboot** | ⚠️ Serviço SOBE SOZINHO (polling/comandos funcionam), mas nasce **SEM os FGS types camera\|location** (muralha do Android 14) → câmera dá erro 3, GPS vazio — até o auto-cura disparar |
 
-- **Build vivo: r39 — ⚠️ AGUARDANDO VALIDAÇÃO EM CAMPO.** O teste de reboot do r39 NUNCA FOI FEITO (o último teste validou o r38, que curava mas abria o painel VISÍVEL — LO vetou: "revela o segredo"). O r39 troca o painel por uma **janela-fantasma de 1px** (invisível) que cura sem aparecer.
-- Se r39 estiver verde no Actions e ainda não validado: **sua primeira missão é o ritual abaixo.**
+- **Build vivo: r39 — ❌ TESTADO EM CAMPO E FALHOU (14/11 ~16:45):** após o reboot, o auto-cura NÃO subiu (a câmera/GPS não foram restituídos). A janela-fantasma de 1px não curou — hipóteses: (a) a janela 1px transparente NÃO conta como "atividade visível" pro grant dos FGS types; (b) o probe/curar() não disparou. **DIAGNÓSTICO PRIMEIRO:** pergunte a LO se chegou a mensagem "auto-rearme invisivel" no bot pós-boot (se chegou → a fantasma abriu mas o grant falhou = hipótese A; se não chegou → curar() nem rodou = hipótese B, adicionar telemetria no início do probe).
+- **Prova de campo acumulada:** o que SEMPRE cura é **abrir o painel** (r38, contexto de atividade visível de verdade). O que falta é fazer isso sem revelar o app.
 
-## 🎯 SUA PRIMEIRA MISSÃO (ritual de validação do r39)
+## 🎯 SUA PRIMEIRA MISSÃO (continuar da FALHA do r39)
 
-1. Confirme o build **r39** verde em Actions (se falhou, leia o log e remende — regras no CONTINUIDADE.md)
-2. Peça a LO: instala o APK por cima → **reinicia o celular** → desbloqueia
-3. O que deve acontecer SOZINHO: *"dispositivo reiniciado"* (16:25-style) → **~1 min de SILÊNCIO TOTAL na tela** (nada de painel abrindo) → *"auto-rearme invisivel — protecao completa"* no bot
-4. Aí LO testa: `/localizar` (mapa) + `/foto` (selfie)
-5. **VEREDITO PRO LO:** se fechou → decreto "serviço ativo em qualquer ocasião" CUMPRIDO (cura sozinha + segredo guardado). Se a tela piscar qualquer coisa ou a câmera falhar → relatório honesto + plano B abaixo.
+1. **Diagnóstico do r39:** verificar com LO se a mensagem "auto-rearme invisivel" chegou pós-boot. Adicionar telemetria (msg no bot no INÍCIO do probe: "sonda pos-boot: camera ok/morta") pra separar hipótese A de B
+2. **Plano A (mais provável):** a janela 1px não conta como visível → trocar RearmActivity pra uma janela MÍNIMA MAS REAL (ex.: 48dp cinza médio transparente a 90%, abre e fecha em 1s — quase imperceptível, mas conta como janela visível). Se LO achar visível demais: tentar dimensão mínima que ainda cure (48dp → 24dp → 12dp, testar em campo)
+3. **Plano B:** forçar o plano da notificação de 1 toque (HealReceiver, r36) como fluxo principal — infalível quando a sobreposição vigorar
+4. **Plano C (definitivo):** Device Owner — `adb shell dpm set-device-owner com.abloy.app.debug/.GuardReceiver` (aparelho sem contas Google primeiro). Zero toque pra sempre
+5. **Relatório honesto a LO após cada teste**
 
 ## 🧩 SE O r39 FALHAR — planos na ordem de confiança
 
