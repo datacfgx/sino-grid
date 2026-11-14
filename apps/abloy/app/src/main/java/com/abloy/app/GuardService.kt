@@ -86,7 +86,10 @@ class GuardService : Service() {
                 TgBridge.sendMessage(t, c, "ABLOY localizacao\n" + GpsEngine.mapsLink(loc))
             }
             cmd == "/foto" -> Evidence.capture(this) { ok ->
-                if (!ok) Thread { TgBridge.sendMessage(t, c, "ABLOY: falha ao capturar foto") }.start()
+                if (!ok) {
+                    Thread { TgBridge.sendMessage(t, c, "ABLOY: falha ao capturar foto — toque na notificacao para rearmar") }.start()
+                    postarCura()
+                }
             }
             cmd == "/status" -> {
                 val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -132,6 +135,23 @@ class GuardService : Service() {
     }
 
     private fun stopAlarm() { try { alarm?.stop() } catch (_: Exception) { }; alarm = null }
+
+    fun postarCura() {
+        try {
+            val pi = android.app.PendingIntent.getBroadcast(
+                this, 7, Intent(this, HealReceiver::class.java),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+            val n = Notification.Builder(this, CH)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                .setContentTitle("ABLOY: protecao parcial apos reinicio")
+                .setContentText("Toque aqui para restituir camera e GPS (2 segundos)")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            val nm = getSystemService(android.app.NotificationManager::class.java)
+            nm.notify(7, n)
+        } catch (_: Exception) { }
+    }
 
     override fun onDestroy() { stopAlarm(); running = false; super.onDestroy() }
 }
