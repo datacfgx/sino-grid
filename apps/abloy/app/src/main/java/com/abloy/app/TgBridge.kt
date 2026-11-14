@@ -27,6 +27,7 @@ object TgBridge {
 
     fun sendPhoto(token: String, chat: String, file: File, caption: String): Boolean {
         var erro = ""
+        for (tentativa in 1..3) {
         val ok = try {
             val boundary = "----Abloy" + System.currentTimeMillis()
             val body = java.io.ByteArrayOutputStream()
@@ -55,8 +56,10 @@ object TgBridge {
             c.disconnect()
             code == 200
         } catch (e: Exception) { erro = e.javaClass.simpleName + ": " + (e.message ?: ""); false }
-        if (!ok) lastPhotoError = erro
-        return ok
+        if (ok) { lastPhotoError = ""; return true }
+        }
+        lastPhotoError = erro
+        return false
     }
 
     var lastPhotoError: String = ""
