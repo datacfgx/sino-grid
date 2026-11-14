@@ -36,12 +36,18 @@ object Evidence {
             val loc = GpsEngine.fix(ctx)
             shot(ctx) { file, motivo ->
                 val sent = if (file != null) {
-                    TgBridge.sendPhoto(
+                    val fotoOk = TgBridge.sendPhoto(
                         Prefs.token(ctx), Prefs.chatId(ctx), file,
                         "ABLOY evidencia\n" + GpsEngine.mapsLink(loc) +
                         "\n" + java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                     )
+                    if (!fotoOk) {
+                        TgBridge.sendMessage(Prefs.token(ctx), Prefs.chatId(ctx),
+                            "ABLOY: FOTO TIRADA mas envio falhou: " + TgBridge.lastPhotoError)
+                    }
+                    fotoOk
                 } else {
+
                     TgBridge.sendMessage(
                         Prefs.token(ctx), Prefs.chatId(ctx),
                         "ABLOY: foto NAO capturada ($motivo)\n" + GpsEngine.mapsLink(loc)
