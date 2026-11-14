@@ -5,9 +5,27 @@ import android.content.SharedPreferences
 
 object Prefs {
     const val BUILD = "r30"
+    @Volatile private var migrado = false
+
     private fun sp(ctx: Context): SharedPreferences {
         val c = if (android.os.Build.VERSION.SDK_INT >= 24) ctx.createDeviceProtectedStorageContext() else ctx
-        return c.getSharedPreferences("abloy", Context.MODE_PRIVATE)
+        val novo = c.getSharedPreferences("abloy", Context.MODE_PRIVATE)
+        if (!migrado) {
+            migrado = true
+            try {
+                val velho = ctx.getSharedPreferences("abloy", Context.MODE_PRIVATE)
+                if (novo.getString("token", "")!!.isBlank() && velho.getString("token", "")!!.isNotBlank()) {
+                    novo.edit()
+                        .putString("token", velho.getString("token", ""))
+                        .putString("chat", velho.getString("chat", ""))
+                        .putString("pin", velho.getString("pin", ""))
+                        .putString("trusted", velho.getString("trusted", ""))
+                        .putBoolean("armed", velho.getBoolean("armed", false))
+                        .apply()
+                }
+            } catch (_: Exception) { }
+        }
+        return novo
     }
 
     fun token(c: Context) = sp(c).getString("token", "") ?: ""
