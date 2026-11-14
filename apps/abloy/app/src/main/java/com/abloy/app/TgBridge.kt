@@ -31,14 +31,15 @@ object TgBridge {
             val boundary = "----Abloy" + System.currentTimeMillis()
             val body = java.io.ByteArrayOutputStream()
             java.io.DataOutputStream(body).use { out ->
+                fun w(s: String) { out.write(s.toByteArray(Charsets.UTF_8)) }
                 fun field(name: String, value: String) {
-                    out.writeBytes("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
+                    w("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
                 }
                 field("chat_id", chat)
                 field("caption", caption)
-                out.writeBytes("--$boundary\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"${file.name}\"\r\nContent-Type: image/jpeg\r\n\r\n")
+                w("--$boundary\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"${file.name}\"\r\nContent-Type: image/jpeg\r\n\r\n")
                 out.write(file.readBytes())
-                out.writeBytes("\r\n--$boundary--\r\n")
+                w("\r\n--$boundary--\r\n")
             }
             val bytes = body.toByteArray()
             val c = URL("https://api.telegram.org/bot$token/sendPhoto").openConnection() as HttpURLConnection
