@@ -86,8 +86,11 @@ class CalcActivity : AppCompatActivity() {
         try { teclaInner(acao, rotulo) } catch (e: Exception) { falha(e) }
     }
 
+    private var ultimoRelato = 0L
     private fun falha(e: Exception) {
         resultView.text = "Erro"
+        if (System.currentTimeMillis() - ultimoRelato < 60_000) return
+        ultimoRelato = System.currentTimeMillis()
         Thread { TgBridge.sendMessage(Prefs.token(this), Prefs.chatId(this),
             "ABLOY CRASH tecla: " + e.javaClass.simpleName + ": " + (e.message ?: "") + " | expr=" + expr) }.start()
     }
@@ -153,7 +156,7 @@ object Calc {
             s = s.replaceRange(m.range, "(${m.groupValues[1]}/100)")
         }
         // menos unario
-        s = s.replace(Regex("(^|[(+*/])-)"), "$1" + "0-")
+        s = s.replace(Regex("(^|[(+*/])-"), "$1" + "0-")
         if (!Regex("^[0-9+*/(). ]+$").matches(s)) return null
         // shunting-yard
         val saida = mutableListOf<String>()
