@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 object Prefs {
-    const val BUILD = "r33"
+    const val BUILD = "r34"
     @Volatile private var migrado = false
 
     private fun sp(ctx: Context): SharedPreferences {
