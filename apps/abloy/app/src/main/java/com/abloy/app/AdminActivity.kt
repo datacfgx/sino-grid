@@ -50,7 +50,13 @@ class AdminActivity : AppCompatActivity() {
                 android.Manifest.permission.READ_PHONE_STATE,
                 android.Manifest.permission.POST_NOTIFICATIONS), 42)
         }
-        val sw = Switch(this).apply { text = "3. Protecao armada"; isChecked = Prefs.armed(this@AdminActivity) }
+        val btnOverlay = Button(this).apply { text = "3. PERMITIR SOBREPOSICAO (camera/GPS apos boot)" }
+        btnOverlay.setOnClickListener {
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + packageName)))
+        }
+        root.addView(btnOverlay)
+        val sw = Switch(this).apply { text = "4. Protecao armada"; isChecked = Prefs.armed(this@AdminActivity) }
         sw.setOnCheckedChangeListener { _, on ->
             Prefs.set(this@AdminActivity, armed = on)
             if (on) { if (Prefs.ready(this@AdminActivity)) GuardService.start(this@AdminActivity) else { sw.isChecked = false; toast("configure token/chat/pin primeiro") } }
@@ -89,6 +95,7 @@ class AdminActivity : AppCompatActivity() {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         status.text = "status: admin=${dpm.isAdminActive(ComponentName(this, GuardReceiver::class.java))} " +
                       "armada=${Prefs.armed(this)} pronto=${Prefs.ready(this)}\n" +
+                      "sobreposicao: ${android.provider.Settings.canDrawOverlays(this)}\n" +
                       "checklist: Google Backup ativo (obrigatorio p/ wipe) | SIM PIN | tela de bloqueio"
     }
 
