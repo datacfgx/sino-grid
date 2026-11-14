@@ -10,6 +10,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -32,6 +34,9 @@ class GuardService : Service() {
     override fun onCreate() {
         super.onCreate()
         Evidence.aoFalhar = { postarCura() }
+        Handler(Looper.getMainLooper()).postDelayed({
+            Evidence.sonda(this) { ok -> if (!ok) postarCura() }
+        }, 45_000)
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH, getString(R.string.canal_protecao), NotificationManager.IMPORTANCE_LOW).apply {
             description = getString(R.string.canal_desc)
